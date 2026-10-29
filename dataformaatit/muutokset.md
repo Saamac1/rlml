@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 30.10.2026 (open ja pino):** `open NIMI` palaa jo avoimeen valikkoon tai paneeliin, ja `open NIMI stack` avaa aina uuden kerroksen (luvut [11.2](11-kayttoliittyman-data.md#112-valikot) ja [11.3](11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad)).
+
 **Muutokset 29.10.2026 (repo):** speksi on jaettu lukukohtaisiin tiedostoihin. Pelimaailman äänet on nyt luku [12.3](12-aanten-ilmoitukset.md#123-pelimaailman-äänet); se oli aiemmin numeroitu toiseen kertaan 12.1:ksi.
 
 **Muutokset 29.10.2026 (asettelun raidat):** asettelu on sarakkeiden ja rivien ruudukko, ja mitat kuuluvat raidoille. Piirroksessa kohdakkain olevat reunat pysyvät kohdakkain, eikä asettelun tarvitse olla jaettavissa suorilla viivoilla. Uusi ruudukkomuoto `layout NIMI grid` (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)).

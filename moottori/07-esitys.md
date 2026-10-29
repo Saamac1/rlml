@@ -81,7 +81,8 @@ Alue, jonka legendirivi nimeää paneelin argumentteineen (`- s STATS(player)`),
 ## 7.5 Valikot
 
 - Moottori näyttää valikon ja ajaa kohdan toiminnon: komennon, moottorin toiminnon, `open`, `back` tai `close` ([D 11.2](../dataformaatit/11-kayttoliittyman-data.md#112-valikot)).
-- Valikot pinoutuvat. `open` korutiinissa odottaa, kunnes valikko suljetaan.
+- Valikot ja modaaliset paneelit pinoutuvat. `open` korutiinissa odottaa, kunnes valikko suljetaan.
+- **Paluu avoimeen.** Kun kohta, `then` tai näppäinsidonta avaa valikon tai paneelin, joka on jo pinossa, moottori sulkee sen päällä olevat (myös `final`-valikot) ja avaa sen uudelleen samalle paikalle; valikon kursori ja luettelo lasketaan alusta. Määre `stack` (`open NIMI stack`) ohittaa paluun ja lisää aina uuden kerroksen. Moottori tallentaa peitetyn kerroksen tilan (argumentit, rivit, kursori, syötteen ja paneelin arvot) ja palauttaa sen, kun päällä oleva kerros suljetaan; peitetyn kerroksen kesken jäänyt laskenta hylätään. Korutiinin `open`-lause avaa aina uuden kerroksen, koska se odottaa juuri avaamaansa valikkoa ([D 11.2](../dataformaatit/11-kayttoliittyman-data.md#112-valikot)).
 - Dialogin `choice` näytetään valikkona kontekstissa `DIALOGUE`.
 - **Lopullinen valikko.** `final`-valikossa ([D 11.2](../dataformaatit/11-kayttoliittyman-data.md#112-valikot)) moottori ei sulje valikkoa toiminnoilla `back` ja `close`, vaan se poistuu vain kohdalla, joka vie pois valikosta tai pelistä (`quit`, `new_game`, `exit`, `open`). `ALWAYS`-konteksti toimii sen päällä, joten taukovalikko avautuu ja sulkeutuu normaalisti, ja sen jälkeen `final`-valikko on yhä auki. Korutiinin `open` `final`-valikolle palaa vain, jos kohta avaa toisen valikon ja se palaa.
 

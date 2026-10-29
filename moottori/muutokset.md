@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 30.10.2026 (open ja pino):** paluu jo avoimeen valikkoon ja määre `stack`; korutiinin `open` avaa aina uuden kerroksen (luku [7.5](07-esitys.md#75-valikot)).
+
 **Muutokset 29.10.2026 (asettelun raidat):** moottori ratkaisee asettelun sarakkeiden ja rivien ruudukkona, joten piirroksessa kohdakkain olevat reunat pysyvät kohdakkain, ja ruudukkomuodon asettelut lasketaan samoin (luku [7.1](07-esitys.md#71-asettelu)).
 
 **Muutokset 26.10.2026 (hiiri):** hiiri on valinnainen syöte, jolla kaiken voi tehdä myös näppäimistöllä: hiiren sidonnat, valikot ja paneelit hiirellä, kartan hover ja matka klikkaamalla (luku [8.1](08-syote.md#81-hiiri)). Näppäimin ja peliohjaimella ohjattava katselukursori, toiminto `look` ja konteksti `LOOK`, ja hover myös tähtäyksessä (luvut [8](08-syote.md) ja [8.1](08-syote.md#81-hiiri)). Asettelun lähde `hover` (luku [7.1](07-esitys.md#71-asettelu)), `game`-kentät `walk` ja `walk_stop` sekä asetus `mouse` (luvut [8.1](08-syote.md#81-hiiri) ja [9.1](09-moottorin-funktiot-ja-tapahtumat.md#91-sanasto)). Matkan pysähtymiseen tulee pelin oma ehto moottorin ehtojen lisäksi, mikä sulkee avoimen kysymyksen (luku [11](11-avoimet-kysymykset.md)). Uudet tarkistukset (luku [2.5](02-lataus.md#25-tarkistukset)).
