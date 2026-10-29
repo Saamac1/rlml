@@ -1,0 +1,37 @@
+[RLML](../README.md) › [RLML-moottorin vastuut](README.md)
+
+# 11. Avoimet kysymykset
+
+Moottoria koskevat avoimet kysymykset molemmista dokumenteista sekä tämän dokumentin kokoamisessa löytyneet:
+
+- **Generoinnin nopeus.** Raskaan generoinnin voi siirtää ulkoiseen generaattoriin (luku [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)), mutta se ei toimi kaikilla alustoilla, joten RogueScript-varaversion on oltava riittävän nopea. Jos vakiokirjaston generointi on suurilla kartoilla hidasta, mitkä funktiot siirretään moottoriin primitiiveiksi?
+- **Moottorin komponenttien merkitys.** `movement`-kentän `mode`, `timer`-rivien tapahtumat ja kentät sekä `interior` ja `shape` on nimetty mutta ei kuvattu.
+- **Keskeytys.** Pitkä komento jatkuu, vaikka vihollinen tulee näkyviin. Ratkaisu voisi olla `interrupt(e)`, joka päättää odotuksen heti. Se vaatisi, että `wait` palauttaa arvon (`if not wait 120: return false`), ja todennäköisesti moottorin näkyvyystapahtuman (luku [9.7](09-moottorin-funktiot-ja-tapahtumat.md#97-raja-vakiokirjastoon)). Toistuva komento voi tarkistaa näkyvyyden kierrosten välissä itse (luku [8](08-syote.md)).
+- **Vaihtuva hinta.** `cost` on vakio. Riittääkö `wait` tilanteesta riippuvaan hintaan, vai sallitaanko `cost`-lauseke (esimerkiksi kantamuksen painosta)?
+- **Ajastimen tarkkuus.** `timer` laskee kierroksia. Tarvitaanko mikroaskeltarkka ajastin, ja millä kirjoitusasulla se erotetaan kierroksista?
+- **Vinoliikkeen hinta.** Chebyshev-metriikalla vinoliike maksaa saman kuin suora. Peli voi kirjoittaa eri hinnan komentoon, mutta moottorin `path` ei tiedä siitä.
+- **Kokoelman muut jäsenet.** Saako repussa palava soihtu `turn`-tapahtuman, vaikka reppu ei ole `modifies`-kokoelma?
+- **Siirto kokoelmasta toiseen** ei lähetä tapahtumia (luku [9.6](09-moottorin-funktiot-ja-tapahtumat.md#96-tapahtumat)). Riittääkö, että vakiokirjaston komento lähettää omansa?
+- **Useat ilmentymät ja aktiiviset kartat.** Voiko samaa karttaa olla useana ilmentymänä (`interior`, syvyystasot)? Voiko aktiivisia karttoja olla useita, ja ajetaanko jäädytetty aika vaihtoehtoisesti nopeasti kiinni? Syvyystasot hoituvat nyt `transient`-kartalla ja `travel`-kutsulla samaan karttaan (luku [6.7](06-ajo.md#67-siirtyminen-kartalta-toiselle)).
+- **Esitysaikainen ulkoasu.** Hallusinaatio ja vastaavat vaikutukset muuttaisivat entiteettien piirtoa ja nimeä esityksessä muuttamatta tilaa. `naming` kattaa nimen, mutta piirrolle ei ole vastaavaa kyselyä ([RS 13](../roguescript/13-avoimet-kysymykset.md)).
+- **Esto ja liike.** Törmäys on vakiokirjastoa, ja `move` ei tarkista estoa (luvut [9.7](09-moottorin-funktiot-ja-tapahtumat.md#97-raja-vakiokirjastoon) ja [10](10-mita-moottori-ei-tee.md)). [D 7.5](../dataformaatit/07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#75-tilen-ominaisuudet-tiles) kertoo, että moottori käyttää `blocks`-estoa näössä, valossa ja reitinhaussa. Ratkaistu 24.10.2026: `sight`, `light` ja `path` käyttävät tilejen ja entiteettien estoa, paitsi `through`-joukon tilejä (luvut [3.4](03-pelin-tila.md#34-moottorin-komponentit) ja [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).
+- **Ison nimen poikkeukset.** Moottori tuntee isoista nimistä ainakin nimiön `START`, kontekstit `MENU`, `DIALOGUE`, `SCENE`, `AIM`, `DIRECTION`, `LOOK` ja `ALWAYS`, viestiryhmän `SPEECH`, nimiavaruuden `STD` ja tekstiavainten päätteet `NAME`, `DESC`, `TITLE`, `TEXT`, `ROW`, `EMPTY` ja `MORE` sekä paikkamerkkien päätteet `SLOT` ja `COUNT`. Pelin peruskonteksti nimetään datassa ([D 3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)). Luvun [1.1](01-rajaus-ja-periaatteet.md#11-vastuunjako) ja [D 2.1](../dataformaatit/02-yleinen-syntaksi.md#21-nimet-ja-sanasto):n sääntö on muotoiltava niin, että poikkeukset luetellaan.
+- **`cancel` ja `after`.** Estääkö `cancel` myös `after`-käsittelijät ([RS 13](../roguescript/13-avoimet-kysymykset.md))? Moottorin tapahtumia kysymys ei koske, koska niissä ei ole `cancel`-mahdollisuutta.
+- **Checkpointit.** Säilytetäänkö vain viimeisin checkpoint vai nimetty lista ([RS 13](../roguescript/13-avoimet-kysymykset.md))?
+- **Tyylien rajaus** vaikuttaa siihen, miten moottori kokoaa ladatut tyyliosiot ([D 13](../dataformaatit/13-avoimet-kysymykset.md)).
+
+* **Kuuleminen.** Ratkaistu 24.10.2026 (luku [6.8](06-ajo.md#68-äänet-ja-kuuleminen)).
+
+Suljettu 26.10.2026 (hiiri): klikkausmatkan keskeytys. Moottorin ehtojen lisäksi peli voi antaa oman ehtonsa kentällä `walk_stop` (luku [8.1](08-syote.md#81-hiiri)).
+
+Suljettu 25.10.2026 (robotfindskitten-toteutustesti): toiminnon lopun järjestys ja etualan kohtauksen kartta (luvut [6.1.7](06-ajo.md#617-toiminto) ja [6.2](06-ajo.md#62-tapahtumat)), logiikan kortti (luku [3.2](03-pelin-tila.md#32-ilmentymän-syntyminen)), generaattorin oikeudet (luku [6.5](06-ajo.md#65-generointi)), asettelun valinta (luku [7.1](07-esitys.md#71-asettelu)), näppäin tekstissä ja tekstiavainten jokeri (luku [7.3](07-esitys.md#73-tekstit)), lokin pitkä viesti (luku [7.4](07-esitys.md#74-loki-ja-dialogit)), `final`-valikko ja `new_game` (luvut [7.5](07-esitys.md#75-valikot) ja [8](08-syote.md)), modaalisen paneelin konteksti (luku [7.7](07-esitys.md#77-paneelit)) sekä ruutujoukon `pick`, tyhjä väli ja `scatter` (luku [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).
+
+Suljettu 25.10.2026 (Rogue-toteutustesti): pelikertojen yli säilyvä tila on profiili (luku [5.6](05-aloitus-tallennus-ja-checkpointit.md#56-profiili)), toistolaskuri on toiminto `repeat` (luku [8](08-syote.md)), valaistus ja muisti ovat tilen ominaisuuksia `lit` ja `forget` (luku [7.2](07-esitys.md#72-kartan-piirtäminen)), ja pinot ovat erillisiä ilmentymiä (luku [3.3](03-pelin-tila.md#33-kokoelmat)). Moottorin kontekstien oletussidonnat on kuvattu luvussa [8](08-syote.md).
+
+Suljettu 24.10.2026: esto näössä, valossa ja reitinhaussa (luvut [3.4](03-pelin-tila.md#34-moottorin-komponentit) ja [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)), pelin peruskonteksti (luku [8](08-syote.md)).
+
+Suljettu 23.10.2026 (ilta): komentojen `wait` tallennuksessa. Suorituskohta on rakenteellinen polku (luku [6.1.6](06-ajo.md#616-monivaiheinen-komento)). Rekursion raja: kutsusyvyys `game.call_depth` (luvut [2.6](02-lataus.md#26-virheiden-lajit) ja [6.2](06-ajo.md#62-tapahtumat)).
+
+---
+
+← [10. Mitä moottori ei tee](10-mita-moottori-ei-tee.md) · [Sisällys](README.md)

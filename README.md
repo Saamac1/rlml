@@ -1,0 +1,98 @@
+# RLML 0.3
+
+RLML on roguelike-pelien kuvauskieli: pelin data kirjoitetaan tekstitiedostoina (kartat, entiteetit, pakat, käyttöliittymä), pelilogiikka RogueScriptillä, ja moottori lataa ja ajaa ne. Speksi on jaettu neljään dokumenttiin, ja jokainen dokumentti lukuihin, yksi tiedosto lukua kohden.
+
+| Dokumentti | Lyhenne | Sisältö |
+|---|---|---|
+| [RLML-dataformaatit](dataformaatit/README.md) | D | mitä kirjoittaja kirjoittaa datana: syntaksi, tiedostot, kartat, ulkoasu, tekstit ja käyttöliittymä |
+| [RogueScript](roguescript/README.md) | RS | pelilogiikan kieli: tapahtumat, funktiot, komennot, generointi ja kohtaukset |
+| [RLML-moottorin vastuut](moottori/README.md) | M | mitä moottori lupaa tehdä: lataus, pelin tila, ajo, esitys, syöte ja tallennus |
+| [RLML-vakiokirjasto](vakiokirjasto/README.md) | STD | RLML:llä ja RogueScriptillä kirjoitettu kirjasto, joka tekee tavallisesta roguelikesta pelattavan |
+
+## Sisällys
+
+### [RLML-dataformaatit](dataformaatit/README.md) (D)
+
+- [1. Rajaus ja periaatteet](dataformaatit/01-rajaus-ja-periaatteet.md)
+- [2. Yleinen syntaksi](dataformaatit/02-yleinen-syntaksi.md)
+- [3. Tiedostot ja include](dataformaatit/03-tiedostot-ja-include.md)
+- [4. Nimiavaruudet](dataformaatit/04-nimiavaruudet.md)
+- [5. Komponentit ja entiteetit](dataformaatit/05-komponentit-ja-entiteetit.md)
+- [6. Pakat ja taulut](dataformaatit/06-pakat-ja-taulut.md)
+- [7. Tilet, maastokerrokset, tilejoukot ja ominaisuudet](dataformaatit/07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md)
+- [8. Kartat ja prefabit](dataformaatit/08-kartat-ja-prefabit.md)
+- [9. Ulkoasu](dataformaatit/09-ulkoasu.md)
+- [10. Tekstit](dataformaatit/10-tekstit.md)
+- [11. Käyttöliittymän data](dataformaatit/11-kayttoliittyman-data.md)
+- [12. Äänten ilmoitukset](dataformaatit/12-aanten-ilmoitukset.md)
+- [13. Avoimet kysymykset](dataformaatit/13-avoimet-kysymykset.md)
+- [14. Osiot ja otsikkorivit](dataformaatit/14-osiot-ja-otsikkorivit.md)
+- [Muutokset](dataformaatit/muutokset.md)
+
+### [RogueScript](roguescript/README.md) (RS)
+
+- [1. Rajaus ja periaatteet](roguescript/01-rajaus-ja-periaatteet.md)
+- [2. Yleinen syntaksi](roguescript/02-yleinen-syntaksi.md)
+- [3. Komponentit](roguescript/03-komponentit.md)
+- [4. Tapahtumat ja käsittelijät](roguescript/04-tapahtumat-ja-kasittelijat.md)
+- [5. Funktiot ja lausekkeet](roguescript/05-funktiot-ja-lausekkeet.md)
+- [6. Ruudut ja paikkahaku](roguescript/06-ruudut-ja-paikkahaku.md)
+- [7. Komennot ja tekoäly](roguescript/07-komennot-ja-tekoaly.md)
+- [8. Generointi](roguescript/08-generointi.md)
+- [9. Kohtaukset ja aikajanat](roguescript/09-kohtaukset-ja-aikajanat.md)
+- [10. Aloitus ja checkpointit](roguescript/10-aloitus-ja-checkpointit.md)
+- [11. Tallennus ja korvaaminen](roguescript/11-tallennus-ja-korvaaminen.md)
+- [12. Kielioppi](roguescript/12-kielioppi.md)
+- [13. Avoimet kysymykset](roguescript/13-avoimet-kysymykset.md)
+- [Muutokset](roguescript/muutokset.md)
+
+### [RLML-moottorin vastuut](moottori/README.md) (M)
+
+- [1. Rajaus ja periaatteet](moottori/01-rajaus-ja-periaatteet.md)
+- [2. Lataus](moottori/02-lataus.md)
+- [3. Pelin tila](moottori/03-pelin-tila.md)
+- [4. Satunnaisuus ja toistettavuus](moottori/04-satunnaisuus-ja-toistettavuus.md)
+- [5. Aloitus, tallennus ja checkpointit](moottori/05-aloitus-tallennus-ja-checkpointit.md)
+- [6. Ajo](moottori/06-ajo.md)
+- [7. Esitys](moottori/07-esitys.md)
+- [8. Syöte](moottori/08-syote.md)
+- [9. Moottorin funktiot ja tapahtumat](moottori/09-moottorin-funktiot-ja-tapahtumat.md)
+- [10. Mitä moottori ei tee](moottori/10-mita-moottori-ei-tee.md)
+- [11. Avoimet kysymykset](moottori/11-avoimet-kysymykset.md)
+- [Muutokset](moottori/muutokset.md)
+
+### [RLML-vakiokirjasto](vakiokirjasto/README.md) (STD)
+
+- [1. Rajaus, periaatteet ja lataus](vakiokirjasto/01-rajaus-periaatteet-ja-lataus.md)
+- [2. Prioriteettivyöhykkeet](vakiokirjasto/02-prioriteettivyohykkeet.md)
+- [3. Komponentit ja oletuspelaaja](vakiokirjasto/03-komponentit-ja-oletuspelaaja.md)
+- [4. Tapahtumat](vakiokirjasto/04-tapahtumat.md)
+- [5. Komennot](vakiokirjasto/05-komennot.md)
+- [6. Tekoäly](vakiokirjasto/06-tekoaly.md)
+- [7. Suhteet ja vihamielisyys](vakiokirjasto/07-suhteet-ja-vihamielisyys.md)
+- [8. Käsittelijät](vakiokirjasto/08-kasittelijat.md)
+- [9. Äänet, viestit ja tekstit](vakiokirjasto/09-aanet-viestit-ja-tekstit.md)
+- [10. Generointi](vakiokirjasto/10-generointi.md)
+- [11. Korvaaminen](vakiokirjasto/11-korvaaminen.md)
+- [12. Minipeli STD:llä](vakiokirjasto/12-minipeli-std-lla.md)
+- [13. Muutokset muihin dokumentteihin](vakiokirjasto/13-muutokset-muihin-dokumentteihin.md)
+- [14. Avoimet kysymykset](vakiokirjasto/14-avoimet-kysymykset.md)
+- [Muutokset](vakiokirjasto/muutokset.md)
+
+## Avoimet kysymykset
+
+Jokaisessa dokumentissa on oma lukunsa avoimille kysymyksille:
+
+- [Dataformaatit, luku 13](dataformaatit/13-avoimet-kysymykset.md)
+- [RogueScript, luku 13](roguescript/13-avoimet-kysymykset.md)
+- [Moottori, luku 11](moottori/11-avoimet-kysymykset.md)
+- [Vakiokirjasto, luku 14](vakiokirjasto/14-avoimet-kysymykset.md)
+
+## Kirjoitusohjeet
+
+- **Yksi luku, yksi tiedosto.** Tiedoston nimi on luvun numero kahdella numerolla ja otsikko pienin kirjaimin ilman ääkkösiä (`11-kayttoliittyman-data.md`). Luvun otsikko on tiedoston `#`-otsikko ja aliluvut `##`-otsikoita (`## 11.1 Asettelu`).
+- **Numerointi pysyy.** Lukujen ja alilukujen numerot ovat viittausten kohteita. Uusi luku tai aliluku saa seuraavan vapaan numeron, eikä olemassa olevia numeroita siirretä.
+- **Viittaukset ovat linkkejä.** Saman dokumentin luku: `luku [11.1](11-kayttoliittyman-data.md#111-asettelu)`. Toinen dokumentti: `([M 7.1](../moottori/07-esitys.md#71-asettelu))` tai `(moottoridokumentti, luku [7.1](../moottori/07-esitys.md#71-asettelu))`. Ankkuri on GitHubin muoto otsikosta: pienet kirjaimet, välimerkit pois ja välilyönnit viivoiksi (`## 3.4 Automaattinen tallennus: autosave` → `#34-automaattinen-tallennus-autosave`).
+- **Muutokset kirjataan.** Jokaisella dokumentilla on `muutokset.md`, jonka alkuun lisätään päivätty merkintä (`**Muutokset 29.10.2026 (aihe):** …`) viittauksineen muuttuneisiin lukuihin.
+- **Piirrokset koodilohkoon.** Kartat, prefabit, asettelut ja paneelit kirjoitetaan koodilohkoon, jotta tasaus säilyy eikä `#`-rivejä tulkita otsikoiksi.
+- **Uusi luku** lisätään dokumentin `README.md`:n sisällykseen, tämän tiedoston sisällykseen sekä viereisten lukujen ala-reunan navigointiriveille.

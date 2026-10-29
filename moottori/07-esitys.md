@@ -1,0 +1,122 @@
+[RLML](../README.md) › [RLML-moottorin vastuut](README.md)
+
+# 7. Esitys
+
+## 7.1 Asettelu
+
+Moottori jakaa ikkunan alueisiin asettelun piirroksen ja mittojen mukaan ([D 11.1](../dataformaatit/11-kayttoliittyman-data.md#111-asettelu)). Legendin pieni nimi map on moottorin lähde: siihen alueeseen piirretään kartta. Muut alueet ovat pelin nimiä. Piirros on pienin sallittu koko, ja puuttuva mitta täyttää jäljelle jäävän tilan.
+
+**Raidat.** Moottori ratkaisee asettelun sarakkeiden ja rivien ruudukkona ([D 11.1](../dataformaatit/11-kayttoliittyman-data.md#111-asettelu)). Latauksessa piirros jaetaan raitoihin alueiden reunojen kohdalta, ja legendin mitat muutetaan raitojen mitoiksi; ruudukkomuodossa raidat ja niiden mitat on kirjoitettu suoraan. Ikkunan koon muuttuessa moottori laskee raitojen pituudet kerran koko asettelulle:
+
+1. Mitallinen raita saa mittansa (prosentti ikkunan koosta).
+2. Mitaton raita saa vähimmäiskoon: piirrosleveytensä, kasvatettuna niin, että sen alueiden sisältö (paneelin piirros ja reuna) mahtuu. Useamman raidan yli ulottuva alue kasvattaa viimeistä mitatonta raitaansa.
+3. Mitattomat raidat jakavat jäljelle jäävän tilan piirrosleveytensä suhteessa. Raita, jonka osuus jäisi alle vähimmäiskoon, saa vähimmäiskokonsa, ja muut jakavat loput. Pyöristyksen ylijäämä ja kokonaan mitallisen asettelun ylimääräinen tila menevät viimeiselle mitattomalle raidalle, tai viimeiselle raidalle, jos mitattomia ei ole.
+4. Alue on raitojensa yhdiste. Jos ikkuna on vähimmäiskokoa pienempi, moottori leikkaa raitoja lopusta.
+
+**Valinta.** Moottori käyttää `game`-lohkon kentän `layout` nimeämää asettelua ([D 3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)). Jos pelissä on yksi asettelu, se on käytössä ilman kenttää, ja useampi asettelu ilman kenttää on latausvirhe (luku [2.5](02-lataus.md#25-tarkistukset)). Kenttä luetaan datasta, joten pelaaja voi vaihtaa asettelun `overrides/`-tiedostossa.
+
+Alue, jonka legendirivi nimeää paneelin argumentteineen (`- s STATS(player)`), piirtää sen paneelin; moottori laskee argumentit kyselyinä jokaisessa välikehyksessä (luku [7.7](#77-paneelit)).
+
+**Hover-alue.** Legendin pieni nimi `hover` on moottorin lähde kuten `map`: siihen alueeseen moottori kirjoittaa osoittimen alla olevan kohteen kuvauksen (luku [8.1](08-syote.md#81-hiiri)), esimerkiksi statusrivillä `- h hover size.height 1`. Alue on tyhjä, kun osoitin ei ole kartan päällä, kohde ei näy tai hiiri ei ole käytössä. Asettelussa saa olla yksi `hover`-alue.
+
+**Kamera.** Kartta-alue näyttää kameran ympäristön. Kamera seuraa kohdetta, joka on oletuksena `player`, ja tapa annetaan asettelun legendissä: `- m map follow center` (oletus) pitää kohteen keskellä, ja `follow margin N` siirtää näkymää vasta, kun kohde on N ruudun päässä alueen reunasta.
+
+- `follow(camera, e)` vaihtaa kohteen, esimerkiksi hirviöön tai katselutilaan, ja `follow(camera, player)` palauttaa oletuksen. Kohde kuuluu pelin tilaan ja tallennukseen.
+- Kokoelmassa olevaa kohdetta seurataan ylimmän kantajan mukana. Tuhoutunut kohde jättää kameran viimeiseen ruutuunsa, kunnes kohde vaihdetaan; samoin kamera jää, kun pelaajaa ei ole (luku [6.1.8](06-ajo.md#618-aktiiviset-kartat-ja-jäädytys)).
+- `pan` ohittaa seurannan ajaksi, ja seuranta jatkuu sen jälkeen.
+- Aluetta pienempi kartta keskitetään. Kiertävällä kartalla näkymä jatkuu reunan yli (luku [6.9](06-ajo.md#69-kiertävä-kartta)).
+
+## 7.2 Kartan piirtäminen
+
+- **Tyyli.** Moottori lataa kaikki tyylitiedostot ja käyttää asetuksen `style` valitsemaa esitystapaa ([D 9](../dataformaatit/09-ulkoasu.md)). Puuttuva style on latausvirhe.
+- **Tilen haku** etenee tarkimmasta nimestä välirivien kautta perusnimeen ja `default`-riviin ([D 7.1](../dataformaatit/07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#71-tilen-nimi-muunnelma-ja-indeksi)). Tyylin sarjarivi on välirivi, joka antaa indeksille merkin ja värin sarjasta ([D 9.2](../dataformaatit/09-ulkoasu.md#92-tilejen-ulkoasu-tilesglyphs)).
+- **Maastokerrokset.** Moottori piirtää ylimmän ei-tyhjän kerroksen ja hakee puuttuvan taustan alemmista kerroksista. Graafisessa esitystavassa kerrokset piirretään päällekkäin ([D 9.4](../dataformaatit/09-ulkoasu.md#94-maastokerrosten-piirtäminen)).
+- **Konsolin kerrokset.** Moottori sijoittaa entiteetit `layers`-kerroksiin `where`-ehdon mukaan, muistaa viimeksi nähdyn (`remember`), piirtää näkökentän ulkopuolen (`fog`) ja liu'uttaa liikkeen (`smooth`) graafisessa esitystavassa. Kerroksetta jäävästä entiteetistä, jolla on render-komponentti, tulee latausvaroitus ([D 9.5](../dataformaatit/09-ulkoasu.md#95-konsolin-kerrokset)). Entiteetti ilman render-komponenttia ei piirry eikä tarvitse kerrosta.
+- **Välikehykset.** Välikehys on yksi mikroaskel, jossa näkyvä tila muuttui. Pelaajan syötteen jälkeen moottori ajaa pelin seuraavaan syötteen odotukseen ja näyttää matkalla jokaisen välikehyksen `presentation`-osion `frame`-ajan ([D 9.3](../dataformaatit/09-ulkoasu.md#93-paneelit-lokit-ja-esitys)).
+  - Saman mikroaskeleen kaikki toiminnot näkyvät yhtenä kehyksenä.
+  - Mikroaskel, jossa mikään näkyvä ei muuttunut, ei tuota kehystä. Näkyvä tarkoittaa pelaajan näkökentässä olevaa, `revealed`-entiteettiä tai lokiin kirjoitettua. Jos pelaajalla ei ole sight-komponenttia, koko aktiivinen kartta on näkökentässä. Kun pelaajaa ei ole, näkökenttä on pelaajan viimeinen näkökenttä, ja `sees(player, …)` kuolleelle pelaajalle käyttää samaa näkökenttää.
+  - `frame 0` näyttää vain tilan seuraavalla syötteen odotuksella. Se on oletus, kun presentation-osio puuttuu.
+  - Kestolliset esitysfunktiot (`fly`, tweenit) piirretään aina koko kestoltaan, myös arvolla `frame 0`. `frame` koskee vain välikehyksiä.
+  - `smooth` liu'uttaa liikkeen välikehyksen sisällä graafisessa esitystavassa.
+  - Esitys ei vaikuta pelin kulkuun: välikehykset näytetään laskennan jälkeen, ja `realtime`-taustakohtaukset kulkevat niistä riippumatta.
+
+**Näkökenttä ja valaistus.** Moottori laskee katsojan näkökentän `sight`-komponentista, ja sama laskenta palvelee `sees`-kyselyä, `fog`-kerrosta ja muistia.
+
+- **Näköyhteys.** Ruutu on näköyhteydessä, jos linja katsojasta siihen ei kulje `sight`-eston läpi ([D 7.5](../dataformaatit/07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#75-tilen-ominaisuudet-tiles)), `through`-joukkoa lukuun ottamatta, ja ruutu on `arc`-kaaren sisällä. Estävä ruutu itse näkyy, joten seinät piirtyvät.
+- **Valaistu ruutu.** Ruutu on valaistu, jos jonkin sen kerroksen tile on `lit` ([D 7.5](../dataformaatit/07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#75-tilen-ominaisuudet-tiles)), jos se on `lit`-tilen kahdeksan naapurin joukossa tai jos jokin `light`-lähde valaisee sen. Naapurisääntö näyttää valaistun huoneen seinät ja oviaukot mutta ei oven takaista käytävää.
+- **Näkyvä ruutu** on näköyhteydessä ja joko valaistu ja enintään `radius`-etäisyydellä tai enintään `dark`-etäisyydellä (oletus 1). Pimeässä käytävässä pelaaja näkee siis vain viereiset ruudut, ja valaistuun huoneeseen astuessaan koko huoneen.
+- **Muisti.** `remember`-kerros ([D 9.5](../dataformaatit/09-ulkoasu.md#95-konsolin-kerrokset)) säilyttää viimeksi nähdyn. Ruutu, jonka jokin kerros on `forget`-tile, unohtuu, kun se poistuu näkökentästä: pimeän huoneen lattia häviää näkyvistä pelaajan perässä, mutta seinät jäävät, jos ne eivät ole `forget`-tilejä. Muisti on pelaajan näkymä kartalla ja tallentuu kartan mukana. Muistettu entiteetti piirretään siihen ruutuun, jossa se viimeksi nähtiin.
+- **Paljastus.** `reveal(a: area)` lisää alueen ruudut pelaajan muistiin kuin ne olisi nähty juuri nyt, myös `forget`-tilet, jotka säilyvät muistissa, kunnes pelaaja näkee ne ja ne taas poistuvat näkökentästä. Paljastus ei tuo ruutuja näkökenttään, joten `sees` ja entiteettien piirto eivät muutu. Kartta, joka paljastetaan kokonaan, kirjoitetaan `reveal(tiles())`.
+- **Paljastettu entiteetti.** Moottorin komponentti `revealed` piirtää entiteetin nykyisessä ruudussaan myös näkökentän ulkopuolella, esimerkiksi hirviöiden aistimisen ajan. Se ei muuta näkökenttää eikä `sees`-kyselyä.
+- **Valaistus ilman `lit`-tilejä.** Jos peli ei käytä `lit`-ominaisuutta eikä `light`-lähteitä, mikään ruutu ei ole valaistu, ja näkösäde on `dark`. Peli, jossa kaikki on valaistua, kirjoittaa `- default lit` ([D 7.5](../dataformaatit/07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#75-tilen-ominaisuudet-tiles)).
+
+## 7.3 Tekstit
+
+- Moottori valitsee kielitiedoston asetuksen `language` mukaan.
+- Puuttuva käännös näkyy avaimena, jotta puute huomataan heti. Entiteetin tekstiavain periytyy määrittelyssä: jos entiteetillä ei ole omaa `NAME`- tai `DESC`-tekstiä, se käyttää lähimmän vanhemman avainta (`HERO` ilman omaa nimeä näyttää `STD.DEFAULT.PLAYER.NAME`-tekstin). Paikkamerkki `{@AVAIN}` tuo toisen tekstiavaimen tekstin samasta kielestä näyttöhetkellä, ja lataus tarkistaa, että avain on olemassa ja ettei viitteistä synny kehää ([D 10](../dataformaatit/10-tekstit.md)). Oletuskieltä ei ole, ja puuttuva language-asetus on latausvirhe.
+- **Paikkamerkit.** Moottori täyttää `{NIMI}`-kohdat parametreista ja näyttää entiteetin nimen, kuvauksen `{NIMI.DESC}`, kokoelmakirjaimen `{NIMI:SLOT}` ja pinon koon `{NIMI:COUNT}` ([D 10](../dataformaatit/10-tekstit.md)). Nimiarvo näytetään avaimen `<NIMI>.NAME` tekstinä, jos nimi on entiteetin määrittely, ja muuten avaimen omana tekstinä. Tekstiarvo näkyy sellaisenaan.
+- **Näppäin.** `{^TOIMINTO}` näytetään näyttöhetkellä toiminnon tai komennon ensimmäisenä näppäimenä nykyisessä kontekstipinossa, pelaajan `overrides/`-sidonnat mukaan lukien. Moottori etsii sidonnan pinon päältä alaspäin ja `ALWAYS`-kontekstista; peliohjaimella se näyttää painikkeen nimen. Sitomaton toiminto näkyy nimenään ([D 10](../dataformaatit/10-tekstit.md)).
+- Avaimet muodostetaan määrittelyistä: entiteetit, valikot, listavalikon rivit, dialogin valinnat ja lokin sivutus ([D 10](../dataformaatit/10-tekstit.md)).
+
+**Entiteetin nimi.** Moottori ratkaisee entiteetin näytettävän nimen aina samassa järjestyksessä, kun se täyttää paikkamerkin, listavalikon rivin tai paneelin kentän:
+
+1. **`naming`-kysely.** Jos `game`-lohkossa on `naming KYSELY` ([D 3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)), moottori kutsuu kyselyä entiteetillä ([RS 9.6](../roguescript/09-kohtaukset-ja-aikajanat.md#96-say-ja-log)). Paluuarvo `name` näytetään avaimen `<NIMI>.NAME` tekstinä ja kuvaus avaimesta `<NIMI>.DESC`, `text` sellaisenaan, ja `none` jatkaa seuraavaan vaiheeseen. Kysely on `query`, joten se ei muuta tilaa ja käyttää kyselyn virtaa (luku [4.1](04-satunnaisuus-ja-toistettavuus.md#41-satunnaisvirrat)).
+2. **Komponentti `name`.** Jos entiteetillä on moottorin komponentti `name`, sen teksti näytetään avaimen sijaan. Teksti ei käänny kielen mukaan, joten se sopii pelaajan antamiin nimiin.
+3. **Avain** `<ENTITEETTI>.NAME` perintäketjun kautta.
+
+**Kuolleen kahvan nimi.** Kun ilmentymä tuhotaan, moottori laskee sen nimen kerran tuhon vaiheessa 4 (luku [9.5](09-moottorin-funktiot-ja-tapahtumat.md#95-ilmentymän-elinkaari-ja-komponentit)) ja säilyttää tuloksen kahvan mukana. Kuolleen kahvan paikkamerkki näyttää siksi saman nimen kuin elävän: juotu tunnistamaton juoma on viestissä yhä ”sininen juoma”. Säilytetty tulos on nimi tai teksti eikä valmis merkkijono, joten kielen vaihto näkyy myös kuolleissa kahvoissa.
+
+**Teksti kyselyssä.** `text_of(AVAIN, PARAM: …) -> text` palauttaa avaimen tekstin valitulla kielellä paikkamerkit täytettyinä ([RS 2.6](../roguescript/02-yleinen-syntaksi.md#26-tyypit)). Tulos riippuu kielestä, joten moottori sallii sen vain kyselyissä, esityksessä, paneelin ja listavalikon lausekkeissa sekä `naming`-kyselyssä. Tilaa muuttavassa logiikassa se on latausvirhe, koska tallennus ei saa riippua kielestä (luku [2.5](02-lataus.md#25-tarkistukset)).
+
+**Avain arvona.** `say` ja `log` voivat saada avaimen arvona (`say(choose(TIP.*))`), ja avain voi kulkea nimiarvona kentässä tai paikkamerkissä (`{NOTE}`, [D 10](../dataformaatit/10-tekstit.md)). Tekstiavainten jokeri vastaa kaikkien ladattujen kielitiedostojen avainten yhdistettä ([D 2.1](../dataformaatit/02-yleinen-syntaksi.md#21-nimet-ja-sanasto)), joten arvonta ei riipu valitusta kielestä. Kun arvo tulee jokerista, lataus tarkistaa jokerin kaikki avaimet ja vaatii niiltä samat paikkamerkit. Muusta lähteestä tuleva avain tarkistetaan käyttöhetkellä.
+
+## 7.4 Loki ja dialogit
+
+- **Loki.** `log` kirjoittaa ilmoitetun viestin. Moottori valitsee viestit lokiin avaimen ryhmän tai avaimen mukaan ([D 11.4](../dataformaatit/11-kayttoliittyman-data.md#114-viestit-ja-loki)), pitää `history`-määrän muistissa ja yhdistää peräkkäiset samat viestit (`merge`).
+- **Rivitys.** Moottori rivittää viestin alueen leveyteen sanojen välistä. Lokissa ilman `more`-sanaa viesti, joka ei mahdu alueeseen, katkaistaan viimeisellä näkyvällä rivillään merkillä `…`; yhden rivin lokissa pitkä viesti näkyy siis yhtenä katkaistuna rivinä ([D 11.4](../dataformaatit/11-kayttoliittyman-data.md#114-viestit-ja-loki)).
+- **Sivutus `more`.** Lokissa, jolla on `more`, moottori laskee syötteen odotuksella, montako riviä uusia viestejä on tullut edellisen odotuksen jälkeen. Jos ne eivät mahdu lokin alueeseen, moottori näyttää ne alueen kokoisina erinä vanhimmasta alkaen ja kirjoittaa erän viimeiselle riville tekstin `<LOKI>.MORE`. Mikä tahansa näppäin näyttää seuraavan erän, ja `back` ohittaa loput. Painallus, joka jatkaa erää, ei ole komento. Viimeisen erän jälkeen moottori odottaa tavallista syötettä. Sivutus ei vaikuta pelin kulkuun, eikä `idle` laukea sen aikana.
+- **Dialogi-ikkuna.** `say` näyttää modaalisen ikkunan ja odottaa kuittausta. `speaker:` näyttää puhujan nimen.
+- Moottorin viestiryhmä on `SPEECH`, ja siihen kuuluvat `say`-repliikit.
+
+## 7.5 Valikot
+
+- Moottori näyttää valikon ja ajaa kohdan toiminnon: komennon, moottorin toiminnon, `open`, `back` tai `close` ([D 11.2](../dataformaatit/11-kayttoliittyman-data.md#112-valikot)).
+- Valikot pinoutuvat. `open` korutiinissa odottaa, kunnes valikko suljetaan.
+- Dialogin `choice` näytetään valikkona kontekstissa `DIALOGUE`.
+- **Lopullinen valikko.** `final`-valikossa ([D 11.2](../dataformaatit/11-kayttoliittyman-data.md#112-valikot)) moottori ei sulje valikkoa toiminnoilla `back` ja `close`, vaan se poistuu vain kohdalla, joka vie pois valikosta tai pelistä (`quit`, `new_game`, `exit`, `open`). `ALWAYS`-konteksti toimii sen päällä, joten taukovalikko avautuu ja sulkeutuu normaalisti, ja sen jälkeen `final`-valikko on yhä auki. Korutiinin `open` `final`-valikolle palaa vain, jos kohta avaa toisen valikon ja se palaa.
+
+**Listavalikko.** `menu NIMI(parametrit) list` ([D 11.2](../dataformaatit/11-kayttoliittyman-data.md#112-valikot)) näyttää joukon jäsenet riveinä.
+
+- Moottori laskee rivit kyselynä, kun valikko avautuu, ja `keep`-valikossa uudelleen jokaisen valinnan jälkeen. `row`, `sort`, `hide when` ja `disabled when` arvioidaan jäsen kerrallaan, ja `it` on jäsen.
+- **Pinot riveinä.** Saman pinon jäsenet (luku [3.3](03-pelin-tila.md#33-kokoelmat)) ovat yksi rivi, ja `it` on pinon ensimmäinen jäsen luontijärjestyksessä. Rivin ehdot ja `then` koskevat tätä jäsentä.
+- **Kirjaimet.** Jos lähteen kaikki jäsenet ovat saman entiteetin samassa kokoelmakentässä, rivit näyttävät jäsentensä kokoelmakirjaimet (`e.slot`), ja oletusjärjestys on kirjainjärjestys. `sort` järjestää rivit toisin, mutta kirjaimet säilyvät. Pelaaja voi valita rivin myös painamalla sen kirjainta, joten saman esineen kirjain on sama repun luettelossa, juomavalikossa ja viesteissä. Muussa lähteessä (eri kokoelmia, kartan entiteettejä, ruutuja, listoja) rivit saavat kirjaimet a–z näkyvässä järjestyksessä.
+- Kursori ja sivutus käyttävät kontekstin `MENU` sidontoja, `confirm` valitsee ja `back` sulkee.
+- `then` ajaa valitulla rivillä `fn`-funktion tai komennon. Komennosta tai kohtauksesta avattu valikko sallii vain `fn`-funktion, joka ajetaan samassa toiminnossa tai kohtauksen luonnoksessa. Näppäinsidonnasta avattu valikko voi ajaa komennon, joka on pelaajan komento hintoineen (luku [6.1.5](06-ajo.md#615-vuoron-kulku)).
+- Korutiinissa `open` palauttaa viimeksi valitun jäsenen tai `none`. Tyhjä lähde näyttää tekstin `<VALIKKO>.EMPTY`, ja ilman sitä valikkoa ei avata.
+- Parametrin lähde `from` käyttää samaa valikkoa ja samoja kirjainsääntöjä (luku [8](08-syote.md)).
+
+**Säädettävä kohta.** `adjust KENTTÄ a..b [pool NIMI]` valikossa tai `choice`-lohkossa muuttaa kentän arvoa vasemmalla ja oikealla eikä päätä valintaa. `pool` on luku, josta korotukset vähennetään ja johon laskut palautetaan. Arvo pysyy välillä, eikä `pool` mene alle nollan.
+
+## 7.6 Ääni
+
+- **Ilmoitukset.** Moottori rekisteröi äänet nimillä, lataa `preload`-äänet etukäteen ja muut ensimmäisellä soitolla ([D 12](../dataformaatit/12-aanten-ilmoitukset.md)).
+- **Renderöinti.** `render audioscript` tuottaa WAV-tiedoston. Kehityksessä moottori kirjoittaa sen skriptin viereen. Jakelussa se käyttää mukana tullutta tiedostoa tai renderöi puuttuvan tai vanhentuneen tiedoston käyttäjädatan välimuistiin.
+- **Mikseri.** Moottori asettaa väylien alkuvoimakkuudet. Väylä 0 on oletus.
+
+Äänen DSL on erillinen kieli, jonka tulkinta kuuluu moottorille mutta jota tämä dokumentti ei kuvaa.
+
+## 7.7 Paneelit
+
+Paneeli ([D 11.5](../dataformaatit/11-kayttoliittyman-data.md#115-paneelit)) on ASCII-malli, jonka legendi sijoittaa kentät. Moottori piirtää sen asettelun alueeseen tai modaalisena koko näytön päälle.
+
+- **Kentät.** Moottori tunnistaa kentät latauksessa: saman legendimerkin yhtenäinen vaakajakso on yksirivinen kenttä ja suorakulmio monirivinen. Muu muoto on latausvirhe. Piirroksen merkit, joita legendi ei mainitse, ovat kuvaa ja piirretään sellaisenaan.
+- **Kenttälajit.** `text AVAIN` näyttää tekstiavaimen valitulla kielellä, `value LAUSEKE` kyselylausekkeen arvon ja `param NIMI` paneelin parametrin arvon. Arvot näytetään paikkamerkin säännöillä (luku [7.3](#73-tekstit)): entiteetti nimenä, nimiarvo tekstinä, luku numerona ja `none` tyhjänä.
+- **Rivitys ja tasaus.** Monirivinen kenttä rivittää tekstin sanojen välistä. Kentän teksti tasataan vasemmalle, oikealle tai keskelle, ja mahtumaton teksti katkaistaan merkillä `…`.
+- **Laskenta.** Moottori laskee `value`-kentät ja asettelun argumentit jokaisessa välikehyksessä kyselyinä kyselyn virrasta (luku [4.1](04-satunnaisuus-ja-toistettavuus.md#41-satunnaisvirrat)). Paneeli ei siis voi muuttaa tilaa.
+- **Parametrit.** Asettelun alueen argumentit (`- s STATS(player)`, [D 11.1](../dataformaatit/11-kayttoliittyman-data.md#111-asettelu)) ja `open PANEELI(…)`-kutsun argumentit sidotaan otsikon parametreihin. Modaalisen paneelin argumentit lasketaan kerran avaushetkellä, joten hautakivi näyttää kuolinhetken tiedot.
+- **Modaalinen paneeli.** `open PANEELI(…)` näyttää paneelin näytön keskellä piirroksen kokoisena ja odottaa toimintoa `confirm` tai `back`. Moottori pinoaa sen ajaksi kontekstin `MENU`, joten paneeli käyttää valikon sidontoja (luku [8](08-syote.md)). Komennossa ja korutiinissa se on odotus kuten valikon `open` (luku [6.1.6](06-ajo.md#616-monivaiheinen-komento)), ja käsittelijässä latausvirhe. Valikon kohta `open PANEELI(…)` avaa sen samoin.
+- **Näkyvyys.** `toggle PANEELI` (luku [8](08-syote.md)) näyttää tai piilottaa asettelun paneelin, ja piilotetun paneelin alue jää tyhjäksi. Debug-paneeli sidotaan tyypillisesti `ALWAYS`-kontekstiin.
+
+---
+
+← [6. Ajo](06-ajo.md) · [Sisällys](README.md) · [8. Syöte](08-syote.md) →
