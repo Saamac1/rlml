@@ -42,6 +42,7 @@ log LOOTLOG
 **Tekstit.** STD toimittaa kielitiedostot suomeksi ja englanniksi (`lib/std/text/fi.rlml`, `en.rlml`). Suomenkielinen:
 
 ```
+language fi
 STD.DEFAULT.PLAYER.NAME sinä
 STD.MESSAGE.COMBAT.HIT {TARGET} ottaa {AMOUNT} vahinkoa.
 STD.MESSAGE.COMBAT.HURT Otat {AMOUNT} vahinkoa.

@@ -2,7 +2,7 @@
 
 # 12. Minipeli STD:llä
 
-Valmiustestin minipeli kirjoitettuna tätä sopimusta vasten. Pelissä ei ole yhtään RogueScript-riviä. Kartat ovat samat kuin testidokumentissa.
+Valmiustestin minipeli kirjoitettuna tätä sopimusta vasten. Pelissä ei ole yhtään RogueScript-riviä. Alla on pelin data yhtenä lohkona. Koko peli karttoineen on kansiossa [`esimerkit/mini/`](../esimerkit/mini/), jossa sama data on jaettu tiedostoihin [`game.rlml`](../esimerkit/mini/game.rlml), [`maps/caves.rlml`](../esimerkit/mini/maps/caves.rlml), [`ui/main.rlml`](../esimerkit/mini/ui/main.rlml), [`style/ascii.rlml`](../esimerkit/mini/style/ascii.rlml) ja [`text/fi.rlml`](../esimerkit/mini/text/fi.rlml).
 
 ```
 game MINI
@@ -67,7 +67,7 @@ layers
 - FOG fog
 ```
 
-Asettelu (`- m map`, `- l LOG`) ja `tiles.glyphs ascii` ovat kuten testissä, ja kielitiedostossa on `HERO.NAME`, `RAT.NAME` ja tauon tekstit. Kohdat, jotka testissä jäivät auki, kulkevat nyt näin:
+Asettelu (`- m map`, `- l LOG`), kartat `CAVE_A` ja `CAVE_B` sekä `tiles.glyphs ascii` ovat esimerkkikansiossa, ja kielitiedostossa on `HERO.NAME`, `RAT.NAME` ja tauon tekstit. Peli alkaa nimiöstä `SPAWN`, ja kummankin luolan `START` on vastakkaisten portaiden ruudussa, joten paluu tuo pelaajan portaille. Kohdat, jotka testissä jäivät auki, kulkevat nyt näin:
 
 - **Liike:** `MOVE.EAST` palauttaa `STEP`-komennon, joka kysyy eston ytimillä `CAN_STEP` ja `BLOCKER` ja siirtää ytimellä `DO_STEP` (luku [5](05-komennot.md)).
 - **Lyönti:** rotan suhde pelaajaan on `50 - |-100 - 0|` = −50, joten törmäys palauttaa `ATTACK`-komennon ja `HUNTER` hyökkää näkemäänsä tai kuulemaansa pelaajaan (luvut [6](06-tekoaly.md) ja [7](07-suhteet-ja-vihamielisyys.md)).

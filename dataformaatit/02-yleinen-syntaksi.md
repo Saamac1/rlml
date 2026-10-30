@@ -29,7 +29,7 @@ Tämän luvun säännöt koskevat datarivejä. RogueScript-koodilohkot ja `.rogu
 - **Otsikkorivi** aloittaa lohkon ja kokoaa sen ominaisuudet: `menu PAUSE size 24x*`.
 - **Luettelokohta** alkaa merkillä `-` ja välilyönnillä. Sisennys on ulkoasua eikä merkitse mitään.
 - **Lohko päättyy** tyhjään riviin.
-- **Alilohko** alkaa kaksoispisteeseen päättyvällä otsikolla (`legend:`, `vars:`). Se jatkaa edellistä määrittelyä tyhjän rivin jälkeenkin, kunnes tulee uusi otsikko. Itsenäisten osioiden otsikoissa (`game`, `profile`, `constants`, `settings`, `autosave`, `terrain`, `tiles`, `tiles.glyphs`, `colors`) ei ole kaksoispistettä.
+- **Alilohko** alkaa kaksoispisteeseen päättyvällä otsikolla (`legend:`, `vars:`). Se jatkaa edellistä määrittelyä tyhjän rivin jälkeenkin, kunnes tulee uusi otsikko. Itsenäisten osioiden otsikoissa (`game`, `profile`, `constants`, `settings`, `autosave`, `terrain`, `tiles`, `tiles.glyphs`, `colors`, `language`) ei ole kaksoispistettä.
 - **Tiedostotason rivi** `namespace` (luku [4.2](04-nimiavaruudet.md#42-määrittely)) kirjoitetaan tiedoston alkuun ennen ensimmäistä määrittelyä, ja se koskee koko tiedostoa.
 - **Piirretyt lohkot** (kartta, prefab, asettelu ja paneeli) kirjoitetaan tiedostossa markdownin koodilohkoon, jotta tasaus säilyy eikä `#`-rivejä tulkita otsikoiksi. Piirros kuuluu edeltävään otsikkoon tai alilohkoon tyhjän rivin yli. Tämän dokumentin esimerkeissä koodilohkoa ei näytetä erikseen.
 - **Tiedostopolut** kirjoitetaan lainausmerkkeihin (`"tiles16.png"`). Poikkeus on `include`, jonka polku kirjoitetaan ilman lainausmerkkejä (luku [3](03-tiedostot-ja-include.md)).
@@ -45,7 +45,7 @@ menu PAUSE size 24x*
 - QUIT
 ```
 
-Kielitiedosto (luku [10](10-tekstit.md)) on poikkeus: se on pelkkä `AVAIN teksti` -lista ilman `-`-merkkejä.
+Kielitiedosto (luku [10](10-tekstit.md)) on poikkeus: otsikkorivin `language KIELI` jälkeen se on pelkkä `AVAIN teksti` -lista ilman `-`-merkkejä.
 
 ## 2.3 Pistenotaatio
 

@@ -1,0 +1,45 @@
+# Minipeli
+
+> Vakiokirjaston valmiustestin minipeli (STD, luku 12). Pelissä ei ole
+> yhtään RogueScript-riviä: liike, lyönti, kuolema ja kartanvaihto tulevat
+> vakiokirjastosta.
+
+game MINI
+- start CAVE_A
+- at SPAWN
+- keys GAME
+- PLAYER HERO
+
+include lib/std.rlml
+include maps/*
+include ui/*
+include style/*
+include text/*
+
+settings
+- style ascii
+- language fi
+- round 250ms
+
+tiles
+- WALL blocks move sight sound
+- default blocks none
+
+entity HERO extends STD.DEFAULT.PLAYER
+- render GLYPH.HERO
+
+entity RAT
+- HP now 3
+- MELEE 1d2
+- blocks move
+- ALIGNMENT -100
+- sight radius 6
+- hearing
+- ai behavior HUNTER
+- render GLYPH.RAT
+
+entity STAIRS_DOWN
+- EXIT to CAVE_B
+
+entity STAIRS_UP
+- EXIT to CAVE_A

@@ -2,9 +2,10 @@
 
 # 10. Tekstit
 
-Kielitiedosto (`text/fi.rlml`, `text/en.rlml`) on yksi lista ilman `-`-merkkejä:
+Kielitiedosto (`text/fi.rlml`, `text/en.rlml`) alkaa otsikkorivillä `language KIELI`, ja sen jälkeen tulee yksi lista ilman `-`-merkkejä:
 
 ```
+language fi
 PAUSE.TITLE Tauko
 PAUSE.RESUME Jatka
 GOBLIN.NAME peikko
@@ -15,6 +16,8 @@ KING.TALK.TEXT Tervetuloa, matkalainen. Mitä haluat?
 SHOP.BUY.ROW {ITEM} … {PRICE} kultaa
 INTRO.START Aloita painamalla {^confirm}.
 ```
+
+**Otsikko:** `language KIELI` on tiedoston ensimmäinen määrittely, ja se tekee koko tiedostosta kielitiedoston. Kieli on pieni nimi, sama kuin asetuksen `- language fi` arvo (luku [3.2](03-tiedostot-ja-include.md#32-pelaajan-oma-data)). Tiedoston nimellä ja kansiolla ei ole merkitystä, kuten muillakaan tiedostoilla (luku [3](03-tiedostot-ja-include.md)). Saman kielen tiedostot yhdistyvät riveittäin, joten kirjasto ja peli voivat kumpikin tuoda omat `fi`-tekstinsä. Ennen otsikkoa saa olla vain `namespace`-rivi ja kommentteja (luku [4.2](04-nimiavaruudet.md#42-määrittely)). Muu määrittely kielitiedostossa tai `language`-otsikko muualla kuin tiedoston alussa on latausvirhe.
 
 **Rivi:** avain on isoilla kirjaimilla, ja teksti alkaa ensimmäisen välilyönnin jälkeen ja jatkuu rivin loppuun. Teksti on aina yksi rivi; useampikappaleinen teksti, kuten ohjeruutu, kirjoitetaan paneelin kenttiin kappale kenttää kohti (luku [11.5](11-kayttoliittyman-data.md#115-paneelit)).
 

@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 30.10.2026 (kielitiedoston otsikko):** moottori valitsee kielitiedostot niiden `language`-otsikon mukaan, ja väärin sijoitettu otsikko on latausvirhe (luvut [2](02-lataus.md) ja [7.3](07-esitys.md#73-tekstit)).
+
 **Muutokset 30.10.2026 (open ja pino):** paluu jo avoimeen valikkoon ja määre `stack`; korutiinin `open` avaa aina uuden kerroksen (luku [7.5](07-esitys.md#75-valikot)).
 
 **Muutokset 29.10.2026 (asettelun raidat):** moottori ratkaisee asettelun sarakkeiden ja rivien ruudukkona, joten piirroksessa kohdakkain olevat reunat pysyvät kohdakkain, ja ruudukkomuodon asettelut lasketaan samoin (luku [7.1](07-esitys.md#71-asettelu)).

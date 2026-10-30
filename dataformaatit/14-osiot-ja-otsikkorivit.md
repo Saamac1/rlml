@@ -29,7 +29,7 @@
 | `tiles.glyphs` | `tiles.glyphs ascii` tai `tiles.glyphs spritesheet "polku" LxK`; sarjarivi `- TILE.a..b series "MERKIT" fg VÄRIT` tai `- TILE.a..b series ALKU..LOPPU` | 9.2 |
 | `panels`, `logs`, `presentation` | tyylin rivit | 9.3 |
 | `layers` | `- NIMI LÄHDE [where ehto] [remember] [smooth AIKA]` | 9.5 |
-| kielitiedosto | `AVAIN teksti` | 10 |
+| `language` | `language KIELI` tiedoston alussa, rivit `AVAIN teksti` ilman `-`-merkkejä | 10 |
 | `layout` | piirros ja `legend:`; kartta-alueen rivi `- m map [follow center \| follow margin N]`, hover-alueen rivi `- h hover`, paneelin rivi `- s PANEELI[(argumentit)]` | 11.1 |
 | `menu` | `menu NIMI [(parametrit)] [list] [size LxK] [context K] [final]`, kohdat `- AVAIN [TOIMINTO] [hide when ehto] [disabled when ehto]` tai `- AVAIN adjust KENTTÄ a..b [pool NIMI]`; listavalikolla rivit `source`, `row`, `sort`, `hide when`, `disabled when`, `then`, `keep` | 11.2 |
 | `keys`, `pad` | `- TOIMINTO näppäimet` (keys-riveillä myös hiiren nimet `click`, `rclick`, `mclick`, `wheel.up`, `wheel.down`) | 11.3 |

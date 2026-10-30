@@ -52,7 +52,7 @@ Alue, jonka legendirivi nimeää paneelin argumentteineen (`- s STATS(player)`),
 
 ## 7.3 Tekstit
 
-- Moottori valitsee kielitiedoston asetuksen `language` mukaan.
+- Moottori käyttää kielitiedostoja, joiden otsikko `language KIELI` vastaa asetusta `language`. Saman kielen tiedostot yhdistyvät riveittäin, ja muiden kielten tiedostot ladataan vain tekstiavainten jokereita ja tarkistuksia varten ([D 10](../dataformaatit/10-tekstit.md)).
 - Puuttuva käännös näkyy avaimena, jotta puute huomataan heti. Entiteetin tekstiavain periytyy määrittelyssä: jos entiteetillä ei ole omaa `NAME`- tai `DESC`-tekstiä, se käyttää lähimmän vanhemman avainta (`HERO` ilman omaa nimeä näyttää `STD.DEFAULT.PLAYER.NAME`-tekstin). Paikkamerkki `{@AVAIN}` tuo toisen tekstiavaimen tekstin samasta kielestä näyttöhetkellä, ja lataus tarkistaa, että avain on olemassa ja ettei viitteistä synny kehää ([D 10](../dataformaatit/10-tekstit.md)). Oletuskieltä ei ole, ja puuttuva language-asetus on latausvirhe.
 - **Paikkamerkit.** Moottori täyttää `{NIMI}`-kohdat parametreista ja näyttää entiteetin nimen, kuvauksen `{NIMI.DESC}`, kokoelmakirjaimen `{NIMI:SLOT}` ja pinon koon `{NIMI:COUNT}` ([D 10](../dataformaatit/10-tekstit.md)). Nimiarvo näytetään avaimen `<NIMI>.NAME` tekstinä, jos nimi on entiteetin määrittely, ja muuten avaimen omana tekstinä. Tekstiarvo näkyy sellaisenaan.
 - **Näppäin.** `{^TOIMINTO}` näytetään näyttöhetkellä toiminnon tai komennon ensimmäisenä näppäimenä nykyisessä kontekstipinossa, pelaajan `overrides/`-sidonnat mukaan lukien. Moottori etsii sidonnan pinon päältä alaspäin ja `ALWAYS`-kontekstista; peliohjaimella se näyttää painikkeen nimen. Sitomaton toiminto näkyy nimenään ([D 10](../dataformaatit/10-tekstit.md)).

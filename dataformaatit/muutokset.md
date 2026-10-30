@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 30.10.2026 (kielitiedoston otsikko):** kielitiedosto alkaa otsikkorivillä `language KIELI`, joten lataaja tunnistaa sen sisällöstä eikä tiedostonimestä, ja saman kielen tiedostot yhdistyvät riveittäin (luvut [2.2](02-yleinen-syntaksi.md#22-rivit-lohkot-ja-luettelot), [10](10-tekstit.md) ja [14](14-osiot-ja-otsikkorivit.md)).
+
 **Muutokset 30.10.2026 (open ja pino):** `open NIMI` palaa jo avoimeen valikkoon tai paneeliin, ja `open NIMI stack` avaa aina uuden kerroksen (luvut [11.2](11-kayttoliittyman-data.md#112-valikot) ja [11.3](11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad)).
 
 **Muutokset 29.10.2026 (repo):** speksi on jaettu lukukohtaisiin tiedostoihin. Pelimaailman äänet on nyt luku [12.3](12-aanten-ilmoitukset.md#123-pelimaailman-äänet); se oli aiemmin numeroitu toiseen kertaan 12.1:ksi.

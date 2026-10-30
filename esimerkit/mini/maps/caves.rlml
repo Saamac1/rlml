@@ -1,0 +1,43 @@
+# Luolat
+
+> Kaksi luolaa, joita portaat yhdistävät. Peli alkaa nimiöstä `SPAWN`.
+> Portaiden `EXIT` vie kohdekartan nimiöön `START`, joka on kummassakin
+> luolassa vastakkaisten portaiden ruudussa.
+
+map CAVE_A
+
+```
+####################
+#....#........r....#
+#.@..#..######.....#
+#....#..#....#..r..#
+#.......#..>.#.....#
+#.......#....#.....#
+#..r.........#.....#
+####################
+```
+
+legend:
+- # WALL
+- . FLOOR
+- @ FLOOR as SPAWN
+- r FLOOR with RAT
+- > STAIR.down with STAIRS_DOWN as START
+
+map CAVE_B
+
+```
+################
+#......#.......#
+#..<...#...r...#
+#......#.......#
+#..........#####
+#..r...........#
+################
+```
+
+legend:
+- # WALL
+- . FLOOR
+- r FLOOR with RAT
+- < STAIR.up with STAIRS_UP as START

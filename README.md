@@ -79,6 +79,10 @@ RLML on roguelike-pelien kuvauskieli: pelin data kirjoitetaan tekstitiedostoina 
 - [14. Avoimet kysymykset](vakiokirjasto/14-avoimet-kysymykset.md)
 - [Muutokset](vakiokirjasto/muutokset.md)
 
+## Esimerkit
+
+- [Minipeli](esimerkit/mini/) (`esimerkit/mini/`): vakiokirjaston valmiustestin peli kokonaisena, kaksi luolaa, rotat ja portaat ilman RogueScriptiä ([STD 12](vakiokirjasto/12-minipeli-std-lla.md)).
+
 ## Avoimet kysymykset
 
 Jokaisessa dokumentissa on oma lukunsa avoimille kysymyksille:

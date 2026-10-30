@@ -1,0 +1,11 @@
+language fi
+
+> Pelin omat tekstit. Vakiokirjaston viestit tulevat tiedostosta
+> lib/std/text/fi.rlml.
+
+HERO.NAME sinä
+RAT.NAME rotta
+RAT.DESC Iso harmaa rotta. Se on nälkäinen.
+PAUSE.TITLE Tauko
+PAUSE.RESUME Jatka
+PAUSE.QUIT Lopeta

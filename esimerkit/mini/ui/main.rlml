@@ -1,0 +1,36 @@
+# Käyttöliittymä
+
+> Kartta ja sen alla kolmen rivin loki.
+
+layout MAIN
+
+```
+m
+l
+```
+
+legend:
+- m map
+- l LOG size.height 3
+
+log LOG history 50
+- STD.MESSAGE.COMBAT
+- STD.MESSAGE.SENSE
+
+menu PAUSE
+- RESUME
+- QUIT
+
+## Näppäimet
+
+keys ALWAYS
+- open PAUSE esc
+
+keys GAME
+- MOVE.NORTH k up
+- MOVE.SOUTH j down
+- MOVE.WEST h left
+- MOVE.EAST l right
+- WAIT s
+- TAKE_EXIT > <
+- pass z
