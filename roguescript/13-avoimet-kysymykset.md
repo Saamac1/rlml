@@ -2,6 +2,7 @@
 
 # 13. Avoimet kysymykset
 
+- **Rivin jatkaminen.** Luku [2.2](02-yleinen-syntaksi.md#22-lohkot-ja-kommentit) ei kerro, saako pitkän lausekkeen jatkaa seuraavalle riville avoimen sulun sisällä (`foo(a,` ja seuraavalla rivillä `b)`). Speksin koodissa näin ei tehdä missään, ja toteutus (31.10.2026) käsittelee jokaisen rivin omana lauseenaan. Sallitaanko jatko sulkujen sisällä, vai pysyykö rivi aina yhtenä lauseena?
 - **Tapahtumat luonnoksessa.** Käsittelijät ajetaan kohtauksen aikana luonnosta vasten. Pitääkö jokin tapahtuma (esimerkiksi saavutus) rajata niin, että se laukeaa vasta kirjauksessa?
 - **`cancel` ja `after`.** Estääkö `cancel` myös `after`-käsittelijät? Moottorin tapahtumia kysymys ei koske, koska niissä ei ole `before`-vaihetta.
 - **Vakiokirjaston törmäys.** Ratkaistu 24.10.2026: törmäys palauttaa jatkokomennon (luku [7.1](07-komennot-ja-tekoaly.md#71-komennot)), joten hyökkäys maksaa hyökkäyksen hinnan ja ei-vihamieliseen törmäys ei vie aikaa. Alkuperäinen kysymys: Jos liikekomento palauttaa `false` lähetettyään `STD.BUMP`-tapahtuman, pelaajan törmäyshyökkäys ei vie vuoroa (luku [7.1](07-komennot-ja-tekoaly.md#71-komennot)). Komennon on siksi tiedettävä, käsitelläänkö törmäys hyökkäyksenä.
