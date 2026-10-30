@@ -1,0 +1,9 @@
+# STD: ASCII-tyyli
+
+> STD:n omien tilejen ulkoasu (STD 1.3 ja 3). STD ei kirjoita `default`-riviä.
+
+namespace STD
+
+tiles.glyphs ascii
+- GLYPH.PLAYER @
+- GLYPH.MISSILE *

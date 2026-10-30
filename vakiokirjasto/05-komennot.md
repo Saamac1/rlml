@@ -15,7 +15,7 @@
 | `TAKE_EXIT()` | 120 | käyttää ruudun uloskäyntiä |
 | `PICK_UP(item)` | 120 | poimii esineen ruudusta reppuun |
 | `DROP(item)` | 120 | pudottaa esineen repusta ruutuun |
-| `APPROACH(target: area)`, `FLEE(from: area)`, `WANDER()` | `STEP`-komennon | tekoälyn liikkeet (luku [6](06-tekoaly.md)) |
+| `APPROACH(target: area)`, `FLEE(threat: area)`, `WANDER()` | `STEP`-komennon | tekoälyn liikkeet (luku [6](06-tekoaly.md)) |
 
 **Ytimet.** Komennon voi ajaa vain jatkokomentona rungon lopussa, joten liikkeen ja iskun säännöt ovat funktioissa, joita komennot ja pelin omat silmukat (juoksu, taistelu kuolemaan asti) kutsuvat. Ytimet eivät kuluta aikaa: hinta ja `wait` kuuluvat kutsuvalle komennolle.
 
@@ -276,7 +276,7 @@ after MISSED(target, attacker) as MISS_MESSAGE priority -10 when WITNESSED(targe
 - **Kohteen valinta.** `aim N at JOUKKO` antaa kantaman ja ehdokkaat. Pelaaja valitsee kohteen asetuksensa `targeting` mukaan kohdistimella, listasta tai automaattisesti lähimmän (moottoridokumentti, luku [8](../moottori/08-syote.md)). Tekoäly antaa ruudun suoraan.
 - **Laskeutuminen.** Ammus putoaa osuttuun olentoon, ohi mentyään linjan loppuun ja esteeseen törmätessään viimeiseen vapaaseen ruutuun. Laskeutumispaikka lasketaan ennen vahinkoa, koska osuma voi tappaa kohteen.
 - **Esitys.** `fly` piirtää ammuksen reitille ennen vahinkoa. Se on esitystä, joten ohitettu kohtaus ei näytä sitä.
-- **Nimi.** Linjan osuman etsivä funktio on `STRIKE_LINE`, jotta se ei sekoitu lähitaistelun ytimeen `STRIKE` (luku [5](#)).
+- **Nimi.** Linjan osuman etsivä funktio on `STRIKE_LINE`, jotta se ei sekoitu lähitaistelun ytimeen `STRIKE` (luku [5](#5-komennot)).
 - **Tekoäly.** `HUNTER` lyö vieressä olevaa vain, jos sillä on `MELEE`. Muuten se ampuu, kun `CAN_SHOOT` on tosi. Suora laukaus voi osua omaan, eikä metsästäjä vielä varo sitä. Jos kohde on vieressä eikä metsästäjä voi ampua, se perääntyy (`FLEE`).
 
 ---

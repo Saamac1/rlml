@@ -1,0 +1,135 @@
+//! The STD minigame (STD 12) as an acceptance test: it loads cleanly with
+//! the standard library, and broken copies give the load errors of M 2.
+
+use std::path::Path;
+
+use rlml_core::check_game;
+use rlml_core::error::Report;
+use rlml_core::load::MemFiles;
+
+fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<String, String>) {
+    for e in std::fs::read_dir(dir).unwrap().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            read_tree(root, &p, out);
+        } else {
+            let rel = p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+            out.insert(rel, std::fs::read_to_string(&p).unwrap());
+        }
+    }
+}
+
+fn mini() -> MemFiles {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = MemFiles::default();
+    let game = repo.join("esimerkit/mini");
+    read_tree(&game, &game, &mut files.game);
+    read_tree(&repo, &repo.join("lib"), &mut files.engine);
+    files
+}
+
+fn run(files: &MemFiles) -> Report {
+    check_game(files, "game.rlml").1
+}
+
+/// Replaces `old` with `new` in one file.
+fn edit(files: &mut MemFiles, path: &str, old: &str, new: &str) {
+    let src = files.game.get_mut(path).unwrap();
+    assert!(src.contains(old), "`{old}` not in {path}");
+    *src = src.replacen(old, new, 1);
+}
+
+fn errors(r: &Report) -> Vec<String> {
+    r.errors().map(|d| d.to_string()).collect()
+}
+
+fn expect_error(r: &Report, part: &str) {
+    let e = errors(r);
+    assert!(e.iter().any(|m| m.contains(part)), "expected an error with `{part}`, got {e:#?}");
+}
+
+#[test]
+fn minigame_loads_cleanly() {
+    let r = run(&mini());
+    let all: Vec<String> = r.0.iter().map(|d| d.to_string()).collect();
+    assert!(all.is_empty(), "{all:#?}");
+}
+
+#[test]
+fn unknown_map_character() {
+    let mut f = mini();
+    edit(&mut f, "maps/caves.rlml", "#.@..#", "#.@X.#");
+    expect_error(&run(&f), "maps/caves.rlml:12: error: unknown character `X` at row 3, column 4");
+}
+
+#[test]
+fn missing_language_setting() {
+    let mut f = mini();
+    edit(&mut f, "game.rlml", "- language fi\n", "");
+    expect_error(&run(&f), "missing setting `language`");
+}
+
+#[test]
+fn exit_label_is_checked_in_the_target_map() {
+    let mut f = mini();
+    edit(&mut f, "game.rlml", "- EXIT to CAVE_B", "- EXIT to CAVE_B at BOTTOM");
+    expect_error(&run(&f), "`STD.EXIT.at`: map `CAVE_B` has no label `BOTTOM`");
+}
+
+#[test]
+fn start_search() {
+    let mut f = mini();
+    edit(&mut f, "game.rlml", "- at SPAWN", "- at SPAWNN");
+    expect_error(&run(&f), "map `CAVE_A` has no label `SPAWNN`");
+    let mut f = mini();
+    edit(&mut f, "game.rlml", "- start CAVE_A", "- start CAVE_C");
+    expect_error(&run(&f), "`start`: `CAVE_C` is not defined");
+}
+
+#[test]
+fn keys_and_menus() {
+    let mut f = mini();
+    edit(&mut f, "ui/main.rlml", "- WAIT s", "- WIAT s");
+    expect_error(&run(&f), "`WIAT` is not defined");
+    let mut f = mini();
+    edit(&mut f, "ui/main.rlml", "- pass z", "- pass s");
+    expect_error(&run(&f), "key `s` is bound twice in context `GAME`");
+    let mut f = mini();
+    edit(&mut f, "ui/main.rlml", "- RESUME", "- RESUMEE");
+    expect_error(&run(&f), "item `RESUMEE` has no action");
+}
+
+#[test]
+fn component_rows() {
+    let mut f = mini();
+    edit(&mut f, "game.rlml", "- HP now 3", "- HP 3");
+    expect_error(&run(&f), "`STD.HP` has 2 fields, so the row must name them: now, max");
+    let mut f = mini();
+    edit(&mut f, "game.rlml", "- MELEE 1d2", "- MELEE strong");
+    expect_error(&run(&f), "`STD.MELEE.damage`: `strong` is not dice");
+}
+
+#[test]
+fn texts_and_logs() {
+    let mut f = mini();
+    edit(&mut f, "ui/main.rlml", "- STD.MESSAGE.SENSE", "- STD.MESSAGE.SENSES");
+    expect_error(&run(&f), "`STD.MESSAGE.SENSES` is not the start of any message key");
+    let mut f = mini();
+    f.engine.get_mut("lib/std/text/fi.rlml").unwrap().push_str("STD.MESSAGE.COMBAT.MISS {TARGETT} väistää.\n");
+    expect_error(&run(&f), "message `STD.MESSAGE.COMBAT.MISS` has no parameter `TARGETT`");
+}
+
+#[test]
+fn labels_must_not_be_general_names() {
+    let mut f = mini();
+    edit(&mut f, "maps/caves.rlml", "- @ FLOOR as SPAWN", "- @ FLOOR as RAT");
+    edit(&mut f, "game.rlml", "- at SPAWN", "- at RAT");
+    expect_error(&run(&f), "label `RAT` of map `CAVE_A` has the same name as the entity `RAT`");
+}
+
+#[test]
+fn style() {
+    let mut f = mini();
+    edit(&mut f, "style/ascii.rlml", "- GLYPH.RAT r fg FUR", "- GLYPH.RAT r fg FURR");
+    expect_error(&run(&f), "`FURR` is not a color name or a hex color");
+}

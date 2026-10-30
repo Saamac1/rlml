@@ -1,0 +1,16 @@
+> STD:n suomenkieliset tekstit (STD 9).
+
+language fi
+STD.DEFAULT.PLAYER.NAME sinä
+STD.MESSAGE.COMBAT.HIT {TARGET} ottaa {AMOUNT} vahinkoa.
+STD.MESSAGE.COMBAT.HURT Otat {AMOUNT} vahinkoa.
+STD.MESSAGE.COMBAT.DIED {VICTIM} kuolee.
+STD.MESSAGE.COMBAT.YOU_DIED Kuolet.
+STD.MESSAGE.COMBAT.MISS {TARGET} väistää.
+STD.MESSAGE.LOOT.PICKUP Poimit: {ITEM}.
+STD.MESSAGE.LOOT.DROP Pudotit: {ITEM}.
+STD.MESSAGE.SENSE.HEARD {SOUND:DESC}
+STD.SOUND.STEP.DESC Kuulet askelia.
+STD.SOUND.SNEAK.DESC Kuulet hiipiviä askelia.
+STD.SOUND.FIGHT.DESC Kuulet taistelun ääniä.
+STD.SOUND.SHOT.DESC Kuulet jänteen napsahduksen.

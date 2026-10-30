@@ -27,6 +27,11 @@
 
 Suljettu 25.10.2026 (robotfindskitten-toteutustesti): jokerin laji ja tekstiavainten jokeri (luku [2.1](02-yleinen-syntaksi.md#21-nimet-ja-sanasto)), asettelun valinta (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)), arvotun ulkoasun sarjarivi ja tyylin merkkisäännöt (luku [9.2](09-ulkoasu.md#92-tilejen-ulkoasu-tilesglyphs)), näppäin tekstissä ja monikappaleiset tekstit (luku [10](10-tekstit.md)), pelin loppuvalikko `final` ja `new_game` (luku [11.2](11-kayttoliittyman-data.md#112-valikot)), lokin pitkä viesti (luku [11.4](11-kayttoliittyman-data.md#114-viestit-ja-loki)) sekä modaalisen paneelin sidonnat (luku [11.5](11-kayttoliittyman-data.md#115-paneelit)).
 
+**Lataajan ensimmäinen versio 31.10.2026.** Kohdat, jotka toteutus joutui arvaamaan:
+
+- **Moottorin komponentti `sound`.** Moottoridokumentin sanasto (luku [9.1](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#91-sanasto)) luettelee komponentin `sound`, mutta sen kenttiä ei ole kuvattu missään. Luvun [5.3](05-komponentit-ja-entiteetit.md#53-moottorin-komponentit) taulukosta puuttuvat lisäksi `blocks`, `hearing` ja `name`, jotka kuvataan vain luettelokohdissa ja luvussa [12.3](12-aanten-ilmoitukset.md#123-pelimaailman-äänet). Toteutus hyväksyy `sound`-rivin tarkistamatta.
+- **Jokeri hakupolulla.** Luku [3](03-tiedostot-ja-include.md) kertoo hakujärjestyksen yhdelle tiedostolle mutta ei jokerille (`include std/text/*`). Toteutus käyttää ensimmäistä hakupaikkaa, jossa kansio on olemassa, ja varoittaa, jos kansiossa ei ole yhtään tiedostoa.
+
 Suljettu 25.10.2026 (Rogue-toteutustesti): pinot ilman `merge`-sääntöä. Kortin määrä synnyttää aina niin monta ilmentymää, ja `merge` päättää vain, näkyvätkö ne pinona (luvut [5.4](05-komponentit-ja-entiteetit.md#54-kokoelmat) ja [6.1](06-pakat-ja-taulut.md#61-pakka)).
 
 ---

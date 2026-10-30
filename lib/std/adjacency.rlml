@@ -1,0 +1,43 @@
+# STD: Vierekkäisyys
+
+> Koottu vakiokirjaston luvuista (RS 4.2). Speksi on normatiivinen,
+> joten muutos tehdään ensin speksiin.
+
+namespace STD
+
+```roguescript
+event ADJACENT(who: entity, other: entity)
+
+event APART(who: entity, other: entity)
+
+query NEIGHBOURS(who: entity, around: area) -> collection:
+    return entities(in: near(around, 1)) where it != who
+
+fn MEET(who: entity, others: collection):
+    for e in others:
+        emit ADJACENT(who, e)
+        emit ADJACENT(e, who)
+
+fn PART(who: entity, others: collection):
+    for e in others:
+        emit APART(who, e)
+        emit APART(e, who)
+
+after enter(who, p, prev) as ADJACENCY_MOVE when prev != none:
+    was = NEIGHBOURS(who, prev)
+    now = NEIGHBOURS(who, p)
+    PART(who, was where not it in now)
+    MEET(who, now where not it in was)
+
+after arrive(who, map, p) as ADJACENCY_ARRIVE:
+    MEET(who, NEIGHBOURS(who, p))
+
+after depart(who, map, p) as ADJACENCY_DEPART:
+    PART(who, NEIGHBOURS(who, p))
+
+after created(e) as ADJACENCY_CREATED:
+    MEET(e, NEIGHBOURS(e, e))
+
+after removed(e) as ADJACENCY_REMOVED:
+    PART(e, NEIGHBOURS(e, e))
+```

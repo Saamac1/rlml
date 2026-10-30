@@ -1,0 +1,28 @@
+# STD: Äänet
+
+> Koottu vakiokirjaston luvuista (STD 3, 8 ja 9). Speksi on normatiivinen,
+> joten muutos tehdään ensin speksiin.
+
+namespace STD
+
+component LISTENER
+- last number default -1
+
+sounds
+- SOUND.STEP level 3
+- SOUND.SNEAK level 1
+- SOUND.FIGHT level 6
+- SOUND.SHOT level 4
+
+messages
+- MESSAGE.SENSE.HEARD SOUND
+
+```roguescript
+on hear(who, s) as HEAR_MESSAGE priority -10 when who == player and (s.source == none or not sees(who, s.source)):
+    if who has LISTENER and who.LISTENER.last == game.time:
+        return
+    if who has no LISTENER:
+        add(who, LISTENER())
+    who.LISTENER.last = game.time
+    log(MESSAGE.SENSE.HEARD, SOUND: s.kind)
+```

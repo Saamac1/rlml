@@ -1,0 +1,172 @@
+# STD: Taistelu
+
+> Koottu vakiokirjaston luvuista (STD 3, 4, 5, 5.1 ja 8). Speksi on normatiivinen,
+> joten muutos tehdään ensin speksiin.
+
+namespace STD
+
+include core.rlml
+
+component HP
+- now number
+- max number default now
+
+component MELEE
+- damage dice
+
+component DROPS
+- loot table
+
+component RANGED
+- range number
+- damage dice
+- lob bool default false
+- ammo name default none
+- projectile name default GLYPH.MISSILE
+
+component MARKSMANSHIP
+- value number default 0
+
+component EVASION
+- value number default 0
+
+component THROWN
+- damage dice
+
+component AMMO
+- count number default 1
+
+messages
+- MESSAGE.COMBAT.HIT TARGET AMOUNT
+- MESSAGE.COMBAT.HURT AMOUNT
+- MESSAGE.COMBAT.DIED VICTIM
+- MESSAGE.COMBAT.YOU_DIED
+- MESSAGE.COMBAT.MISS TARGET
+
+```roguescript
+event HIT(target: entity, attacker: entity, amount: number, cause: name = none)
+
+event DIED(victim: entity, killer: entity, cause: name = none)
+
+event MISSED(target: entity, attacker: entity)
+
+fn HURT(target: entity, amount: number, source: entity = none, cause: name = none):
+    emit HIT(target, source, amount, cause)
+
+fn STRIKE(attacker: entity, target: entity) -> bool:
+    if attacker has no MELEE or target has no HP or not target.at in adjacent(attacker):
+        return false
+    emit HIT(target, attacker, attacker.MELEE.damage)
+    noise(attacker.at, SOUND.FIGHT, source: attacker)
+    return true
+
+command ATTACK(target: entity) cost 120:
+    return STRIKE(actor, target)
+
+on HIT(target, attacker, amount, cause) as APPLY_DAMAGE:
+    if target has no HP:
+        return
+    target.HP.now -= amount
+    if target.HP.now <= 0:
+        emit DIED(target, attacker, cause)
+
+after HIT(target, attacker, amount) as HIT_MESSAGE priority -10 when WITNESSED(target):
+    if target == player:
+        log(MESSAGE.COMBAT.HURT, AMOUNT: amount)
+    else:
+        log(MESSAGE.COMBAT.HIT, TARGET: target, AMOUNT: amount)
+
+on DIED(victim, killer) as DEATH priority -10:
+    if victim has DROPS:
+        spawn(victim.DROPS.loot, at: victim)
+    destroy(victim)
+
+after DIED(victim, killer) as DEATH_MESSAGE priority -10 when WITNESSED(victim):
+    if victim == player:
+        log(MESSAGE.COMBAT.YOU_DIED)
+    else:
+        log(MESSAGE.COMBAT.DIED, VICTIM: victim)
+
+fn HITS(shooter: entity, target: entity) -> bool:
+    attack = 1d20
+    if shooter has MARKSMANSHIP:
+        attack += shooter.MARKSMANSHIP.value
+    save = 1d20
+    if target has EVASION:
+        save += target.EVASION.value
+    return attack > save
+
+query ROUTE(shooter: entity, target: pos, range: number, lob: bool) -> area:
+    if lob:
+        return ray(shooter.at, target, for: shooter, mode: MISSILE)
+    return ray(shooter.at, target, for: shooter, range: range, mode: MISSILE)
+
+fn STRIKE_LINE(shooter: entity, route: area, lob: bool) -> entity:
+    candidates = route
+    if lob and route.count > 0:
+        candidates = route where it == route.last
+    for p in candidates:
+        victim = (entities(in: p) where it has HP and it != shooter).first
+        if victim != none:
+            if HITS(shooter, victim):
+                return victim
+            emit MISSED(victim, shooter)
+    return none
+
+query LANDING(shooter: entity, route: area, victim: entity) -> pos:
+    if victim != none:
+        return victim.at
+    if route.count > 0:
+        return route.last
+    return shooter.at
+
+command SHOOT(target: pos aim actor.RANGED.range at HOSTILES(actor)) cost 120:
+    if actor has no RANGED:
+        return false
+    w = actor.RANGED
+    ammo = none
+    if w.ammo != none:
+        if actor has no PACK:
+            return false
+        ammo = (actor.PACK.items where it is w.ammo and it has AMMO and it.AMMO.count > 0).first
+        if ammo == none:
+            return false
+    noise(actor.at, SOUND.SHOT, source: actor)
+    route = ROUTE(actor, target, w.range, w.lob)
+    victim = STRIKE_LINE(actor, route, w.lob)
+    land = LANDING(actor, route, victim)
+    fly(w.projectile, line(actor.at, land) - actor.at, speed: 30ms)
+    if ammo != none:
+        ammo.AMMO.count -= 1
+        pile = (entities(in: land) where it is w.ammo and it has AMMO).first
+        if pile != none:
+            pile.AMMO.count += 1
+        else:
+            spawn(w.ammo, at: land)
+        if ammo.AMMO.count <= 0:
+            destroy(ammo)
+    if victim != none:
+        emit HIT(victim, actor, w.damage)
+
+command THROW(item: entity from actor.PACK.items, target: pos aim 6 at HOSTILES(actor)) cost 120:
+    route = ROUTE(actor, target, 6, true)
+    victim = none
+    if item has THROWN:
+        victim = STRIKE_LINE(actor, route, true)
+    land = LANDING(actor, route, victim)
+    fly(item.render.tile, line(actor.at, land) - actor.at, speed: 30ms)
+    move(item, to: land)
+    if victim != none:
+        emit HIT(victim, actor, item.THROWN.damage)
+
+query CAN_SHOOT(shooter: entity, foe: entity) -> bool:
+    if shooter has no RANGED or distance(shooter, foe) > shooter.RANGED.range:
+        return false
+    w = shooter.RANGED
+    if w.ammo != none and (shooter has no PACK or (shooter.PACK.items where it is w.ammo and it has AMMO and it.AMMO.count > 0).count == 0):
+        return false
+    return foe.at in ROUTE(shooter, foe.at, w.range, w.lob)
+
+after MISSED(target, attacker) as MISS_MESSAGE priority -10 when WITNESSED(target):
+    log(MESSAGE.COMBAT.MISS, TARGET: target)
+```

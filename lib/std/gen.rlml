@@ -1,0 +1,64 @@
+# STD: Generointi
+
+> Koottu vakiokirjaston luvuista (STD 10). Speksi on normatiivinen,
+> joten muutos tehdään ensin speksiin.
+
+namespace STD
+
+```roguescript
+fn SCATTER_TILES(t: name, share: percent, area: area = tiles()):
+    for p in area:
+        if chance(share):
+            carve(p, t)
+
+query FLOOR_AROUND(p: pos, floor: name) -> number:
+    return ((near(p, 1) - p) and at(floor)).count
+
+fn SMOOTH(floor: name, wall: name, area: area = tiles()):
+    cells = area and (at(floor) or at(wall))
+    grow = cells where FLOOR_AROUND(it, floor) <= 3
+    shrink = cells where FLOOR_AROUND(it, floor) >= 5
+    carve(grow, wall)
+    carve(shrink, floor)
+
+fn ROOMS(count: range, width: range, height: range, area: area = tiles()) -> list area:
+    rooms = []
+    taken = area - area
+    want = choose(count)
+    tries = 0
+    while rooms.count < want:
+        tries += 1
+        if tries > want * 20:
+            break
+        room = rect(area.choose(), choose(width), choose(height))
+        if (room - area).count == 0 and (near(room, 1) and taken).count == 0:
+            rooms += room
+            taken = taken or room
+    return rooms
+
+fn CONNECT(floor: name, with: name = floor):
+    cells = at(floor)
+    if cells.count == 0:
+        return
+    joined = region(cells.first, of: at(floor) or at(with))
+    for p in cells:
+        if not p in joined:
+            goal = nearest(joined, p)
+            bend = pos(goal.x, p.y)
+            carve(line(p, bend) or line(bend, goal), with)
+            joined = region(goal, of: at(floor) or at(with))
+
+query FITS(p: name, spot: pos, area: area) -> bool:
+    shape = footprint(p, at: spot)
+    if shape == none:
+        return false
+    return (shape - area).count == 0
+
+fn PLACE(p: name, area: area = tiles()) -> area:
+    spots = area where FITS(p, it, area)
+    if spots.count == 0:
+        return none
+    spot = spots.choose()
+    stamp(p, at: spot)
+    return footprint(p, at: spot)
+```

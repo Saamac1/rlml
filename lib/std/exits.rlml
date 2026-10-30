@@ -1,0 +1,18 @@
+# STD: Uloskäynnit
+
+> Koottu vakiokirjaston luvuista (STD 3 ja 5). Speksi on normatiivinen,
+> joten muutos tehdään ensin speksiin.
+
+namespace STD
+
+component EXIT
+- to name
+- at label default START
+
+```roguescript
+command TAKE_EXIT() cost 120:
+    exit = (entities(in: actor.at) where it has EXIT).first
+    if exit == none:
+        return false
+    travel(actor, exit.EXIT.to, at: exit.EXIT.at)
+```

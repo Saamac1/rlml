@@ -1,0 +1,16 @@
+# RLML-vakiokirjasto (STD)
+
+> Paketti, joka ottaa mukaan koko vakiokirjaston (STD 1.3).
+
+include std/core.rlml
+include std/combat.rlml
+include std/move.rlml
+include std/relations.rlml
+include std/ai.rlml
+include std/items.rlml
+include std/exits.rlml
+include std/adjacency.rlml
+include std/sound.rlml
+include std/gen.rlml
+include std/ascii.rlml
+include std/text/*

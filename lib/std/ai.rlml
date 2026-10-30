@@ -1,0 +1,74 @@
+# STD: Tekoäly
+
+> Koottu vakiokirjaston luvuista (STD 6). Speksi on normatiivinen,
+> joten muutos tehdään ensin speksiin.
+
+namespace STD
+
+include move.rlml
+include combat.rlml
+include relations.rlml
+
+```roguescript
+query HOSTILES(of: entity) -> collection:
+    if of has no sight:
+        return []
+    return entities(in: near(of, of.sight.radius)) where MAY_ATTACK(of, it) and sees(of, it)
+
+command APPROACH(target: area) cost 120:
+    route = path(actor, target, for: actor)
+    if route.count == 0:
+        return false
+    return STEP(route.first)
+
+command FLEE(threat: area) cost 120:
+    spots = adjacent(actor) where distance(it, threat) > distance(actor, threat) and not blocks(it, move, for: actor)
+    if spots.count == 0:
+        return false
+    return STEP(spots.choose())
+
+command WANDER() cost 120:
+    spots = adjacent(actor) where not blocks(it, move, for: actor)
+    if spots.count == 0:
+        return false
+    return STEP(spots.choose())
+
+ai HUNTER:
+    foe = nearest(HOSTILES(self), self)
+    if foe != none:
+        if self has HP and self.HP.now < self.HP.max / 4:
+            return FLEE(foe)
+        near_foe = foe.at in adjacent(self)
+        if near_foe and self has MELEE:
+            return ATTACK(foe)
+        if CAN_SHOOT(self, foe):
+            return SHOOT(foe.at)
+        if near_foe:
+            return FLEE(foe)
+        return APPROACH(foe)
+    noises = heard(self) where it.source != none and MAY_ATTACK(self, it.source)
+    if noises.count > 0:
+        return APPROACH(noises.first.at)
+    return WANDER()
+
+component FOLLOW(target: entity = none, distance: number = 1)
+
+query LEADER_OF(e: entity) -> entity:
+    if e has FOLLOW and e.FOLLOW.target != none:
+        return e.FOLLOW.target
+    return player
+
+ai FOLLOWER:
+    leader = LEADER_OF(self)
+    if leader == none or leader.at == none or leader.map != self.map:
+        return WANDER()
+    foe = nearest(HOSTILES(self), self)
+    if foe != none and self has MELEE and foe.at in adjacent(self):
+        return ATTACK(foe)
+    stop = 1
+    if self has FOLLOW:
+        stop = self.FOLLOW.distance
+    if distance(self, leader) <= stop:
+        return WAIT()
+    return APPROACH(leader)
+```

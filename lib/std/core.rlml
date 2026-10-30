@@ -1,0 +1,32 @@
+# STD: Pelaaja ja aloitus
+
+> Koottu vakiokirjaston luvuista (STD 3 ja 8). Speksi on normatiivinen,
+> joten muutos tehdään ensin speksiin.
+
+namespace STD
+
+component PLAYER
+- class card default DEFAULT.PLAYER
+
+entity DEFAULT.PLAYER
+- HP now 10
+- MELEE 1d4
+- PACK
+- blocks move
+- ALIGNMENT 0
+- FACTION GROUP.PLAYER
+- sight radius 8
+- hearing
+- ai behavior HUNTER
+- render GLYPH.PLAYER
+
+```roguescript
+query WITNESSED(e: entity) -> bool:
+    return player != none and (e == player or sees(player, e))
+
+on begin() as SPAWN_PLAYER:
+    if game has PLAYER:
+        control(spawn(game.PLAYER.class, at: game.at))
+    else:
+        control(spawn(DEFAULT.PLAYER, at: game.at))
+```

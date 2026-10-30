@@ -1,0 +1,47 @@
+# STD: Esineet
+
+> Koottu vakiokirjaston luvuista (STD 3, 4 ja 5). Speksi on normatiivinen,
+> joten muutos tehdään ensin speksiin.
+
+namespace STD
+
+component PACK
+- items collection
+
+component ITEM
+
+messages
+- MESSAGE.LOOT.PICKUP ITEM
+- MESSAGE.LOOT.DROP ITEM
+
+```roguescript
+event PICKED_UP(who: entity, item: entity)
+
+event DROPPED(who: entity, item: entity)
+
+fn GIVE(to: entity, card: card):
+    spawn(card, into: to.PACK.items)
+
+command PICK_UP(item: entity from entities(in: actor.at) where it has ITEM) cost 120:
+    if actor has no PACK:
+        return false
+    if item has AMMO:
+        same = (actor.PACK.items where it is item and it has AMMO).first
+        if same != none:
+            same.AMMO.count += item.AMMO.count
+            destroy(item)
+            emit PICKED_UP(actor, same)
+            return
+    move(item, to: actor.PACK.items)
+    emit PICKED_UP(actor, item)
+
+command DROP(item: entity from actor.PACK.items) cost 120:
+    move(item, to: actor.at)
+    emit DROPPED(actor, item)
+
+after PICKED_UP(who, item) as PICKUP_MESSAGE priority -10 when who == player:
+    log(MESSAGE.LOOT.PICKUP, ITEM: item)
+
+after DROPPED(who, item) as DROP_MESSAGE priority -10 when who == player:
+    log(MESSAGE.LOOT.DROP, ITEM: item)
+```

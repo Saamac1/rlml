@@ -1,0 +1,114 @@
+# STD: Liike
+
+> Koottu vakiokirjaston luvuista (STD 3 ja 5). Speksi on normatiivinen,
+> joten muutos tehdään ensin speksiin.
+
+namespace STD
+
+include relations.rlml
+include combat.rlml
+include sound.rlml
+
+component SNEAKING
+
+component FOOD
+- points number default 30
+- group bool default false
+
+```roguescript
+event BUMP(who: entity, other: entity)
+
+query STEP_SOUND(e: entity) -> name:
+    if e has SNEAKING:
+        return SOUND.SNEAK
+    return SOUND.STEP
+
+query CAN_STEP(who: entity, to: pos) -> bool:
+    return to in adjacent(who)
+
+query BLOCKER(who: entity, to: pos) -> entity:
+    return (entities(in: to) where it != who and blocks(it, move, tiles: false)).first
+
+fn DO_STEP(who: entity, to: pos):
+    move(who, to: to)
+    noise(to, STEP_SOUND(who), source: who)
+
+command STEP(to: pos) cost 120:
+    if actor has SNEAKING:
+        wait 120
+    if not CAN_STEP(actor, to):
+        return false
+    other = BLOCKER(actor, to)
+    if other != none:
+        emit BUMP(actor, other)
+        if other has HP and MAY_ATTACK(actor, other):
+            return ATTACK(other)
+        if FRIENDS(actor, other) and (other has ai or other == player) and not blocks(actor.at, move, for: other):
+            move(other, to: actor.at)
+            DO_STEP(actor, to)
+            return
+        return false
+    if blocks(to, move, for: actor):
+        return false
+    DO_STEP(actor, to)
+
+command MOVE(dir: dir) cost 120:
+    return STEP(actor.at + dir)
+
+command MOVE.NORTH = MOVE(north)
+
+command MOVE.NORTHEAST = MOVE(northeast)
+
+command MOVE.EAST = MOVE(east)
+
+command MOVE.SOUTHEAST = MOVE(southeast)
+
+command MOVE.SOUTH = MOVE(south)
+
+command MOVE.SOUTHWEST = MOVE(southwest)
+
+command MOVE.WEST = MOVE(west)
+
+command MOVE.NORTHWEST = MOVE(northwest)
+
+command WAIT() cost 120:
+    return
+
+command SNEAK() cost 0:
+    if actor has SNEAKING:
+        remove(actor, SNEAKING)
+    else:
+        add(actor, SNEAKING())
+
+command FIGHT(dir: dir) cost 120:
+    others = entities(in: actor.at + dir) where it != actor and it has HP
+    if others.count == 0:
+        return false
+    other = others.first
+    if ALIGNMENT_OF(actor) >= GOOD_AT and not ENEMIES(actor, other):
+        return false
+    return ATTACK(other)
+
+command FIGHT.NORTH = FIGHT(north)
+
+command FIGHT.NORTHEAST = FIGHT(northeast)
+
+command FIGHT.EAST = FIGHT(east)
+
+command FIGHT.SOUTHEAST = FIGHT(southeast)
+
+command FIGHT.SOUTH = FIGHT(south)
+
+command FIGHT.SOUTHWEST = FIGHT(southwest)
+
+command FIGHT.WEST = FIGHT(west)
+
+command FIGHT.NORTHWEST = FIGHT(northwest)
+
+command FEED(item: entity from actor.PACK.items where it has FOOD, target: pos aim 1 at entities(in: adjacent(actor)) where it has HP) cost 120:
+    eaters = entities(in: target) where it != actor and it has HP
+    if eaters.count == 0 or not target in adjacent(actor):
+        return false
+    BEFRIEND(eaters.first, actor, item.FOOD.points, group: item.FOOD.group)
+    destroy(item)
+```

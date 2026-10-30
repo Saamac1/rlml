@@ -4,6 +4,13 @@
 
 - **Paikanvaihto oletussuhteella.** Oletussuhde on tasan `FRIENDLY`, joten kaikki entiteetit ilman suhteita ovat ystäviä, ja paikanvaihdon rajaa vain tekoälyehto (luku [5](05-komennot.md)). Vaatiiko paikanvaihto yksilö- tai ryhmäsuhteen eikä pelkkää alignmentin oletusta? Muutos koskisi seuraajia, joiden suhde on nyt oletus (luku [6.1](06-tekoaly.md#61-seuraaja)).
 
+**Lataajan ensimmäinen versio 31.10.2026.** STD on nyt tiedostoina kansiossa `lib/std/`, ja lataaja tarkistaa sen. Seuraavat kohdat jouduttiin arvaamaan:
+
+- **Moduulien riippuvuudet.** Luvun [1.3](01-rajaus-periaatteet-ja-lataus.md#13-lataus-ja-moduulit) taulukon mukaan `core` ei tarvitse muita moduuleja, mutta `DEFAULT.PLAYER` käyttää komponentteja `HP`, `MELEE`, `PACK`, `ALIGNMENT` ja `FACTION`, tekoälyä `HUNTER` ja tileä `GLYPH.PLAYER`. Pelkkä `include lib/std/core.rlml` antaa siksi seitsemän latausvirhettä. Samoin `combat` käyttää datassa tileä `GLYPH.MISSILE` ja logiikassa nimiä `HOSTILES` (ai), `PACK` (items) ja `SOUND.SHOT` (sound). Pitäisikö `core`:n ottaa mukaan nämä moduulit, vai siirretäänkö `DEFAULT.PLAYER` omaan moduuliinsa?
+- **Moduulittomat nimet.** Taulukko ei sijoita nimiä `SNEAK`, `SNEAKING`, `FIGHT`, `FEED`, `FOOD`, `LISTENER`, `HEAR_MESSAGE`, `WITNESSED`, `FOLLOW`, `LEADER_OF`, `FOLLOWER`, `AMMO` eikä vakioita `TOLERANCE` … `KIN_RANGE`. Toteutus sijoittaa ne näin: liike (`SNEAK`, `SNEAKING`, `FIGHT`, `FEED`, `FOOD`), ääni (`LISTENER`, `HEAR_MESSAGE`), core (`WITNESSED`), tekoäly (`FOLLOW`, `LEADER_OF`, `FOLLOWER`), taistelu (`AMMO`) ja suhteet (vakiot).
+- **Kortin ylikirjoitus `PLAYER HERO HP 20`.** Luvun [3](03-komponentit-ja-oletuspelaaja.md) esimerkki kirjoittaa kaksikenttäisen `HP`:n ilman kentän nimeä, mikä on latausvirhe (dataformaatit, luvut [5.2](../dataformaatit/05-komponentit-ja-entiteetit.md#52-entiteetit) ja [6.4](../dataformaatit/06-pakat-ja-taulut.md#64-kenttien-ylikirjoitus)). Pitäisikö esimerkin olla `- PLAYER HERO HP now 20`?
+- **Englanninkieliset tekstit.** Luku [1.3](01-rajaus-periaatteet-ja-lataus.md#13-lataus-ja-moduulit) lupaa tiedoston `lib/std/text/en.rlml`, mutta luku [9](09-aanet-viestit-ja-tekstit.md) antaa vain suomenkieliset tekstit. Toteutuksessa on toistaiseksi vain `fi.rlml`.
+
 **Ratkaistu 25.10.2026 (robotfindskitten-toteutustesti):**
 
 - **Moduulin `move` riippuvuudet** ovat relations, combat ja sound (luku [1.3](01-rajaus-periaatteet-ja-lataus.md#13-lataus-ja-moduulit)).

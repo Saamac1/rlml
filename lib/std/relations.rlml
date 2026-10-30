@@ -1,0 +1,116 @@
+# STD: Suhteet
+
+> Koottu vakiokirjaston luvuista (STD 3 ja 7). Speksi on normatiivinen,
+> joten muutos tehdään ensin speksiin.
+
+namespace STD
+
+component ALIGNMENT
+- value number default 0
+
+component FACTION
+- group name
+
+component BONDS
+- toward dict entity number
+
+component STANCE
+- toward dict name number
+
+component FACTIONS
+- items collection
+
+entity GROUP.PLAYER
+
+constants
+- TOLERANCE 50
+- FRIENDLY 50
+- PROVOKED -50
+- GOOD_AT 34
+- EVIL_AT -34
+- KIN_RANGE 8
+
+```roguescript
+query GROUP_OF(e: entity) -> entity:
+    if e has no FACTION or game has no FACTIONS:
+        return none
+    return (game.FACTIONS.items where it is e.FACTION.group).first
+
+query GROUP_STANCE(a: entity, b: entity) -> number:
+    ga = GROUP_OF(a)
+    if ga == none or ga has no STANCE or b has no FACTION:
+        return none
+    if not b.FACTION.group in ga.STANCE.toward:
+        return none
+    return ga.STANCE.toward[b.FACTION.group]
+
+query BASE(a: entity, b: entity) -> number:
+    s = GROUP_STANCE(a, b)
+    if s != none:
+        return s
+    d = 0
+    if a has ALIGNMENT:
+        d += a.ALIGNMENT.value
+    if b has ALIGNMENT:
+        d -= b.ALIGNMENT.value
+    return TOLERANCE - max(d, -d)
+
+query ATTITUDE(a: entity, b: entity) -> number:
+    if a has BONDS and b in a.BONDS.toward:
+        return a.BONDS.toward[b]
+    return BASE(a, b)
+
+fn BEFRIEND(a: entity, b: entity, points: number, group: bool = false):
+    if group:
+        ga = GROUP_OF(a)
+        if ga != none and b has FACTION:
+            if ga has no STANCE:
+                add(ga, STANCE(toward: {}))
+            ga.STANCE.toward[b.FACTION.group] = min(100, max(-100, BASE(a, b) + points))
+            return
+    if a has no BONDS:
+        add(a, BONDS(toward: {}))
+    a.BONDS.toward[b] = min(100, max(-100, ATTITUDE(a, b) + points))
+
+query ALIGNMENT_OF(e: entity) -> number:
+    if e has ALIGNMENT:
+        return e.ALIGNMENT.value
+    return 0
+
+query ENEMIES(a: entity, b: entity) -> bool:
+    return ATTITUDE(a, b) < 0 or ATTITUDE(b, a) < 0
+
+query FRIENDS(a: entity, b: entity) -> bool:
+    return ATTITUDE(a, b) >= FRIENDLY and ATTITUDE(b, a) >= FRIENDLY
+
+query MAY_ATTACK(a: entity, b: entity) -> bool:
+    if a == b or b has no HP:
+        return false
+    if ALIGNMENT_OF(a) <= EVIL_AT:
+        return ATTITUDE(a, b) < FRIENDLY
+    return ENEMIES(a, b)
+
+query NEUTRAL(e: entity) -> bool:
+    return ALIGNMENT_OF(e) > EVIL_AT and ALIGNMENT_OF(e) < GOOD_AT
+
+fn GRUDGE(victim: entity, attacker: entity):
+    if victim has no BONDS:
+        add(victim, BONDS(toward: {}))
+    victim.BONDS.toward[attacker] = min(ATTITUDE(victim, attacker), PROVOKED)
+
+fn PROVOKE(victim: entity, attacker: entity):
+    if attacker == none or attacker == victim:
+        return
+    GRUDGE(victim, attacker)
+    if not NEUTRAL(victim) or victim has no FACTION:
+        return
+    kin = entities(in: near(victim, KIN_RANGE)) where it != victim and it != attacker and it has FACTION and it.FACTION.group == victim.FACTION.group and NEUTRAL(it) and sees(it, victim)
+    for k in kin:
+        GRUDGE(k, attacker)
+
+on HIT(target, attacker, amount) as PROVOKE_HIT priority 1:
+    PROVOKE(target, attacker)
+
+after MISSED(target, attacker) as PROVOKE_MISS:
+    PROVOKE(target, attacker)
+```

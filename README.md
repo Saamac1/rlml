@@ -83,6 +83,15 @@ RLML on roguelike-pelien kuvauskieli: pelin data kirjoitetaan tekstitiedostoina 
 
 - [Minipeli](esimerkit/mini/) (`esimerkit/mini/`): vakiokirjaston valmiustestin peli kokonaisena, kaksi luolaa, rotat ja portaat ilman RogueScriptiä ([STD 12](vakiokirjasto/12-minipeli-std-lla.md)).
 
+## Lataaja
+
+`crates/` sisältää Rust-toteutuksen alun: lataajan, joka lukee pelin ja vakiokirjaston (`lib/std.rlml`, `lib/std/`) ja tarkistaa ne latausvirheiden ja -varoitusten osalta ([M 2](moottori/02-lataus.md)). RogueScript-lohkoista luetaan toistaiseksi vain ylimmän tason määrittelyt.
+
+```sh
+cargo run -p rlml -- check esimerkit/mini
+cargo test
+```
+
 ## Avoimet kysymykset
 
 Jokaisessa dokumentissa on oma lukunsa avoimille kysymyksille:
