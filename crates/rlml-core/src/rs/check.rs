@@ -13,36 +13,16 @@
 use std::collections::BTreeSet;
 
 use super::ast::*;
+use super::sigs::FnKind;
 use crate::error::{Diagnostic, Report};
 use crate::fields::{DIRS, SIDES};
 use crate::model::{Kind, Model};
 use crate::names;
 use crate::rogue::Decl;
 
-/// How an engine function relates to the game's state (M 9.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FnKind {
-    /// Changes the game's state.
-    Changes,
-    /// Changes its receiver: a local copy or list is fine in a query.
-    ChangesReceiver,
-    Query,
-    Present,
-}
-
-/// Engine functions (M 6.8, M 9.3).
+/// An engine function's kind (M 9.2); see [`super::sigs`].
 pub fn engine_function(name: &str) -> Option<FnKind> {
-    use FnKind::*;
-    Some(match name {
-        "spawn" | "destroy" | "move" | "tile" | "tag" | "control" | "travel" | "follow" | "carve" | "stamp" | "external" | "scatter"
-        | "start" | "stop" | "checkpoint" | "rollback" | "autosave" | "delete_save" | "noise" => Changes,
-        "add" | "remove" | "shuffle" | "draw" | "put" | "reset" | "insert" | "remove_at" => ChangesReceiver,
-        "entities" | "tiles" | "at" | "near" | "from" | "rect" | "line" | "path" | "label" | "edge" | "pos" | "region" | "choose"
-        | "shuffled" | "pick" | "chance" | "index_of" | "peek" | "copy" | "min" | "max" | "distance" | "nearest" | "sees" | "text_of"
-        | "blocks" | "tile_of" | "adjacent" | "ray" | "footprint" | "heard" | "hears" => Query,
-        "say" | "log" | "play" | "pan" | "shake" | "fade" | "light" | "reveal" | "today" | "fly" => Present,
-        _ => return None,
-    })
+    super::sigs::kind_of(name)
 }
 
 /// Context names (RS 2.4).

@@ -5,4 +5,5 @@ pub mod ast;
 pub mod check;
 pub mod lex;
 pub mod parse;
+pub mod sigs;
 pub mod types;

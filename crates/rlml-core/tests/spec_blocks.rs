@@ -147,3 +147,28 @@ fn every_type_reads() {
     assert!(errors.is_empty(), "{errors:#?}");
     assert!(count > 150, "{count} parameters");
 }
+
+/// Every function M 9.1 lists has a signature (M 9.3).
+#[test]
+fn every_engine_function_has_a_signature() {
+    let src = std::fs::read_to_string(repo().join("moottori/09-moottorin-funktiot-ja-tapahtumat.md")).unwrap();
+    let groups = ["tila ja ilmentymät", "ruutujoukot", "listat", "satunnaisuus", "pakat ja taulut", "kyselyt", "generointi"];
+    let mut missing = Vec::new();
+    let mut seen = 0;
+    for line in src.lines() {
+        let Some(group) = groups.iter().find(|g| line.starts_with(&format!("| {g} |"))) else { continue };
+        let cells = line.split('|').nth(2).unwrap();
+        for name in cells.split('`').skip(1).step_by(2) {
+            seen += 1;
+            if rlml_core::rs::sigs::versions(name).is_empty() {
+                missing.push(format!("{group}: {name}"));
+            }
+        }
+    }
+    assert!(seen > 50, "{seen} names read from M 9.1");
+    assert!(missing.is_empty(), "{missing:#?}");
+    // and every signature is in the vocabulary, which guides load checks (M 9.1)
+    let vocab = &src[src.find("## 9.1").unwrap()..src.find("## 9.2").unwrap()];
+    let unlisted: Vec<&str> = rlml_core::rs::sigs::all().iter().map(|s| s.name.as_str()).filter(|n| !vocab.contains(&format!("`{n}`"))).collect();
+    assert!(unlisted.is_empty(), "not in M 9.1: {unlisted:?}");
+}

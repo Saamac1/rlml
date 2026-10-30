@@ -21,7 +21,7 @@ Kaikki moottorin nimet ovat pieniä.
 | tilen ominaisuudet | `blocks`, `only`, `lit`, `forget` ([D 7.5](../dataformaatit/07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#75-tilen-ominaisuudet-tiles)) |
 | valikon määreet | `list`, `final` ([D 11.2](../dataformaatit/11-kayttoliittyman-data.md#112-valikot)) |
 | tyylin määreet | `series` ([D 9.2](../dataformaatit/09-ulkoasu.md#92-tilejen-ulkoasu-tilesglyphs)) |
-| tila ja ilmentymät | `spawn`, `destroy`, `add`, `remove`, `move`, `tile`, `tag`, `entities`, `control`, `travel`, `follow` |
+| tila ja ilmentymät | `spawn`, `destroy`, `add`, `remove`, `move`, `tile`, `tag`, `entities`, `control`, `travel`, `follow`, `noise` (luku [6.8](06-ajo.md#68-äänet-ja-kuuleminen)) |
 | ruutujoukot | `tiles`, `at`, `near`, `from`, `rect`, `line`, `path`, `label`, `edge`, `pos`, `region` |
 | listat | `insert`, `remove_at`, `index_of` ([RS 2.6](../roguescript/02-yleinen-syntaksi.md#26-tyypit)) |
 | satunnaisuus | `choose`, `shuffled`, `pick`, `chance` |

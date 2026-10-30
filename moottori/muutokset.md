@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 31.10.2026 (moottorin funktioiden allekirjoitukset):** sanasto luettelee myös äänifunktion `noise` (luku [9.1](09-moottorin-funktiot-ja-tapahtumat.md#91-sanasto)).
+
 **Muutokset 30.10.2026 (kielitiedoston otsikko):** moottori valitsee kielitiedostot niiden `language`-otsikon mukaan, ja väärin sijoitettu otsikko on latausvirhe (luvut [2](02-lataus.md) ja [7.3](07-esitys.md#73-tekstit)).
 
 **Muutokset 30.10.2026 (open ja pino):** paluu jo avoimeen valikkoon ja määre `stack`; korutiinin `open` avaa aina uuden kerroksen (luku [7.5](07-esitys.md#75-valikot)).
