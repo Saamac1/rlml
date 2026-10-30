@@ -1,24 +1,12 @@
-//! RogueScript declarations (RS 12.1).
-//!
-//! The loader reads only the top-level declarations of a code block: their
-//! kind, name and, for components, events and commands, their parameters.
-//! Bodies are kept as text; statements and expressions are not parsed yet.
-//!
-//! ```text
-//! [override] component NAME[(fields)][:]
-//! [override] event NAME(params)
-//! [override] (before|on|after) EVENT(names) [as NAME] [priority N] [when …]:
-//! [override] [present] fn NAME(params) [-> type]:
-//! [override] query NAME(params) -> type:
-//! [override] command NAME(params) [cost N]:   |   command NAME = CALL
-//! [override] ai NAME:
-//! [override] generator NAME(params) [size WxH]:
-//! [override] map NAME [transient] [wrap] [nosave] generate CALL
-//! [override] scene NAME(params) …:
-//! ```
+//! RogueScript declarations as the model sees them (RS 12.1): kind, name,
+//! parameters and place, with the parsed declaration for the checks that
+//! read bodies. The parser is in [`crate::rs`].
+
+use std::sync::Arc;
 
 use crate::error::Diagnostic;
-use crate::syntax::{RawCode, matching_close, split_top_level};
+use crate::rs::ast::{Item, ItemKind, Param};
+use crate::syntax::RawCode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeclKind {
@@ -34,7 +22,7 @@ pub enum DeclKind {
     Scene,
 }
 
-/// `name: type [= default]`.
+/// `name: type [= default]`, written back as text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RsParam {
     pub name: String,
@@ -54,151 +42,50 @@ pub struct Decl {
     pub file: String,
     pub line: usize,
     pub namespace: Option<String>,
+    pub item: Arc<Item>,
 }
 
-const KEYWORDS: &[(&str, DeclKind)] = &[
-    ("component", DeclKind::Component),
-    ("event", DeclKind::Event),
-    ("before", DeclKind::Handler),
-    ("on", DeclKind::Handler),
-    ("after", DeclKind::Handler),
-    ("fn", DeclKind::Function),
-    ("query", DeclKind::Query),
-    ("command", DeclKind::Command),
-    ("ai", DeclKind::Ai),
-    ("generator", DeclKind::Generator),
-    ("map", DeclKind::Map),
-    ("scene", DeclKind::Scene),
-];
+fn params(ps: &[Param]) -> Vec<RsParam> {
+    ps.iter().map(|p| RsParam { name: p.name.clone(), ty: p.ty.to_string(), default: p.default.as_ref().map(|d| d.to_string()) }).collect()
+}
 
-/// Reads the top-level declarations of a code block.
+/// Parses a code block and lists its top-level declarations.
 pub fn declarations(code: &RawCode) -> (Vec<Decl>, Vec<Diagnostic>) {
-    let mut decls = Vec::new();
-    let mut errors = Vec::new();
-    let mut open_block = false;
-    for (i, line) in code.lines.iter().enumerate() {
-        let lineno = code.line + i;
-        if line.contains('\t') {
-            errors.push(Diagnostic::error(&code.file, lineno, "tab in RogueScript: indent with four spaces (RS 2.2)"));
-            continue;
-        }
-        let t = line.trim();
-        if t.is_empty() || t.starts_with("//") {
-            continue;
-        }
-        let indent = line.len() - line.trim_start().len();
-        if indent > 0 {
-            if !open_block {
-                errors.push(Diagnostic::error(&code.file, lineno, "indented line outside a block"));
-            } else if indent % 4 != 0 {
-                errors.push(Diagnostic::error(&code.file, lineno, "indentation must be a multiple of four spaces (RS 2.2)"));
+    let (items, errors) = crate::rs::parse::parse(code);
+    let decls = items
+        .into_iter()
+        .map(|item| {
+            let (kind, ps, event) = match &item.kind {
+                ItemKind::Component { fields, .. } => (DeclKind::Component, params(fields), None),
+                ItemKind::Event { params: p } => (DeclKind::Event, params(p), None),
+                ItemKind::Handler(h) => (
+                    DeclKind::Handler,
+                    h.names.iter().map(|n| RsParam { name: n.clone(), ty: String::new(), default: None }).collect(),
+                    Some(h.event.clone()),
+                ),
+                ItemKind::Function { query: true, params: p, .. } => (DeclKind::Query, params(p), None),
+                ItemKind::Function { params: p, .. } => (DeclKind::Function, params(p), None),
+                ItemKind::Command { params: p, .. } => (DeclKind::Command, params(p), None),
+                ItemKind::CommandAlias(_) => (DeclKind::Command, vec![], None),
+                ItemKind::Ai { .. } => (DeclKind::Ai, vec![], None),
+                ItemKind::Generator { params: p, .. } => (DeclKind::Generator, params(p), None),
+                ItemKind::Map { .. } => (DeclKind::Map, vec![], None),
+                ItemKind::Scene { params: p, .. } | ItemKind::Timeline { params: p, .. } => (DeclKind::Scene, params(p), None),
+            };
+            Decl {
+                kind,
+                name: item.name.clone(),
+                overrides: item.overrides,
+                params: ps,
+                event,
+                file: code.file.clone(),
+                line: item.pos.line,
+                namespace: code.namespace.clone(),
+                item: Arc::new(item),
             }
-            continue;
-        }
-        match declaration(code, lineno, t) {
-            Ok(d) => {
-                open_block = t.split("//").next().unwrap_or(t).trim_end().ends_with(':');
-                decls.push(d);
-            }
-            Err(e) => {
-                open_block = true;
-                errors.push(e);
-            }
-        }
-    }
+        })
+        .collect();
     (decls, errors)
-}
-
-fn declaration(code: &RawCode, lineno: usize, line: &str) -> Result<Decl, Diagnostic> {
-    let err = |m: String| Diagnostic::error(&code.file, lineno, m);
-    let mut rest = line;
-    let overrides = word(rest) == "override";
-    if overrides {
-        rest = after_word(rest);
-    }
-    if word(rest) == "present" {
-        rest = after_word(rest);
-    }
-    let kw = word(rest);
-    let kind = KEYWORDS.iter().find(|(k, _)| *k == kw).map(|(_, d)| *d).ok_or_else(|| err(format!("expected a declaration, found `{}`", word(line))))?;
-    rest = after_word(rest);
-    let name_end = rest.find(|c: char| c.is_whitespace() || c == '(' || c == ':').unwrap_or(rest.len());
-    let written = &rest[..name_end];
-    let tail = &rest[name_end..];
-    let params = match tail.strip_prefix('(') {
-        Some(_) => {
-            let close = matching_close(tail, 0).ok_or_else(|| err("missing `)`".into()))?;
-            let inner = &tail[1..close];
-            if kind == DeclKind::Handler {
-                // a handler names the event's parameters without types
-                inner.split(',').map(str::trim).filter(|n| !n.is_empty()).map(|n| RsParam { name: n.to_string(), ty: String::new(), default: None }).collect()
-            } else {
-                parse_params(inner).map_err(err)?
-            }
-        }
-        None => vec![],
-    };
-    let mut decl = Decl {
-        kind,
-        name: written.to_string(),
-        overrides,
-        params,
-        event: None,
-        file: code.file.clone(),
-        line: lineno,
-        namespace: code.namespace.clone(),
-    };
-    if kind == DeclKind::Handler {
-        decl.event = Some(written.to_string());
-        decl.name = tail.split_whitespace().skip_while(|w| *w != "as").nth(1).map(|n| n.trim_end_matches(':').to_string()).unwrap_or_default();
-        if !decl.name.is_empty() && !crate::names::is_name(&decl.name) {
-            return Err(err(format!("bad handler name `{}`", decl.name)));
-        }
-    } else if !crate::names::is_name(written) {
-        return Err(err(format!("`{kw}` needs an upper-case NAME, not `{written}`")));
-    }
-    Ok(decl)
-}
-
-fn word(s: &str) -> &str {
-    s.split(|c: char| c.is_whitespace() || c == '(').next().unwrap_or("")
-}
-
-fn after_word(s: &str) -> &str {
-    s[word(s).len()..].trim_start()
-}
-
-/// Parses `a: number = 1, b: list area` (RS 12.1 `params` and `fields`).
-pub fn parse_params(s: &str) -> Result<Vec<RsParam>, String> {
-    let mut out = Vec::new();
-    for p in split_top_level(s, ',').into_iter().map(str::trim).filter(|p| !p.is_empty()) {
-        let (name, rest) = p.split_once(':').ok_or_else(|| format!("parameter `{p}` needs a type (`name: type`)"))?;
-        let name = name.trim();
-        if !crate::names::is_vocabulary(name) && !crate::names::is_name(name) {
-            return Err(format!("bad parameter name `{name}`"));
-        }
-        // a source (`from …`, `aim …`, `ask`, `count`) follows the type and default
-        let rest = cut_source(rest.trim());
-        let (ty, default) = match split_top_level(rest, '=').as_slice() {
-            [ty] => (ty.trim().to_string(), None),
-            [ty, d] => (ty.trim().to_string(), Some(d.trim().to_string())),
-            _ => return Err(format!("bad parameter `{p}`")),
-        };
-        out.push(RsParam { name: name.to_string(), ty, default });
-    }
-    Ok(out)
-}
-
-fn cut_source(s: &str) -> &str {
-    let mut pos = 0;
-    for w in s.split_whitespace() {
-        let at = pos + s[pos..].find(w).unwrap();
-        if ["from", "aim", "ask", "count"].contains(&w) {
-            return s[..at].trim_end();
-        }
-        pos = at + w.len();
-    }
-    s
 }
 
 #[cfg(test)]
@@ -228,6 +115,7 @@ mod tests {
         ]);
         assert_eq!(d[0].params[3], RsParam { name: "cause".into(), ty: "name".into(), default: Some("none".into()) });
         assert_eq!(d[1].line, 13);
+        assert_eq!(d[1].namespace.as_deref(), Some("STD"));
     }
 
     #[test]
@@ -238,23 +126,22 @@ mod tests {
         assert_eq!((d[0].event.as_deref(), d[0].name.as_str()), (Some("HIT"), "HIT_MESSAGE"));
         assert_eq!(d[1].name, "SPAWN_PLAYER");
         assert_eq!(d[2].name, "", "unnamed handler");
-        assert_eq!(d[3].params.len(), 2);
+        assert_eq!(d[3].params[1].default.as_deref(), Some("1"));
     }
 
     #[test]
     fn sources_are_not_part_of_the_type() {
-        let p = parse_params("item: entity from actor.PACK.items where it has FOOD, target: pos aim 1 at entities(in: adjacent(actor))").unwrap();
-        assert_eq!((p[0].ty.as_str(), p[1].ty.as_str()), ("entity", "pos"));
-        let p = parse_params("items: collection 26 merge STACKABLE, n: number count").unwrap();
-        assert_eq!((p[0].ty.as_str(), p[1].ty.as_str()), ("collection 26 merge STACKABLE", "number"));
+        let d = decls(
+            "command FEED(item: entity from actor.PACK.items where it has FOOD, n: number count) cost 120:\n    return\ncomponent PACK(items: collection 26 merge STACKABLE)\n",
+        );
+        assert_eq!((d[0].params[0].ty.as_str(), d[0].params[1].ty.as_str()), ("entity", "number"));
+        assert_eq!(d[1].params[0].ty, "collection 26 merge STACKABLE");
     }
 
     #[test]
-    fn layout_errors() {
+    fn errors() {
         let (_, e) = declarations(&code("fn F():\n\treturn\n"));
         assert!(e[0].message.contains("tab"));
-        let (_, e) = declarations(&code("fn F():\n  return\n"));
-        assert!(e[0].message.contains("multiple of four"));
         let (_, e) = declarations(&code("x = 1\n"));
         assert!(e[0].message.contains("expected a declaration"));
         let (_, e) = declarations(&code("command move():\n    return\n"));

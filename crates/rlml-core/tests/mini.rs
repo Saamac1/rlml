@@ -128,6 +128,16 @@ fn labels_must_not_be_general_names() {
 }
 
 #[test]
+fn syntax_error_in_the_standard_library() {
+    let mut f = mini();
+    let ai = f.engine.get_mut("lib/std/ai.rlml").unwrap();
+    assert!(ai.contains("        return APPROACH(foe)\n"));
+    *ai = ai.replacen("        return APPROACH(foe)\n", "        return APPROACH(foe\n", 1);
+    expect_error(&run(&f), "<engine>/lib/std/ai.rlml:48: error: column 28: expected `)`, found the end of the line");
+    expect_error(&run(&f), "`HUNTER` is not defined");
+}
+
+#[test]
 fn style() {
     let mut f = mini();
     edit(&mut f, "style/ascii.rlml", "- GLYPH.RAT r fg FUR", "- GLYPH.RAT r fg FURR");

@@ -1,3 +1,5 @@
-//! RogueScript (RS): tokens now; the parser and checks follow.
+//! RogueScript (RS): tokens, syntax tree and parser.
 
+pub mod ast;
 pub mod lex;
+pub mod parse;

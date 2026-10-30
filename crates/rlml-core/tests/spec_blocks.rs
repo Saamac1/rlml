@@ -66,3 +66,45 @@ fn every_block_lexes() {
     assert!(errors.is_empty(), "{errors:#?}");
 }
 
+
+/// Documentation snippets: statements, expressions or timeline rows
+/// without a declaration around them. Parsed with `parse_snippet`.
+const SNIPPETS: &[(&str, usize, &str)] = &[
+    ("roguescript/02-yleinen-syntaksi.md", 148, "a loop and statements"),
+    ("roguescript/02-yleinen-syntaksi.md", 182, "two statements"),
+    ("roguescript/05-funktiot-ja-lausekkeet.md", 47, "a `match` statement"),
+    ("roguescript/05-funktiot-ja-lausekkeet.md", 61, "a loop"),
+    ("roguescript/05-funktiot-ja-lausekkeet.md", 89, "two expressions"),
+    ("roguescript/05-funktiot-ja-lausekkeet.md", 151, "a loop before a component"),
+    ("roguescript/09-kohtaukset-ja-aikajanat.md", 89, "timeline rows"),
+];
+
+/// A block that starts with `namespace` is read as a `.rogue` file, the
+/// only place the grammar has that line (RS 12.1).
+fn as_rogue_file(block: &RawCode) -> Option<RawCode> {
+    let first = block.lines.iter().find(|l| !l.trim().is_empty())?;
+    first.starts_with("namespace ").then(|| {
+        let parsed = rlml_core::syntax::parse_rogue(&block.file, &block.lines.join("\n")).unwrap();
+        let rlml_core::syntax::Entry::Code(mut code) = parsed.entries.into_iter().next().unwrap() else { unreachable!() };
+        code.line = block.line;
+        code
+    })
+}
+
+#[test]
+fn every_block_parses() {
+    let mut errors = Vec::new();
+    let mut snippets_seen = Vec::new();
+    for block in corpus() {
+        if let Some((_, _, _)) = SNIPPETS.iter().find(|(f, l, _)| *f == block.file && *l == block.line) {
+            snippets_seen.push((block.file.clone(), block.line));
+            errors.extend(rlml_core::rs::parse::parse_snippet(&block).into_iter().map(|d| d.to_string()));
+            continue;
+        }
+        let code = as_rogue_file(&block).unwrap_or(block);
+        errors.extend(rlml_core::rs::parse::parse(&code).1.into_iter().map(|d| d.to_string()));
+    }
+    assert!(errors.is_empty(), "{errors:#?}");
+    assert_eq!(snippets_seen.len(), SNIPPETS.len(), "a snippet moved: {snippets_seen:?}");
+}
+
