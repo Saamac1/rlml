@@ -137,6 +137,57 @@ fn syntax_error_in_the_standard_library() {
     expect_error(&run(&f), "`HUNTER` is not defined");
 }
 
+/// Replaces `old` with `new` in a standard library file.
+fn edit_std(files: &mut MemFiles, path: &str, old: &str, new: &str) {
+    let src = files.engine.get_mut(path).unwrap();
+    assert!(src.contains(old), "`{old}` not in {path}");
+    *src = src.replacen(old, new, 1);
+}
+
+#[test]
+fn names_in_logic() {
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/ai.rlml", "    return WANDER()\n\ncomponent", "    return WANDERR()\n\ncomponent");
+    expect_error(&run(&f), "`WANDERR` is not defined (tried STD.WANDERR, WANDERR)");
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/ai.rlml", "return APPROACH(foe)", "return APPROACH(fo)");
+    expect_error(&run(&f), "unknown name `fo`");
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/exits.rlml", "it has EXIT", "it has EXITS");
+    expect_error(&run(&f), "`EXITS` is not defined");
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/combat.rlml", "emit HIT(target, attacker, attacker.MELEE.damage)", "emit STRIKE(target, attacker)");
+    expect_error(&run(&f), "`STD.STRIKE` is a function");
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/move.rlml", "noise(to, STEP_SOUND(who), source: who)", "nois(to, STEP_SOUND(who), source: who)");
+    expect_error(&run(&f), "unknown engine function `nois`");
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/exits.rlml", "exit = (entities(in: actor.at) where it has EXIT).first", "exit = it");
+    expect_error(&run(&f), "`it` is the member inside `where`");
+}
+
+#[test]
+fn kinds_of_bodies() {
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/core.rlml", "    if game has PLAYER:", "    wait 120\n    if game has PLAYER:");
+    expect_error(&run(&f), "`wait` is allowed only in a command or a coroutine scene");
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/move.rlml", "    return to in adjacent(who)", "    move(who, to: to)\n    return to in adjacent(who)");
+    expect_error(&run(&f), "`move` changes the game's state; it is not allowed in a `query`");
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/move.rlml", "    noise(to, STEP_SOUND(who), source: who)", "    noise(to, STEP_SOUND(who), source: who)\n    return 1");
+    expect_error(&run(&f), "a `fn` without a return type returns no value");
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/relations.rlml", "    return ATTITUDE(a, b) < 0 or ATTITUDE(b, a) < 0", "    BEFRIEND(a, b, 1)\n    return ATTITUDE(a, b) < 0 or ATTITUDE(b, a) < 0");
+    expect_error(&run(&f), "`STD.BEFRIEND` is a `fn` that may change the game's state");
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/core.rlml", "    if game has PLAYER:", "    cancel\n    if game has PLAYER:");
+    expect_error(&run(&f), "`cancel` belongs to a `before` handler");
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/core.rlml", "on begin() as SPAWN_PLAYER:", "before begin() as SPAWN_PLAYER:");
+    expect_error(&run(&f), "engine event `begin` has no `before` phase");
+}
+
 #[test]
 fn style() {
     let mut f = mini();

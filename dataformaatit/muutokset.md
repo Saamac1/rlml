@@ -4,7 +4,7 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
-**Muutokset 31.10.2026 (lataajan ensimmäinen versio):** komponentin `sound` kentät ja jokerin hakujärjestys ovat avoimia kysymyksiä (luku [13](13-avoimet-kysymykset.md)).
+**Muutokset 31.10.2026 (lataajan ensimmäinen versio):** komponentin `sound` kentät, liikkumistapojen määrittely ja jokerin hakujärjestys ovat avoimia kysymyksiä (luku [13](13-avoimet-kysymykset.md)).
 
 **Muutokset 30.10.2026 (kielitiedoston otsikko):** kielitiedosto alkaa otsikkorivillä `language KIELI`, joten lataaja tunnistaa sen sisällöstä eikä tiedostonimestä, ja saman kielen tiedostot yhdistyvät riveittäin (luvut [2.2](02-yleinen-syntaksi.md#22-rivit-lohkot-ja-luettelot), [10](10-tekstit.md) ja [14](14-osiot-ja-otsikkorivit.md)).
 

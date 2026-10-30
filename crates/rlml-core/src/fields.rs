@@ -42,7 +42,7 @@ pub fn engine_component(name: &str) -> Option<Vec<Field>> {
     Some(match name {
         "render" => vec![f("tile", "name", None)],
         "movement" => vec![
-            f("mode", "name", None),
+            f("mode", "mode", None),
             f("speed", "number", Some("10")),
             f("through", "name", None),
             f("dirs", "number", Some("8")),
@@ -316,6 +316,8 @@ impl Values<'_> {
             "table" => one().and_then(|w| self.m.resolve_kind(self.ns, w, &[Kind::Table]).map(|_| ())),
             "name" => one().and_then(|w| self.name(w)),
             "label" => one().and_then(|w| if names::is_name(w) { Ok(()) } else { Err(format!("`{w}` is not a label NAME")) }),
+            // a movement mode is any upper-case name (D 7.5)
+            "mode" => one().and_then(|w| if names::is_name(w) { Ok(()) } else { Err(format!("`{w}` is not a movement mode NAME")) }),
             "entity" | "handle" => one().and_then(|w| if w == "none" { Ok(()) } else { Err(format!("an {base} field starts as `none` in data")) }),
             "area" => Err("an area starts empty in data; logic sets it".into()),
             "card" => self.card(words),

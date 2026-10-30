@@ -123,8 +123,6 @@ pub struct Model {
     /// Key contexts (`keys` and `pad`) by name.
     pub contexts: BTreeMap<String, Vec<RawBlock>>,
     pub code: Vec<Decl>,
-    /// RogueScript lines, for checks that look for a name in logic.
-    pub code_text: Vec<String>,
     pub languages: Vec<LanguageFile>,
     /// Every loaded file in load order.
     pub files: Vec<crate::load::Place>,
@@ -236,7 +234,6 @@ pub fn build(loaded: Loaded, report: &mut Report) -> Model {
             Entry::Include { .. } => {}
             Entry::Code(code) => {
                 let (decls, errors) = rogue::declarations(&code);
-                m.code_text.extend(code.lines.iter().cloned());
                 for e in errors {
                     report.push(e);
                 }

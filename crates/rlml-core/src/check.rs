@@ -36,7 +36,8 @@ struct Drawn {
 }
 
 pub fn check(m: &Model, main: &str, r: &mut Report) {
-    let mut c = Checker { m, r, drawn: BTreeMap::new(), used_tiles: BTreeSet::new() };
+    let logic_tiles = crate::rs::check::check(m, r);
+    let mut c = Checker { m, r, drawn: BTreeMap::new(), used_tiles: logic_tiles };
     c.components();
     c.maps();
     c.entities();
@@ -955,15 +956,13 @@ impl Checker<'_> {
 
     /// A `tiles` row for a tile that nothing uses is probably a typo (D 7.5).
     fn unused_tiles(&mut self) {
-        let code = self.m.code_text.join("\n");
         for (_, item) in self.m.section_rows("tiles") {
             let (_, row) = item.marker();
             if row.key() == "default" {
                 continue;
             }
             let Ok(full) = self.m.resolve_tile(row.namespace.as_deref(), row.key()) else { continue };
-            let base = names::tile_name(row.key()).map(|t| t.base).unwrap_or_default();
-            if !self.used_tiles.contains(&full) && !code.contains(&base) {
+            if !self.used_tiles.contains(&full) {
                 self.r.push(item.warn(format!("tile `{}` is not used in a legend, a style or logic: a typo?", row.key())));
             }
         }
