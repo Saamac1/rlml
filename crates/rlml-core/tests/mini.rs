@@ -209,3 +209,49 @@ fn data_field_types_read() {
     }
     assert!(n > 20, "{n} fields");
 }
+
+/// Inference knows every parameter and local of the standard library.
+#[test]
+fn std_local_types_are_inferred() {
+    let (m, _) = check_game(&mini(), "game.rlml");
+    let mut unknown = Vec::new();
+    let mut by_name = std::collections::BTreeMap::new();
+    for d in &m.code {
+        for (local, ty) in rlml_core::rs::check::local_types(&m, d) {
+            if !ty.is_known() {
+                unknown.push(format!("{}.{local}", d.name));
+            }
+            by_name.insert(format!("{}.{local}", d.name), ty.to_string());
+        }
+    }
+    assert!(unknown.is_empty(), "{unknown:?}");
+    assert!(by_name.len() > 200, "{} locals", by_name.len());
+    for (local, ty) in [
+        ("HUNTER.foe", "entity"),
+        ("HUNTER.noises", "collection sound"),
+        ("ROOMS.rooms", "list area"),
+        ("ROOMS.want", "number"),
+        ("SHOOT.w", "STD.RANGED"),
+        ("SHOOT.land", "pos"),
+        ("CONNECT.goal", "pos"),
+        ("FEED.eaters", "collection"),
+        ("ADJACENCY_ARRIVE.map", "name"),
+        ("HEAR_MESSAGE.s", "sound"),
+        ("BASE.s", "number"),
+    ] {
+        assert_eq!(by_name.get(local).map(String::as_str), Some(ty), "{local}");
+    }
+}
+
+#[test]
+fn local_types_stick() {
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/ai.rlml", "        near_foe = foe.at in adjacent(self)\n", "        near_foe = foe.at in adjacent(self)\n        foe = 1\n");
+    expect_error(&run(&f), "`foe` has the type `entity`; a `number` cannot be assigned to it");
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/gen.rlml", "            rooms += room\n", "            rooms += room\n            rooms += 1\n");
+    expect_error(&run(&f), "`rooms` has the type `list area`; a `number` cannot be added to it");
+    let mut f = mini();
+    edit_std(&mut f, "lib/std/gen.rlml", "    rooms = []\n", "    rooms = [1, \"a\"]\n");
+    expect_error(&run(&f), "a list holds one type");
+}

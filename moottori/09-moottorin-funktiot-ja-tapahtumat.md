@@ -80,7 +80,7 @@ Lyhenteet: *alue* on `area`, ja sen paikalla käyvät myös `pos`, kartalla olev
 | `tag(a: area, n: name)` | `area` | muuttaa | nimeää joukon kaikki ruudut ([RS 6.4](../roguescript/06-ruudut-ja-paikkahaku.md#64-siirtyminen-kartalta-toiselle)) |
 | `entities(in: area = tiles())` | `collection` | kysely | luontijärjestyksessä |
 | `control(e: entity)` | `entity` | muuttaa | tekee `e`:stä pelaajan; herätys luvun [6.1.2](06-ajo.md#612-toimijat-ja-ajoitin) mukaan |
-| `travel(e: entity, kartta: name, at: name = START, align: bool = false)` | `entity` | muuttaa | lähettää `leave`, `depart` ja `arrive` (luku [6.7](06-ajo.md#67-siirtyminen-kartalta-toiselle)); saapumisruutu arvotaan, ellei `align`; nykyinen kartta sallittu; puuttuva nimiö on virhe; siirto tehdään toiminnon lopussa ennen etualan kohtauksia (luku [6.1.7](06-ajo.md#617-toiminto)) |
+| `travel(e: entity, map: name, at: name = START, align: bool = false)` | `entity` | muuttaa | lähettää `leave`, `depart` ja `arrive` (luku [6.7](06-ajo.md#67-siirtyminen-kartalta-toiselle)); saapumisruutu arvotaan, ellei `align`; nykyinen kartta sallittu; puuttuva nimiö on virhe; siirto tehdään toiminnon lopussa ennen etualan kohtauksia (luku [6.1.7](06-ajo.md#617-toiminto)) |
 
 **Ruutujoukot** (kaikki kyselyjä)
 
@@ -91,8 +91,8 @@ Lyhenteet: *alue* on `area`, ja sen paikalla käyvät myös `pos`, kartalla olev
 | `near(a: alue, d: number\|range)` | `area` | luku N on väli 0..N; väli antaa renkaan |
 | `from(a: alue, x: number, y: number)` | `area` | siirtymä ankkurista |
 | `from(a: alue, d: number, s: dir)` | `area` | suunta voi olla suhteellinen (`facing`) |
-| `rect(k: pos, koko: size)` | `area` |  |
-| `rect(k: pos, leveys: number, korkeus: number)` | `area` | koko luvuista ([RS 6.1](../roguescript/06-ruudut-ja-paikkahaku.md#61-joukon-tuottavat-funktiot)) |
+| `rect(k: pos, size: size)` | `area` |  |
+| `rect(k: pos, width: number, height: number)` | `area` | koko luvuista ([RS 6.1](../roguescript/06-ruudut-ja-paikkahaku.md#61-joukon-tuottavat-funktiot)) |
 | `line(a: alue, b: alue)` | `area` |  |
 | `path(a: alue, b: alue, for: entity = none)` | `area` | reitti järjestyksessä; `.last` on määränpää; for: liikkujan liikkumistapa, through-joukko, esto sekä kentät dirs ja corners, ilman sitä vain tilejen move-esto ja kahdeksan suuntaa; lähtöruutu ei kuulu reittiin; `for`-reitillä estävä toimija (`ai` tai pelaaja) on läpipääsevä, mutta sen ruutu maksaa neljä askelta, jotta reitti kiertää jonon, jos voi |
 | `label(n: name)` | `area` | nimiöryhmän ja nimettyjen entiteettien ruudut |
@@ -129,8 +129,8 @@ Tyhjä väli on tyhjä joukko kaikissa tuottavissa käytöissä: `for` ei kierr�
 | `draw(d: deck, n: number\|dice\|all = 1)` | `collection card` | muuttaa vastaanottajaa | kortit nostojärjestyksessä |
 | `draw(t: table, n: number\|dice = 1)` | `collection card` | kysely | kutsujan virta |
 | `peek(d: deck, n: number = 1)` | `collection card` | kysely | näkee vain nostopinon |
-| `put(d: deck, kortti: card\|name, bottom: bool = false, shuffle: bool = false)` | `deck` | muuttaa vastaanottajaa | `bottom` ja `shuffle` yhdessä on virhe |
-| `add(d: deck, toinen: deck, shuffle: bool = false)` | `deck` | muuttaa vastaanottajaa | litistää toisen pakan määrittelyn |
+| `put(d: deck, card: card\|name, bottom: bool = false, shuffle: bool = false)` | `deck` | muuttaa vastaanottajaa | `bottom` ja `shuffle` yhdessä on virhe |
+| `add(d: deck, other: deck, shuffle: bool = false)` | `deck` | muuttaa vastaanottajaa | litistää toisen pakan määrittelyn |
 | `reset(d: deck)` | `deck` | muuttaa vastaanottajaa | poistaa määrittelyn ulkopuoliset kortit |
 | `copy(d: deck)` | `deck` | kysely | uusi paikallinen kopio; kutsujan virta |
 
@@ -146,7 +146,7 @@ Pakan `.count` on kenttä, ei kutsu. Esto ja maasto (kyselyjä): blocks(p: alue,
 | `distance(a: alue, b: alue)` | `number` | Chebyshev |
 | `nearest(j: joukko, a: alue)` | jäsen tai `none` | tasatilanteessa joukon järjestys; ruutujoukolle lähin ruutu |
 | `sees(a: entity, b: alue)` | `bool` | `sight`-komponentti ja valaistus (luku [7.2](07-esitys.md#72-kartan-piirtäminen)); `revealed` ja `reveal` eivät vaikuta |
-| `text_of(avain: name, …)` | `text` | kielen mukainen teksti paikkamerkit täytettyinä; vain kyselyssä, esityksessä, paneelissa, listavalikossa ja `naming`-kyselyssä (luku [7.3](07-esitys.md#73-tekstit)) |
+| `text_of(key: name, …)` | `text` | kielen mukainen teksti paikkamerkit täytettyinä; vain kyselyssä, esityksessä, paneelissa, listavalikossa ja `naming`-kyselyssä (luku [7.3](07-esitys.md#73-tekstit)) |
 
 **Generointi** (pelin virta; `footprint` on kysely, muut muuttavat; `external` vain generaattorissa)
 
@@ -155,7 +155,7 @@ Pakan `.count` on kenttä, ei kutsu. Esto ja maasto (kyselyjä): blocks(p: alue,
 | `carve(a: area, t: name, layer: name = oletuskerros, from: area)` | `none` | asettaa koko joukon tilen; `carve(tiles(), WALL)` täyttää kartan |
 | `footprint(p: name, at: pos)` | `area` | prefabin piirretyt ruudut, kun sen vasen yläkulma on `at`; `none`, jos prefab ei mahdu kartalle |
 | `stamp(p: name, at: pos)` | `none` | painaa prefabin tilet, nimiöt ja entiteetit; prefabin tyhjät ruudut jättävät alla olevan |
-| `external(ohjelma, …)` | `bool` | vain generaattorissa; ajaa ulkoisen ohjelman ja painaa sen kartan (alla) |
+| `external(program: text, …)` | `bool` | vain generaattorissa; ajaa ulkoisen ohjelman ja painaa sen kartan (alla) |
 | `scatter(x: name\|card\|deck\|table, count: number\|range\|dice, in: area)` | `collection` | ensimmäinen parametri kuten `spawn`; jokainen synnytys saa eri ruudun joukosta (kortin kappaleet samaan ruutuun), ja varattuja ruutuja se ei väistä; jos ruudut loppuvat, loput jätetään synnyttämättä ja moottori kirjaa ajon varoituksen |
 
 `region` on ruutujoukkojen kysely (yllä), ja generaattorit käyttävät sitä usein. Algoritmit ovat vakiokirjastoa. `STD.SCATTER_TILES`, `STD.SMOOTH`, `STD.ROOMS`, `STD.CONNECT` ja `STD.PLACE` on kirjoitettu RogueScriptillä ([STD 10](../vakiokirjasto/10-generointi.md)), ja ne käyttävät yllä olevia primitiivejä. Kirjaston lähdekoodi määrää algoritmin ja satunnaisvirran käytön, joten sama siemen tuottaa saman kartan kaikissa toteutuksissa. Niitä varten `nearest` hyväksyy myös ruutujoukon ja palauttaa lähimmän ruudun, `pos`-arvolla on kentät `x` ja `y`, `rect` hyväksyy muodon `rect(kulma, leveys, korkeus)` ja `choose` lukuvälin ([RS 5.4](../roguescript/05-funktiot-ja-lausekkeet.md#54-satunnaisuus) ja [6.1](../roguescript/06-ruudut-ja-paikkahaku.md#61-joukon-tuottavat-funktiot)).
@@ -178,10 +178,10 @@ Pakan `.count` on kenttä, ei kutsu. Esto ja maasto (kyselyjä): blocks(p: alue,
 | --- | --- | --- | --- |
 | `start(k: scene, scope: map, bind: entity\|collection)` | `handle` taustakohtaukselle, muuten `none` | muuttaa | kaikkialla; etualan kohtaus alkaa toiminnon lopussa siirtojen jälkeen (luku [6.1.7](06-ajo.md#617-toiminto)) |
 | `stop(h: handle)`, `stop(track: name)` | `none` | muuttaa | kaikkialla; `track` vain kohtauksessa |
-| `say(avain: name, …, speaker: entity)` | `none` | esitys | korutiini, etualan aikajana, pelin ajan taustakohtaus |
-| `log(avain: name, …, speaker: entity)` | `none` | esitys | kaikkialla |
+| `say(key: name, …, speaker: entity)` | `none` | esitys | korutiini, etualan aikajana, pelin ajan taustakohtaus |
+| `log(key: name, …, speaker: entity)` | `none` | esitys | kaikkialla |
 | `checkpoint()`, `rollback()`, `autosave()` | `none` | muuttaa | kaikkialla; tehdään toiminnon lopussa (luvut [5.3](05-aloitus-tallennus-ja-checkpointit.md#53-checkpointit), [5.4](05-aloitus-tallennus-ja-checkpointit.md#54-automaattinen-tallennus) ja [6.1.7](06-ajo.md#617-toiminto)) |
-| `delete_save(kohde: checkpoint\|auto\|all)` | – | muuttaa | kaikkialla; tehdään toiminnon lopussa (luku [5.5](05-aloitus-tallennus-ja-checkpointit.md#55-tallennuksen-poisto)) |
+| `delete_save(target: checkpoint\|auto\|all)` | – | muuttaa | kaikkialla; tehdään toiminnon lopussa (luku [5.5](05-aloitus-tallennus-ja-checkpointit.md#55-tallennuksen-poisto)) |
 
 `wait`, `open`, `emit` ja `cancel` ovat avainsanoja, eivät funktioita ([RS 2.4](../roguescript/02-yleinen-syntaksi.md#24-varatut-sanat-ja-paikalliset-nimet)). `wait` ja `open` ovat sallittuja komennon rungossa ja korutiinikohtauksissa (luku [6.1.6](06-ajo.md#616-monivaiheinen-komento)). `open` hyväksyy valikon ja paneelin (luku [7.7](07-esitys.md#77-paneelit)).
 
@@ -189,7 +189,7 @@ Pakan `.count` on kenttä, ei kutsu. Esto ja maasto (kyselyjä): blocks(p: alue,
 
 | Kutsu | Paluu | Huomiot |
 | --- | --- | --- |
-| `play(ääni: name, at: alue)` | `none` |  |
+| `play(sound: name, at: alue)` | `none` |  |
 | `pan(c: camera, to: alue)` | `none` |  |
 | `shake(c: camera, strength: number)` | `none` |  |
 | `fade(v: light, to: percent)` | `none` |  |

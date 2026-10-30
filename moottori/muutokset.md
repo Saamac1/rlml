@@ -4,7 +4,7 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
-**Muutokset 31.10.2026 (moottorin funktioiden allekirjoitukset):** sanasto luettelee myös äänifunktion `noise` (luku [9.1](09-moottorin-funktiot-ja-tapahtumat.md#91-sanasto)).
+**Muutokset 31.10.2026 (moottorin funktioiden allekirjoitukset):** sanasto luettelee myös äänifunktion `noise` (luku [9.1](09-moottorin-funktiot-ja-tapahtumat.md#91-sanasto)). Funktioiden parametrit on nimetty englanniksi kuten muutkin nimet, joten ne käyvät nimetyiksi argumenteiksi: `travel(…, map:)`, `rect(…, size:)` tai `rect(…, width:, height:)`, `put(…, card:)`, `add(…, other:)`, `text_of`, `say` ja `log` (`key`), `external(program:)`, `delete_save(target:)` ja `play(sound:)` (luku [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).
 
 **Muutokset 30.10.2026 (kielitiedoston otsikko):** moottori valitsee kielitiedostot niiden `language`-otsikon mukaan, ja väärin sijoitettu otsikko on latausvirhe (luvut [2](02-lataus.md) ja [7.3](07-esitys.md#73-tekstit)).
 

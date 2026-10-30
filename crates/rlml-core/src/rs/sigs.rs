@@ -11,9 +11,8 @@
 //! * `LAJI` is `changes`, `receiver` (changes its receiver), `query` or
 //!   `present` (M 9.2).
 //! * A parameter in brackets has a default. A name starting with `_` is
-//!   positional only: M 9.3 names it in Finnish (`kartta`, `leveys`), which
-//!   cannot be written as a named argument. `…` takes further named
-//!   arguments (text parameters of `say`, `log` and `text_of`).
+//!   positional only. `…` takes further named arguments (text parameters
+//!   of `say`, `log` and `text_of`).
 //! * Type aliases: `area` is M 9.3's *alue* (an area, a position, an entity
 //!   on a map or a list of positions, see [`super::types::fits`]), `set` is
 //!   *joukko*, `anylist` and `anydict` are any list or dictionary, and `?` is
@@ -89,14 +88,14 @@ changes spawn(x: table, at: area) -> collection
 changes spawn(x: name|card|deck|table, into: collection) -> ?
 changes spawn(x: name|card|deck|table, map: name, at: label) -> ?
 changes destroy(e: entity) -> none
-changes add(e: entity, _k: component) -> entity
-changes remove(e: entity, _k: name) -> entity
+changes add(e: entity, k: component) -> entity
+changes remove(e: entity, k: name) -> entity
 changes move(e: entity, to: area|collection, [via: ?]) -> bool
 changes tile(p: area, t: name|none, [layer: name], [label: label]) -> bool
 changes tag(a: area, n: label) -> area
 query entities([in: area]) -> collection
 changes control(e: entity) -> entity
-changes travel(e: entity, _kartta: name, [at: label], [align: bool]) -> entity
+changes travel(e: entity, map: name, [at: label], [align: bool]) -> entity
 changes follow(c: camera, e: entity) -> none
 
 # Ruutujoukot
@@ -105,8 +104,8 @@ query at(h: name) -> area
 query near(a: area, d: number|range) -> area
 query from(a: area, x: number, y: number) -> area
 query from(a: area, d: number, s: dir|side) -> area
-query rect(k: pos, _koko: size) -> area
-query rect(k: pos, _leveys: number, _korkeus: number) -> area
+query rect(k: pos, size: size) -> area
+query rect(k: pos, width: number, height: number) -> area
 query line(a: area, b: area) -> area
 query path(a: area, b: area, [for: entity]) -> area
 query label(n: label) -> area
@@ -131,8 +130,8 @@ receiver shuffle(d: deck) -> deck
 receiver draw(d: deck, [n: number|dice|all]) -> collection card
 query draw(t: table, [n: number|dice]) -> collection card
 query peek(d: deck, [n: number]) -> collection card
-receiver put(d: deck, _kortti: card|name, [bottom: bool], [shuffle: bool]) -> deck
-receiver add(d: deck, _toinen: deck, [shuffle: bool]) -> deck
+receiver put(d: deck, card: card|name, [bottom: bool], [shuffle: bool]) -> deck
+receiver add(d: deck, other: deck, [shuffle: bool]) -> deck
 receiver reset(d: deck) -> deck
 query copy(d: deck) -> deck
 
@@ -149,28 +148,28 @@ query max(a: number, b: number) -> number
 query distance(a: area, b: area) -> number
 query nearest(j: set, a: area) -> member
 query sees(a: entity, b: area) -> bool
-query text_of(_avain: name, …) -> text query_or_present
+query text_of(key: name, …) -> text query_or_present
 
 # Generointi
 changes carve(a: area, t: name, [layer: name], [from: area]) -> none
 query footprint(p: name, at: pos) -> area
 changes stamp(p: name, at: pos) -> none
-changes external(_ohjelma: text, …) -> bool generator
+changes external(program: text, …) -> bool generator
 changes scatter(x: name|card|deck|table, count: number|range|dice, in: area) -> collection
 
 # Kohtaukset ja tallennus
 changes start(k: scene, [scope: name], [bind: entity|collection]) -> handle
 changes stop(h: handle) -> none
 changes stop(track: name) -> none coroutine
-present say(_avain: name, …, [speaker: entity]) -> none coroutine
-present log(_avain: name, …, [speaker: entity]) -> none
+present say(key: name, …, [speaker: entity]) -> none coroutine
+present log(key: name, …, [speaker: entity]) -> none
 changes checkpoint() -> none
 changes rollback() -> none
 changes autosave() -> none
-changes delete_save(_kohde: ?) -> none
+changes delete_save(target: ?) -> none
 
 # Esitys
-present play(_ääni: name, [at: area]) -> none
+present play(sound: name, [at: area]) -> none
 present pan(c: camera, to: area) -> none
 present shake(c: camera, strength: number) -> none
 present fade(v: light, to: percent) -> none
@@ -361,7 +360,7 @@ mod tests {
         assert_eq!(spawn.len(), 6);
         assert_eq!(spawn[0].params[1].name, "at");
         let travel = &versions("travel")[0];
-        assert!(travel.params[1].positional && travel.params[2].optional);
+        assert!(travel.params[1].name == "map" && !travel.params[1].positional && travel.params[2].optional);
         assert_eq!(versions("draw")[0].params[1].ty.to_string(), "number|dice|all");
         assert_eq!(versions("choose")[0].ret, Ret::Member);
         assert!(versions("say")[0].rest && versions("say")[0].context == Context::Coroutine);
