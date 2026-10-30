@@ -194,3 +194,18 @@ fn style() {
     edit(&mut f, "style/ascii.rlml", "- GLYPH.RAT r fg FUR", "- GLYPH.RAT r fg FURR");
     expect_error(&run(&f), "`FURR` is not a color name or a hex color");
 }
+
+#[test]
+fn data_field_types_read() {
+    use rlml_core::model::Kind;
+    let (m, _) = check_game(&mini(), "game.rlml");
+    let mut n = 0;
+    for def in m.defs.values().filter(|d| d.kind == Kind::Component) {
+        for f in rlml_core::fields::component_fields(def) {
+            n += 1;
+            let t = rlml_core::rs::types::parse(&f.ty, &|c| m.resolve(None, c).is_ok_and(|d| d.kind == Kind::Component));
+            assert!(t.is_ok(), "{}.{}: {:?}", def.full, f.name, t);
+        }
+    }
+    assert!(n > 20, "{n} fields");
+}

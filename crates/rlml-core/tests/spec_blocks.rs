@@ -108,3 +108,42 @@ fn every_block_parses() {
     assert_eq!(snippets_seen.len(), SNIPPETS.len(), "a snippet moved: {snippets_seen:?}");
 }
 
+
+#[test]
+fn every_type_reads() {
+    use rlml_core::rs::ast::{ItemKind, Param, ReturnType};
+    let mut errors = Vec::new();
+    let mut count = 0;
+    let mut read = |p: &[Param], file: &str, errors: &mut Vec<String>| {
+        for p in p {
+            count += 1;
+            if let Err(e) = rlml_core::rs::types::parse(&p.ty.to_string(), &|n| rlml_core::names::is_name(n)) {
+                errors.push(format!("{file}:{}: {e}", p.pos.line));
+            }
+        }
+    };
+    for block in corpus().into_iter().filter(|b| !SNIPPETS.iter().any(|(f, l, _)| *f == b.file && *l == b.line)) {
+        let code = as_rogue_file(&block).unwrap_or(block);
+        for item in rlml_core::rs::parse::parse(&code).0 {
+            match &item.kind {
+                ItemKind::Component { fields: p, .. }
+                | ItemKind::Event { params: p }
+                | ItemKind::Command { params: p, .. }
+                | ItemKind::Generator { params: p, .. }
+                | ItemKind::Scene { params: p, .. }
+                | ItemKind::Timeline { params: p, .. } => read(p, &code.file, &mut errors),
+                ItemKind::Function { params: p, ret, .. } => {
+                    read(p, &code.file, &mut errors);
+                    if let Some(ReturnType::Type(t)) = ret
+                        && let Err(e) = rlml_core::rs::types::parse(&t.to_string(), &|n| rlml_core::names::is_name(n))
+                    {
+                        errors.push(format!("{}:{}: {e}", code.file, item.pos.line));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    assert!(errors.is_empty(), "{errors:#?}");
+    assert!(count > 150, "{count} parameters");
+}
