@@ -8,6 +8,18 @@ use std::collections::BTreeSet;
 use super::eval::{BodyKind, Env};
 use super::value::{MapId, Pos, Value};
 use super::world::World;
+use crate::names;
+
+/// A color as red, green and blue.
+pub type Rgb = [u8; 3];
+
+/// A drawn cell: its character and colors (D 9.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Look {
+    pub ch: char,
+    pub fg: Option<Rgb>,
+    pub bg: Option<Rgb>,
+}
 
 struct Layer {
     source: String,
@@ -38,8 +50,24 @@ impl World<'_> {
         out
     }
 
-    /// A tile's ASCII glyph down the ladder of `tiles.glyphs ascii` (D 9.2).
-    pub fn glyph(&self, tile: &str) -> char {
+    /// A color by name (`colors`, D 9.1) or six lower-case hex digits.
+    pub fn color(&self, word: &str, ns: Option<&str>) -> Option<Rgb> {
+        let hex = |h: &str| {
+            (h.len() == 6).then(|| [0, 2, 4].map(|i| u8::from_str_radix(&h[i..i + 2], 16).ok()))?.into_iter().collect::<Option<Vec<u8>>>().map(|v| [v[0], v[1], v[2]])
+        };
+        if let Some(c) = hex(word) {
+            return Some(c);
+        }
+        let full = self.m.resolve(ns, word).ok()?.full.clone();
+        self.m.section_rows("colors").find_map(|(_, item)| {
+            let (_, row) = item.marker();
+            (names::qualify(row.namespace.as_deref(), row.key()) == full).then(|| row.word(1).and_then(hex)).flatten()
+        })
+    }
+
+    /// A tile's ASCII look down the ladder of `tiles.glyphs` (D 9.2): its
+    /// character and colors.
+    pub fn look(&self, tile: &str) -> Look {
         let style = self.m.settings().get("style").map(|i| i.rest(1).to_string()).unwrap_or_else(|| "ascii".into());
         let mut ladder = vec![tile.to_string()];
         let mut t = tile.to_string();
@@ -54,18 +82,25 @@ impl World<'_> {
                 for item in &b.items {
                     let (_, row) = item.marker();
                     let row_key = if row.key() == "default" { "default".to_string() } else { self.full_name(row.key(), row.namespace.as_deref()) };
-                    if row_key == key
-                        && let Ok((c, _)) = crate::model::glyph_char(&row.shift(1))
-                    {
-                        found = Some(c);
+                    if row_key != key {
+                        continue;
                     }
+                    let Ok((ch, rest)) = crate::model::glyph_char(&row.shift(1)) else { continue };
+                    let ns = row.namespace.as_deref();
+                    let after = |w: &str| rest.tokens.iter().position(|t| t.is(w)).and_then(|i| rest.word(i + 1)).and_then(|c| self.color(c, ns));
+                    found = Some(Look { ch, fg: after("fg"), bg: after("bg") });
                 }
             }
-            if let Some(c) = found {
-                return c;
+            if let Some(l) = found {
+                return l;
             }
         }
-        '?'
+        Look { ch: '?', fg: None, bg: None }
+    }
+
+    /// A tile's ASCII glyph (D 9.2).
+    pub fn glyph(&self, tile: &str) -> char {
+        self.look(tile).ch
     }
 
     /// The player's view on a map now, or the whole map without `sight`.
@@ -87,6 +122,12 @@ impl World<'_> {
 
     /// Draws a map as rows of characters.
     pub fn render(&mut self, map: MapId) -> Vec<String> {
+        self.render_cells(map).into_iter().map(|r| r.into_iter().map(|c| c.ch).collect::<String>().trim_end().to_string()).collect()
+    }
+
+    /// Draws a map as cells with colors. A look without a background takes
+    /// the next non-empty layer's below it (D 9.4).
+    pub fn render_cells(&mut self, map: MapId) -> Vec<Vec<Look>> {
         let view = self.player_view(map);
         let (w, h) = (self.s.maps[map].width, self.s.maps[map].height);
         // what the player now sees is remembered (M 7.2)
@@ -96,7 +137,8 @@ impl World<'_> {
             }
         }
         let remembered: BTreeSet<(i32, i32)> = self.s.maps[map].remembered.iter().copied().collect();
-        let mut grid = vec![vec![' '; w as usize]; h as usize];
+        let blank = Look { ch: ' ', fg: None, bg: None };
+        let mut grid = vec![vec![blank; w as usize]; h as usize];
         let mut drawn = vec![vec![false; w as usize]; h as usize];
         for layer in self.layers_section() {
             match layer.source.as_str() {
@@ -107,11 +149,14 @@ impl World<'_> {
                                 continue;
                             }
                             let m = &self.s.maps[map];
-                            let top = (0..m.layers.len()).rev().find_map(|l| m.tile(l, x, y).map(String::from));
-                            if let Some(t) = top {
-                                grid[y as usize][x as usize] = self.glyph(&t);
-                                drawn[y as usize][x as usize] = true;
+                            let tiles: Vec<String> = (0..m.layers.len()).rev().filter_map(|l| m.tile(l, x, y).map(String::from)).collect();
+                            let Some(top) = tiles.first() else { continue };
+                            let mut look = self.look(top);
+                            if look.bg.is_none() {
+                                look.bg = tiles[1..].iter().find_map(|t| self.look(t).bg);
                             }
+                            grid[y as usize][x as usize] = look;
+                            drawn[y as usize][x as usize] = true;
                         }
                     }
                 }
@@ -130,7 +175,10 @@ impl World<'_> {
                                 continue;
                             }
                         }
-                        grid[p.y as usize][p.x as usize] = self.glyph(&tile);
+                        let under = grid[p.y as usize][p.x as usize].bg;
+                        let mut look = self.look(&tile);
+                        look.bg = look.bg.or(under);
+                        grid[p.y as usize][p.x as usize] = look;
                         drawn[p.y as usize][p.x as usize] = true;
                     }
                 }
@@ -138,7 +186,7 @@ impl World<'_> {
                     for y in 0..h {
                         for x in 0..w {
                             if !view.contains(&(x, y)) && !(drawn[y as usize][x as usize] && remembered.contains(&(x, y))) {
-                                grid[y as usize][x as usize] = ' ';
+                                grid[y as usize][x as usize] = blank;
                             }
                         }
                     }
@@ -146,7 +194,7 @@ impl World<'_> {
                 _ => {}
             }
         }
-        grid.into_iter().map(|r| r.into_iter().collect::<String>().trim_end().to_string()).collect()
+        grid
     }
 
     /// A cell as `x,y` for messages.

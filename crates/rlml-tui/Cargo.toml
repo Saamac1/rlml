@@ -1,0 +1,10 @@
+[package]
+name = "rlml-tui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rlml-core = { path = "../rlml-core" }
+# Termplate's frame, layout, styles, keys and terminal (github.com/Saamac1/termplate)
+termplate-core = { git = "https://github.com/Saamac1/termplate", rev = "bebd8e356589ba6809732429b46c45d2da995a28" }
+termplate-term = { git = "https://github.com/Saamac1/termplate", rev = "bebd8e356589ba6809732429b46c45d2da995a28" }
