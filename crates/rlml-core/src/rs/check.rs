@@ -80,6 +80,8 @@ struct Body<'a> {
     texts: &'a BTreeSet<String>,
     errors: Vec<Diagnostic>,
     tiles: &'a mut BTreeSet<String>,
+    /// Examples: an undefined upper-case name is `Unknown`, not an error.
+    lenient: bool,
 }
 
 /// Checks every RogueScript body; returns the tiles the logic names.
@@ -87,9 +89,20 @@ pub fn check(m: &Model, r: &mut Report) -> BTreeSet<String> {
     let texts = text_keys(m);
     let mut tiles = BTreeSet::new();
     for decl in &m.code {
-        check_decl(m, decl, &texts, &mut tiles, r);
+        check_decl(m, decl, &texts, &mut tiles, r, false);
     }
     tiles
+}
+
+/// Checks documentation examples, which name things they do not define:
+/// an undefined upper-case name is `Unknown` instead of an error, and the
+/// other checks, types included, hold.
+pub fn check_examples(m: &Model, r: &mut Report) {
+    let texts = text_keys(m);
+    let mut tiles = BTreeSet::new();
+    for decl in &m.code {
+        check_decl(m, decl, &texts, &mut tiles, r, true);
+    }
 }
 
 /// The inferred types of a declaration's parameters and locals, for tests
@@ -98,7 +111,7 @@ pub fn local_types(m: &Model, decl: &Decl) -> BTreeMap<String, Ty> {
     let texts = text_keys(m);
     let mut tiles = BTreeSet::new();
     let mut r = Report::default();
-    check_decl(m, decl, &texts, &mut tiles, &mut r)
+    check_decl(m, decl, &texts, &mut tiles, &mut r, false)
 }
 
 fn text_keys(m: &Model) -> BTreeSet<String> {
@@ -106,7 +119,7 @@ fn text_keys(m: &Model) -> BTreeSet<String> {
 }
 
 /// Checks one declaration; returns the locals of its (last) body.
-fn check_decl(m: &Model, decl: &Decl, texts: &BTreeSet<String>, tiles: &mut BTreeSet<String>, r: &mut Report) -> BTreeMap<String, Ty> {
+fn check_decl(m: &Model, decl: &Decl, texts: &BTreeSet<String>, tiles: &mut BTreeSet<String>, r: &mut Report, lenient: bool) -> BTreeMap<String, Ty> {
     let item = decl.item.clone();
     let mut last = BTreeMap::new();
     let mut run = |ctx: Ctx, ret: bool, f: &mut dyn FnMut(&mut Body)| {
@@ -115,7 +128,7 @@ fn check_decl(m: &Model, decl: &Decl, texts: &BTreeSet<String>, tiles: &mut BTre
             Ctx::Ai => Ty::Union(vec![Ty::Command, Ty::None]),
             _ => Ty::Unknown,
         };
-        let mut b = Body { m, decl, ctx, ret, ret_ty, locals: BTreeMap::new(), own: BTreeSet::new(), it: vec![], texts, errors: vec![], tiles: &mut *tiles };
+        let mut b = Body { m, decl, ctx, ret, ret_ty, locals: BTreeMap::new(), own: BTreeSet::new(), it: vec![], texts, errors: vec![], tiles: &mut *tiles, lenient };
         f(&mut b);
         for e in b.errors {
             r.push(e);
@@ -287,6 +300,7 @@ impl Body<'_> {
                 self.error(h.pos, format!("engine event `{}` has no `before` phase (RS 4.1)", h.event));
             }
         } else if in_component
+            && !self.lenient
             && let Err(e) = self.m.resolve_kind(self.ns(), &h.event, &[Kind::Event])
         {
             // top-level handlers' events are checked with the declarations (check.rs)
@@ -575,7 +589,7 @@ impl Body<'_> {
                 Some(def)
             }
             Err(e) => {
-                if kinds.is_empty() && names::candidates(self.ns(), &written).iter().any(|c| self.texts.contains(c)) {
+                if self.lenient || (kinds.is_empty() && names::candidates(self.ns(), &written).iter().any(|c| self.texts.contains(c))) {
                     return None;
                 }
                 self.error(pos, e);
@@ -615,6 +629,9 @@ impl Body<'_> {
             EmptyDict => Ty::Dict(Box::new(Ty::Unknown), Box::new(Ty::Unknown)),
             Name { name, root } => {
                 let def = self.name(e.pos, name, *root, &[]).cloned();
+                if def.is_none() && self.lenient {
+                    return Ty::Unknown;
+                }
                 self.name_ty(def.as_ref())
             }
             Word(w) => self.word(e.pos, w),
@@ -794,7 +811,9 @@ impl Body<'_> {
                             Ty::Component(Some(full))
                         }
                         Option::None => {
-                            self.error(e.pos, format!("`{}`: no component `{p}` (RS 3.3)", e));
+                            if !self.lenient {
+                                self.error(e.pos, format!("`{}`: no component `{p}` (RS 3.3)", e));
+                            }
                             return Ty::Unknown;
                         }
                     }
@@ -982,9 +1001,9 @@ impl Body<'_> {
             };
             self.error(pos, format!("`{w}` is allowed only in {where_} (M 9.3)"));
         }
-        match fitting.as_slice() {
-            [sig] => ret_ty(sig, w, args),
-            _ => Ty::Unknown,
+        match prefer_exact(&fitting, args) {
+            Some(sig) => ret_ty(sig, w, args),
+            Option::None => Ty::Unknown,
         }
     }
 
@@ -1144,7 +1163,9 @@ impl Body<'_> {
                 match self.m.resolve_kind(self.ns(), n, &[Kind::Component]) {
                     Ok(c) => (c.full.clone(), component_fields(c).into_iter().map(|f| f.name).collect()),
                     Err(e) => {
-                        self.error(a.value.pos, format!("card `{}`: {e}", def.full));
+                        if !self.lenient {
+                            self.error(a.value.pos, format!("card `{}`: {e}", def.full));
+                        }
                         continue;
                     }
                 }
@@ -1282,9 +1303,25 @@ impl Body<'_> {
 /// is exactly one (M 9.2).
 pub fn select(name: &str, args: &[(Option<String>, Ty)]) -> Option<&'static Sig> {
     let fitting: Vec<&Sig> = sigs::versions(name).into_iter().filter(|s| fits_version(s, args)).collect();
-    match fitting.as_slice() {
-        [one] => Some(one),
-        _ => Option::None,
+    prefer_exact(&fitting, args)
+}
+
+/// Of several fitting versions, the one whose first parameter is exactly
+/// the first argument's type: a bare entity name is a card too, but
+/// `spawn(RAT, at: …)` is the name version (M 9.2).
+fn prefer_exact(fitting: &[&'static Sig], args: &[(Option<String>, Ty)]) -> Option<&'static Sig> {
+    match fitting {
+        [one] => Some(*one),
+        [] => Option::None,
+        many => {
+            let first = args.first().map(|(_, t)| t)?;
+            let exact = |p: &Ty| p == first || matches!(p, Ty::Union(alts) if alts.contains(first) && alts.len() == 1);
+            let hits: Vec<&&Sig> = many.iter().filter(|s| s.params.first().is_some_and(|p| exact(&p.ty))).collect();
+            match hits.as_slice() {
+                [one] => Some(**one),
+                _ => Option::None,
+            }
+        }
     }
 }
 

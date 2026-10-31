@@ -213,6 +213,8 @@ pub fn fits(arg: &Ty, param: &Ty) -> bool {
         (Component(Some(_)), Component(Option::None)) => true,
         // a label is a name of the map
         (Label, Name) | (Name, Label) => true,
+        // an entity name is a card without overrides (D 5.1, D 6.4)
+        (Name, Card) => true,
         _ => false,
     }
 }
@@ -348,6 +350,7 @@ mod tests {
         assert!(!fits(&Text, &Union(vec![Number, Dice, All])));
         assert!(fits(&Component(Some("HP".into())), &Component(Option::None)));
         assert!(fits(&Label, &Name) && fits(&Name, &Label));
+        assert!(fits(&Name, &Card) && !fits(&Card, &Name), "GIVE(player, QUEST.SEAL)");
     }
 
     #[test]

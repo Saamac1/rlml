@@ -172,3 +172,76 @@ fn every_engine_function_has_a_signature() {
     let unlisted: Vec<&str> = rlml_core::rs::sigs::all().iter().map(|s| s.name.as_str()).filter(|n| !vocab.contains(&format!("`{n}`"))).collect();
     assert!(unlisted.is_empty(), "not in M 9.1: {unlisted:?}");
 }
+
+/// The examples of each specification document, checked with the standard
+/// library: undefined names are unknown, everything else must hold. STD's
+/// own chapters are left out, since lib/std/ is assembled from them.
+#[test]
+fn spec_examples_type_check() {
+    use rlml_core::error::Report;
+    use rlml_core::load::MemFiles;
+    let root = repo();
+    let mut engine = std::collections::BTreeMap::new();
+    let mut lib = Vec::new();
+    files(&root.join("lib"), ".rlml", &mut lib);
+    for p in lib {
+        engine.insert(p.strip_prefix(&root).unwrap().to_string_lossy().to_string(), std::fs::read_to_string(&p).unwrap());
+    }
+    let mut by_doc: std::collections::BTreeMap<String, Vec<RawCode>> = Default::default();
+    for block in corpus().into_iter().filter(|b| !b.file.starts_with("vakiokirjasto/") && !b.file.starts_with("lib/")) {
+        if SNIPPETS.iter().any(|(f, l, _)| *f == block.file && *l == block.line) {
+            continue;
+        }
+        let code = as_rogue_file(&block).unwrap_or(block);
+        by_doc.entry(code.file.clone()).or_default().push(code);
+    }
+    let mut errors = Vec::new();
+    let mut checked = 0;
+    for (doc, blocks) in by_doc {
+        // one file per document; each block keeps its own line numbers
+        let mut text = String::from("include lib/std.rlml\n\n");
+        let mut lines = Vec::new();
+        for b in &blocks {
+            text.push_str("```roguescript\n");
+            lines.push((text.lines().count() + 1, b.line));
+            for l in &b.lines {
+                text.push_str(l);
+                text.push('\n');
+            }
+            text.push_str("```\n\n");
+        }
+        let files = MemFiles { game: [("doc.rlml".to_string(), text)].into(), engine: engine.clone() };
+        let (loaded, mut report) = rlml_core::load::load(&files, "doc.rlml");
+        let m = rlml_core::model::build(loaded, &mut report);
+        let mut r = Report::default();
+        rlml_core::rs::check::check_examples(&m, &mut r);
+        checked += m.code.iter().filter(|d| d.file == "doc.rlml").count();
+        for d in report.errors().chain(r.errors()) {
+            // map the line back to the document
+            let line = lines.iter().rev().find(|(start, _)| d.line >= *start).map(|(start, orig)| orig + (d.line - start)).unwrap_or(d.line);
+            errors.push(format!("{doc}:{line}: {}", d.message));
+        }
+    }
+    assert!(errors.is_empty(), "{} errors:\n{}", errors.len(), errors.join("\n"));
+    assert!(checked > 70, "{checked} example declarations checked");
+}
+
+/// Lenient checking still finds type errors.
+#[test]
+fn example_checking_finds_type_errors() {
+    use rlml_core::error::Report;
+    use rlml_core::load::MemFiles;
+    let root = repo();
+    let mut lib = Vec::new();
+    files(&root.join("lib"), ".rlml", &mut lib);
+    let engine = lib.iter().map(|p| (p.strip_prefix(&root).unwrap().to_string_lossy().to_string(), std::fs::read_to_string(p).unwrap())).collect();
+    let src = "include lib/std.rlml\n\n```roguescript\nfn PROBE():\n    HURT(player, \"5\")\n    UNDEFINED_THING(1)\n```\n";
+    let files = MemFiles { game: [("doc.rlml".to_string(), src.to_string())].into(), engine };
+    let (loaded, mut report) = rlml_core::load::load(&files, "doc.rlml");
+    let m = rlml_core::model::build(loaded, &mut report);
+    let mut r = Report::default();
+    rlml_core::rs::check::check_examples(&m, &mut r);
+    let msgs: Vec<String> = r.errors().map(|d| d.message.clone()).collect();
+    assert_eq!(msgs.len(), 1, "{msgs:?}");
+    assert!(msgs[0].contains("`amount` takes a `number`"), "{msgs:?}");
+}

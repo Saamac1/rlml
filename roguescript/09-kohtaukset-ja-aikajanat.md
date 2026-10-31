@@ -53,7 +53,7 @@ scene GATE_OPENS(lever: entity) timeline:
 - Kesto kutsulle, jolla ei ole esitystä (`emit`, `GIVE`, kentän sijoitus), on latausvirhe.
 
 ```roguescript
-scene BRIDGE_RISES() timeline:
+scene BRIDGE_RISES(guard: entity) timeline:
     0s    2000ms fade(light(label(GATE)), to: 100%)
     500ms 1500ms move(guard, to: label(DOOR))
     1s    3s     carve(label(BRIDGE), BRIDGE.built, from: label(GATE))

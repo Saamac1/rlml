@@ -379,7 +379,8 @@ mod tests {
                 for b in &v[i + 1..] {
                     let first = |s: &Sig| s.params.first().map(|p| p.ty.clone()).unwrap_or(Ty::None);
                     let (fa, fb) = (first(a), first(b));
-                    let by_type = !types::fits(&fa, &fb) && !types::fits(&fb, &fa);
+                    // a one-way conversion (a name is a card) is settled by the exact match
+                    let by_type = fa != fb && !(types::fits(&fa, &fb) && types::fits(&fb, &fa));
                     let named = |s: &Sig| s.params.iter().filter(|p| !p.positional).map(|p| p.name.clone()).collect::<Vec<_>>();
                     let by_names = named(a).iter().any(|n| !named(b).contains(n)) || named(b).iter().any(|n| !named(a).contains(n));
                     let arity = |s: &Sig| s.params.iter().filter(|p| !p.optional).count();
