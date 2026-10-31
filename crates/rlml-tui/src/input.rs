@@ -155,7 +155,9 @@ impl Keys {
 pub enum Effect {
     Command(CommandValue),
     Engine(String),
-    Open { menu: String, stack: bool },
+    /// `open`; `always` when the key is `ALWAYS`'s, where the same key
+    /// closes the menu it opened (M 8).
+    Open { menu: String, stack: bool, always: bool },
     Toggle(String),
     /// The repeat count is being typed (D 11.3).
     Counting(String),
@@ -207,7 +209,7 @@ impl Input {
                     }
                     Effect::Command(cmd)
                 }
-                Some(a) => self.effect(a),
+                Some(a) => self.effect(a, &b),
                 None => Effect::Unbound(b),
             };
         }
@@ -216,16 +218,19 @@ impl Input {
                 self.count = Some(String::new());
                 Effect::Counting(String::new())
             }
-            Some(a) => self.effect(a),
+            Some(a) => self.effect(a, &b),
             None => Effect::Unbound(b),
         }
     }
 
-    fn effect(&self, a: Action) -> Effect {
+    fn effect(&self, a: Action, b: &Binding) -> Effect {
         match a {
             Action::Command(c) => Effect::Command(CommandValue { name: c, args: vec![] }),
             Action::Engine(e) => Effect::Engine(e),
-            Action::Open { menu, stack } => Effect::Open { menu, stack },
+            Action::Open { menu, stack } => {
+                let always = self.keys.contexts.get("ALWAYS").is_some_and(|c| c.rows.iter().any(|(x, _)| x == b));
+                Effect::Open { menu, stack, always }
+            }
             Action::Toggle(p) => Effect::Toggle(p),
         }
     }

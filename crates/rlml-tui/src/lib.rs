@@ -3,4 +3,5 @@
 pub mod app;
 pub mod draw;
 pub mod input;
+pub mod menu;
 pub mod term;

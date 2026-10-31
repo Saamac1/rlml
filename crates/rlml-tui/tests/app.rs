@@ -138,3 +138,97 @@ fn ctrl_c_quits_and_resizing_redraws() {
     app.key(Binding::key(KeyCode::Char('c'), Mods { ctrl: true, ..Mods::default() }), ms(0)).unwrap();
     assert!(app.quit);
 }
+
+fn screen(app: &mut App) -> String {
+    app.draw().rows().join("\n")
+}
+
+fn press(app: &mut App, keys: &str) {
+    for k in keys.split_whitespace() {
+        app.key(key(k), ms(10)).unwrap();
+    }
+}
+
+#[test]
+fn pause_opens_stops_time_and_closes_with_the_same_key() {
+    let f = mini_with(|_| {});
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    press(&mut app, "esc");
+    assert_eq!(app.contexts(), ["GAME", "MENU"]);
+    let s = screen(&mut app);
+    assert!(s.contains(" Tauko ") && s.contains("Jatka") && s.contains("Lopeta"), "{s}");
+    // the game's keys do not reach under the menu, and time stands
+    let (x, time) = (player_x(&app), app.r.w.s.game.time);
+    press(&mut app, "l");
+    app.tick(ms(5000)).unwrap();
+    assert_eq!((player_x(&app), app.r.w.s.game.time), (x, time));
+    press(&mut app, "esc");
+    assert!(!app.menus.is_open());
+    press(&mut app, "l");
+    assert_eq!(player_x(&app), x + 1);
+}
+
+#[test]
+fn resume_closes_and_quit_goes_to_the_engine_menu() {
+    let f = mini_with(|_| {});
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    press(&mut app, "esc enter");
+    assert!(!app.menus.is_open() && app.players_turn());
+    // QUIT: the game ends, and without `title` the engine's menu opens
+    press(&mut app, "esc j enter");
+    assert!(!app.playing && !app.quit);
+    let s = screen(&mut app);
+    assert!(s.contains("New game") && s.contains("Exit"), "{s}");
+    // the engine's menu is final: neither esc nor back closes it
+    press(&mut app, "backspace");
+    assert!(app.menus.is_open());
+    // a new game takes a new seed
+    press(&mut app, "enter");
+    assert!(app.playing && app.players_turn() && !app.menus.is_open());
+    assert_ne!(app.seed, 7);
+    assert_eq!(app.games, 2);
+    press(&mut app, "esc j enter j enter");
+    assert!(app.quit);
+}
+
+#[test]
+fn items_hide_disable_and_open_menus() {
+    let f = mini_with(|g| {
+        *g = g.replace("- PLAYER HERO", "- PLAYER HERO\n- title OPENING");
+        g.push_str(
+            "\nmenu OPENING final\n- NEW_GAME new_game\n- MORE open MORE\n- GONE quit hide when game.time >= 0\n- DIM quit disabled when game.time >= 0\n- EXIT\n\n\
+             menu MORE size 20x*\n- AGAIN open MORE stack\n- HOME open OPENING\n- BACK back\n- CLOSE close\n",
+        );
+    });
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    // the game starts in its `title` menu
+    assert!(!app.playing && app.games == 0);
+    let layer = &app.menus.layers[0];
+    let shown: Vec<&str> = layer.rows.iter().map(|r| layer.menu.items[r.item].key.as_str()).collect();
+    assert_eq!(shown, ["NEW_GAME", "MORE", "DIM", "EXIT"]);
+    assert!(!layer.rows[2].enabled);
+    // the cursor skips the disabled item
+    press(&mut app, "j j");
+    assert_eq!(app.menus.layers[0].cursor, 3);
+    press(&mut app, "k enter");
+    assert_eq!(app.menus.layers.len(), 2);
+    // `stack` adds a layer, `open` returns to the one already open
+    press(&mut app, "enter enter");
+    assert_eq!(app.menus.layers.len(), 4);
+    press(&mut app, "j enter");
+    assert_eq!(app.menus.layers.len(), 1);
+    // `back` closes one, `close` all but the final menu
+    press(&mut app, "j enter enter j j enter");
+    assert_eq!(app.menus.layers.len(), 2);
+    press(&mut app, "j j j enter");
+    assert_eq!(app.menus.layers.len(), 1);
+    // the first new game takes the seed given
+    press(&mut app, "k enter");
+    assert!(app.playing && app.seed == 7 && app.menus.layers.is_empty());
+    // `quit` returns to the title menu
+    press(&mut app, "esc j enter");
+    assert!(!app.playing && app.menus.layers[0].menu.full == "OPENING");
+}
