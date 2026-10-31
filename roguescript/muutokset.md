@@ -4,7 +4,7 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
-**Muutokset 31.10.2026 (RogueScript-lekseri ja -jäsennin):** rivin jatkaminen sulkujen sisällä, `namespace` koodilohkossa, yksirivinen lohko ja `none`-arvon tyypit ovat avoimia kysymyksiä (luku [13](13-avoimet-kysymykset.md)).
+**Muutokset 31.10.2026 (RogueScript-lekseri ja -jäsennin):** rivin jatkaminen sulkujen sisällä, `namespace` koodilohkossa, yksirivinen lohko ja `none`-arvon tyypit ovat avoimia kysymyksiä (luku [13](13-avoimet-kysymykset.md)). Aloituksen esimerkki ottaa hallintaan kortista syntyneen kokoelman ensimmäisen jäsenen (`spawn(…).first`, luku [10.1](10-aloitus-ja-checkpointit.md#101-aloitus)).
 
 **Muutokset 25.10.2026 (robotfindskitten-toteutustesti):** entiteetin nimen kutsu tuottaa kortin (luku [2.8](02-yleinen-syntaksi.md#28-ison-nimen-kutsu)). Komponentin käsittelijä jättää tapahtuman subjektin aina pois (luvut [3.1](03-komponentit.md#31-määrittely), [3.4](03-komponentit.md#34-kokoelman-jäsenet-ja-tilat), [4](04-tapahtumat-ja-kasittelijat.md) ja [12.1](12-kielioppi.md#121-määrittelyt)). Jokeri vastaa ryhmän kaikkia nimiä, myös tekstiavaimia, ja tyhjä väli on sallittu (luku [2.6](02-yleinen-syntaksi.md#26-tyypit)). `pick` ja `shuffled` palauttavat ruutujoukosta listan (luku [5.4](05-funktiot-ja-lausekkeet.md#54-satunnaisuus)). Etualan kohtauksen kartta ratkaistaan kohtauksen alkaessa, joten `travel` ja `start` voivat olla samassa käsittelijässä (luvut [4](04-tapahtumat-ja-kasittelijat.md), [6.4](06-ruudut-ja-paikkahaku.md#64-siirtyminen-kartalta-toiselle) ja [9](09-kohtaukset-ja-aikajanat.md)).
 

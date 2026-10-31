@@ -87,6 +87,12 @@ impl Checker<'_> {
                     self.r.push(item.err(e));
                     continue;
                 }
+                // the same type reading as RogueScript's (D 5.1 = RS 2.6)
+                let ns = b.namespace.as_deref();
+                if let Err(e) = crate::rs::types::parse(&f.ty, &|n| self.m.resolve(ns, n).is_ok_and(|d| d.kind == Kind::Component)) {
+                    self.r.push(item.err(e));
+                    continue;
+                }
                 if let Some(d) = &f.default {
                     // a default may name another field of the same component
                     if fields.iter().any(|o| &o.name == d) {
@@ -985,7 +991,7 @@ fn is_joining(c: char) -> bool {
 
 /// `{NAME}`, `{NAME:SUFFIX}` and `{NAME.DESC}` placeholders; `{@KEY}` and
 /// `{^ACTION}` are not parameters.
-fn placeholders(text: &str) -> Vec<String> {
+pub(crate) fn placeholders(text: &str) -> Vec<String> {
     braces(text).into_iter().filter(|p| !p.starts_with('@') && !p.starts_with('^')).collect()
 }
 

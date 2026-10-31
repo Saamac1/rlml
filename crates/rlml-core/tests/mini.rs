@@ -189,6 +189,68 @@ fn kinds_of_bodies() {
 }
 
 #[test]
+fn argument_types() {
+    let cases: &[(&str, &str, &str, &str)] = &[
+        ("lib/std/combat.rlml", "    emit HIT(target, attacker, attacker.MELEE.damage)", "    HURT(target, \"5\")", "`STD.HURT`: `amount` takes a `number`, but `\"5\"` is a `text`"),
+        ("lib/std/move.rlml", "    return STEP(actor.at + dir)", "    return STEP(north)", "`STD.STEP`: `to` takes a `pos`, but `north` is a `dir`"),
+        ("lib/std/move.rlml", "command MOVE.NORTH = MOVE(north)", "command MOVE.NORTH = MOVE(front)", "`STD.MOVE`: `dir` takes a `dir`, but `front` is a `side`"),
+        ("lib/std/move.rlml", "    return STEP(actor.at + dir)", "    return STEP()", "`STD.STEP`: missing argument `to`"),
+        ("lib/std/move.rlml", "    return STEP(actor.at + dir)", "    return STEP(actor.at, dir: north)", "`STD.STEP` has no parameter `dir`"),
+        ("lib/std/combat.rlml", "        spawn(victim.DROPS.loot, at: victim)", "        spawn(victim.DROPS.loot)", "no version of `spawn` takes (table)"),
+        ("lib/std/combat.rlml", "        spawn(victim.DROPS.loot, at: victim)", "        victim.DROPS.loot.shuffle()", "`shuffle`: `d` takes a `deck`, but `victim.DROPS.loot` is a `table`"),
+        ("lib/std/core.rlml", "        control(spawn(DEFAULT.PLAYER, at: game.at))", "        control(spawn(DEFAULT.PLAYER(HPP: 3), at: game.at).first)", "card `STD.DEFAULT.PLAYER`: `HPP` is not defined"),
+        ("lib/std/core.rlml", "        control(spawn(DEFAULT.PLAYER, at: game.at))", "        control(spawn(DEFAULT.PLAYER(HP: 3), at: game.at).first)", "card `STD.DEFAULT.PLAYER`: `HP` takes a component value `STD.HP(…)`, not a `number`"),
+        ("lib/std/core.rlml", "        control(spawn(DEFAULT.PLAYER, at: game.at))", "        control(spawn(DEFAULT.PLAYER(HP: HP(now: 3)), at: game.at).first)", ""),
+    ];
+    for (file, old, new, want) in cases {
+        let mut f = mini();
+        edit_std(&mut f, file, old, new);
+        let r = run(&f);
+        if want.is_empty() {
+            assert!(!r.has_errors(), "{new}: {:#?}", errors(&r));
+        } else {
+            expect_error(&r, want);
+        }
+    }
+}
+
+#[test]
+fn returns_conditions_and_fields() {
+    let cases: &[(&str, &str, &str, &str)] = &[
+        ("lib/std/move.rlml", "    return to in adjacent(who)", "    return to", "`return to` gives a `pos`; this returns `bool`"),
+        ("lib/std/ai.rlml", "    return WANDER()\n\ncomponent", "    return 3\n\ncomponent", "`return 3` gives a `number`; this returns `command|none`"),
+        ("lib/std/move.rlml", "    if actor has SNEAKING:\n        wait 120", "    if actor.HP:\n        wait 120", "a condition is a `bool`, not a `STD.HP`"),
+        ("lib/std/move.rlml", "    move(who, to: to)", "    who.at = to", "`who.at` is kept by the engine and read-only"),
+        ("lib/std/core.rlml", "    if game has PLAYER:", "    game.start = CAVE_B\n    if game has PLAYER:", "`game.start` is an engine field and read-only"),
+        ("lib/std/combat.rlml", "    target.HP.now -= amount", "    target.HP.now = \"a\"", "`target.HP.now` has the type `number`; a `text` cannot be assigned to it"),
+        ("lib/std/combat.rlml", "    if victim has DROPS:", "    if victim.DROPS.loot.count > 0:", "a table has no fields"),
+        ("lib/std/ai.rlml", "    spots = adjacent(actor) where not blocks(it, move, for: actor)\n", "    spots = adjacent(actor) where not blocks(it, move, for: actor)\n    n = choose(4..)\n", "`choose` needs both ends of the range"),
+        ("lib/std/combat.rlml", "        log(MESSAGE.COMBAT.HURT, AMOUNT: amount)", "        log(MESSAGE.COMBAT.HURT)", "message `STD.MESSAGE.COMBAT.HURT` takes (AMOUNT); the call gives ()"),
+        ("lib/std/combat.rlml", "        log(MESSAGE.COMBAT.HURT, AMOUNT: amount)", "        log(MESSAGE.COMBAT.NOPE)", "`MESSAGE.COMBAT.NOPE` is not defined"),
+        ("lib/std/move.rlml", "            return ATTACK(other)", "            return HUNTER()", "`STD.HUNTER()` runs another ai only inside an `ai`"),
+    ];
+    for (file, old, new, want) in cases {
+        let mut f = mini();
+        edit_std(&mut f, file, old, new);
+        expect_error(&run(&f), want);
+    }
+}
+
+#[test]
+fn say_placeholders_and_data_types() {
+    let scene = "\n```roguescript\nscene GREET():\n    say(STD.MESSAGE.COMBAT.HIT, TARGET: player)\n```\n";
+    let mut f = mini();
+    f.game.get_mut("game.rlml").unwrap().push_str(scene);
+    expect_error(&run(&f), "text `STD.MESSAGE.COMBAT.HIT` (fi) shows `{AMOUNT}`, but the call gives no `AMOUNT`");
+    let mut f = mini();
+    f.game.get_mut("game.rlml").unwrap().push_str(&scene.replace("TARGET: player)", "TARGET: player, AMOUNT: 1, EXTRA: 2)"));
+    expect_error(&run(&f), "text `STD.MESSAGE.COMBAT.HIT` has no placeholder `{EXTRA}`");
+    let mut f = mini();
+    f.game.get_mut("game.rlml").unwrap().push_str("\ncomponent BESTIARY\n- seen list RAT\n");
+    expect_error(&run(&f), "`RAT` is not a component");
+}
+
+#[test]
 fn style() {
     let mut f = mini();
     edit(&mut f, "style/ascii.rlml", "- GLYPH.RAT r fg FUR", "- GLYPH.RAT r fg FURR");

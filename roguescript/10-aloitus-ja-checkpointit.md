@@ -9,7 +9,7 @@ Aloitus on dataa (`game`-lohko, dataformaatit luku [3.3](../dataformaatit/03-tie
 ```roguescript
 on begin() as STD.SPAWN_PLAYER:
     if game has PLAYER:
-        control(spawn(game.PLAYER.class, at: game.at))
+        control(spawn(game.PLAYER.class, at: game.at).first)
     else:
         control(spawn(DEFAULT.PLAYER, at: game.at))
 

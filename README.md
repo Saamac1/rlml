@@ -85,7 +85,7 @@ RLML on roguelike-pelien kuvauskieli: pelin data kirjoitetaan tekstitiedostoina 
 
 ## Lataaja
 
-`crates/` sisältää Rust-toteutuksen alun: lataajan, joka lukee pelin ja vakiokirjaston (`lib/std.rlml`, `lib/std/`) ja tarkistaa ne latausvirheiden ja -varoitusten osalta ([M 2](moottori/02-lataus.md)). RogueScript jäsennetään kokonaan ([RS 12](roguescript/12-kielioppi.md)), ja lataus tarkistaa logiikasta nimet, paikalliset nimet, odotusten ja kyselyjen säännöt sekä moottorin funktiot. Tyyppejä ei vielä tarkisteta.
+`crates/` sisältää Rust-toteutuksen alun: lataajan, joka lukee pelin ja vakiokirjaston (`lib/std.rlml`, `lib/std/`) ja tarkistaa ne latausvirheiden ja -varoitusten osalta ([M 2](moottori/02-lataus.md)). RogueScript jäsennetään kokonaan ([RS 12](roguescript/12-kielioppi.md)), ja lataus tarkistaa logiikasta nimet, paikalliset nimet, odotusten ja kyselyjen säännöt sekä moottorin funktiot. Tyypit päätellään ja tarkistetaan asteittain: tyyppi, jota ei voi päätellä, ei aiheuta virhettä.
 
 ```sh
 cargo run -p rlml -- check esimerkit/mini

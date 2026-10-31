@@ -26,7 +26,7 @@ query WITNESSED(e: entity) -> bool:
 
 on begin() as SPAWN_PLAYER:
     if game has PLAYER:
-        control(spawn(game.PLAYER.class, at: game.at))
+        control(spawn(game.PLAYER.class, at: game.at).first)
     else:
         control(spawn(DEFAULT.PLAYER, at: game.at))
 ```
