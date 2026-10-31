@@ -50,7 +50,9 @@ check loads the game and reports load errors and warnings (M 2).
 run plays a new game without a screen: each key is one player's turn,
 and the map, HP and log are printed after it. Keys are the key names of
 the game's `keys` contexts, separated by spaces (`l l > j`).
-play plays a new game in the terminal; ctrl+c leaves.
+play plays a new game in the terminal: the game's keys, esc for its
+pause menu where it binds one, ctrl+c to leave at once. A runtime error
+ends the game and is printed after the terminal is restored.
 
 GAME is the game's main file or its folder (then game.rlml, game.md or
 game.rlml.md). The engine library holds lib/std.rlml; it is found with

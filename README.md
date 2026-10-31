@@ -87,13 +87,38 @@ RLML on roguelike-pelien kuvauskieli: pelin data kirjoitetaan tekstitiedostoina 
 
 `crates/` sisältää Rust-toteutuksen: lataajan, joka lukee pelin ja vakiokirjaston (`lib/std.rlml`, `lib/std/`) ja tarkistaa ne latausvirheiden ja -varoitusten osalta ([M 2](moottori/02-lataus.md)). RogueScript jäsennetään kokonaan ([RS 12](roguescript/12-kielioppi.md)), ja lataus tarkistaa logiikasta nimet, paikalliset nimet, odotusten ja kyselyjen säännöt sekä moottorin funktiot. Tyypit päätellään ja tarkistetaan asteittain: tyyppi, jota ei voi päätellä, ei aiheuta virhettä.
 
-Ajo ([M 3–6](moottori/README.md)) on mukana ilman käyttöliittymää: `rlml run` pelaa uuden pelin, jossa jokainen näppäin on yksi pelaajan vuoro, ja tulostaa jokaisen vuoron jälkeen kartan, HP:n ja lokin. Sama siemen ja samat näppäimet tuottavat aina saman tulosteen.
+Ajo ([M 3–6](moottori/README.md)) on mukana myös ilman käyttöliittymää: `rlml run` pelaa uuden pelin, jossa jokainen näppäin on yksi pelaajan vuoro, ja tulostaa jokaisen vuoron jälkeen kartan, HP:n ja lokin. Sama siemen ja samat näppäimet tuottavat aina saman tulosteen.
 
 ```sh
 cargo run -p rlml -- check esimerkit/mini
 cargo run -p rlml -- run esimerkit/mini --seed 7 --keys "s s s j h h"
 cargo test
 ```
+
+## Pelaaminen
+
+`rlml play` pelaa pelin päätteessä ([M 7](moottori/07-esitys.md) ja [M 8](moottori/08-syote.md)). Komento tarvitsee oikean päätteen, koska se lukee näppäimiä suoraan.
+
+```sh
+cargo run -p rlml -- play esimerkit/mini --seed 7
+```
+
+Minipelin näppäimet tulevat sen tiedostosta [`ui/main.rlml`](esimerkit/mini/ui/main.rlml):
+
+| Näppäin | Toiminto |
+| --- | --- |
+| `h` `j` `k` `l` tai nuolet | liiku tai lyö viereistä |
+| `s` | odota vuoro |
+| `>` `<` | portaat alas ja ylös |
+| `z` | seuraava kierros heti, kun pelaajalla ei ole vuoroa (esimerkiksi kuoleman jälkeen) |
+| `esc` | taukovalikko auki ja kiinni |
+| `ctrl+c` | lopettaa heti |
+
+Valikossa `j` `k` ja nuolet liikuttavat kursoria, `enter` ja `space` valitsevat ja `esc` tai `backspace` palaa. Pelin aika pysähtyy valikon ajaksi. Taukovalikon Lopeta-kohta päättää pelikerran ja avaa moottorin valikon, josta voi aloittaa uuden pelin uudella siemenellä tai poistua. Jos pelissä on `title`-valikko ([D 3.3](dataformaatit/03-tiedostot-ja-include.md#33-aloitus)), peli alkaa siitä ja Lopeta palaa siihen.
+
+Kun pelaaja kuolee, maailma jatkaa kierros kerrallaan pelin `round`-tahdissa. Asetus `idle` antaa vuoron komennolle tai pelaajan tekoälylle, jos näppäintä ei paineta ([D 3.2](dataformaatit/03-tiedostot-ja-include.md#32-pelaajan-oma-data)). Ajon virhe lopettaa pelin, ja se tulostetaan päätteen palauttamisen jälkeen tiedoston, rivin ja sarakkeen kanssa.
+
+Puuttuu vielä: listavalikot, paneelien kentät, kohtaukset ja dialogit, kohdistus, tallennus, äänet ja hiiri.
 
 ## Avoimet kysymykset
 
