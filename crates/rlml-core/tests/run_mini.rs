@@ -656,3 +656,44 @@ fn a_whole_run_is_reproducible() {
     assert_eq!(a.w.log, b.w.log);
     assert!(a.w.s.game.time > 0);
 }
+
+// ---- golden transcripts (R6) ----
+
+/// Plays keys from seed 7 and compares the transcript with
+/// `tests/golden/NAME.txt`; `RLML_UPDATE_GOLDEN=1` writes it instead.
+fn golden(name: &str, keys: &str) {
+    let f = mini();
+    let m = model(&f);
+    let keys: Vec<&str> = keys.split_whitespace().collect();
+    let got = rlml_core::rt::play::transcript(&m, 7, &keys).unwrap();
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden").join(format!("{name}.txt"));
+    if std::env::var_os("RLML_UPDATE_GOLDEN").is_some() {
+        std::fs::write(&path, &got).unwrap();
+        return;
+    }
+    let want = std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("no {}; run with RLML_UPDATE_GOLDEN=1", path.display()));
+    if got != want {
+        let line = got.lines().zip(want.lines()).position(|(a, b)| a != b).unwrap_or(0);
+        panic!("{name}: the transcript differs from line {}:\n got:  {:?}\n want: {:?}", line + 1, got.lines().nth(line), want.lines().nth(line));
+    }
+}
+
+#[test]
+fn golden_walk_into_a_wall() {
+    golden("walk_into_a_wall", "l l l");
+}
+
+#[test]
+fn golden_a_rat_kills_the_waiting_player() {
+    golden("rat_kills_player", "s s s s s s s s s s s s");
+}
+
+#[test]
+fn golden_the_player_kills_a_rat() {
+    golden("player_kills_rat", "s s s j h h");
+}
+
+#[test]
+fn golden_stairs_down_and_back() {
+    golden("stairs_down_and_back", "s s s j h j j j l l l l l l l k k l l > s <");
+}

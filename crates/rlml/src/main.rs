@@ -43,6 +43,12 @@ impl Files for DiskFiles {
 }
 
 const USAGE: &str = "usage: rlml check GAME [--lib DIR]
+       rlml run GAME [--seed N] [--keys \"KEY KEY …\"] [--lib DIR]
+
+check loads the game and reports load errors and warnings (M 2).
+run plays a new game without a screen: each key is one player's turn,
+and the map, HP and log are printed after it. Keys are the key names of
+the game's `keys` contexts, separated by spaces (`l l > j`).
 
 GAME is the game's main file or its folder (then game.rlml, game.md or
 game.rlml.md). The engine library holds lib/std.rlml; it is found with
@@ -52,8 +58,11 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut game = None;
     let mut lib = std::env::var_os("RLML_LIB").map(PathBuf::from);
+    let mut seed: u64 = 1;
+    let mut keys = String::new();
     let mut i = 0;
-    if args.first().map(String::as_str) != Some("check") {
+    let command = args.first().cloned().unwrap_or_default();
+    if command != "check" && command != "run" {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     }
@@ -62,6 +71,20 @@ fn main() -> ExitCode {
         match args[i].as_str() {
             "--lib" if i + 1 < args.len() => {
                 lib = Some(PathBuf::from(&args[i + 1]));
+                i += 1;
+            }
+            "--seed" if command == "run" && i + 1 < args.len() => {
+                match args[i + 1].parse() {
+                    Ok(n) => seed = n,
+                    Err(_) => {
+                        eprintln!("--seed takes a number");
+                        return ExitCode::from(2);
+                    }
+                }
+                i += 1;
+            }
+            "--keys" if command == "run" && i + 1 < args.len() => {
+                keys = args[i + 1].clone();
                 i += 1;
             }
             "-h" | "--help" => {
@@ -97,6 +120,25 @@ fn main() -> ExitCode {
     let engine = lib.or_else(|| Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")).filter(|p| p.join("lib/std.rlml").is_file()));
     let files = DiskFiles { game: root, engine };
     let (model, report) = rlml_core::check_game(&files, &main);
+    if command == "run" {
+        if report.has_errors() {
+            for d in report.errors() {
+                eprintln!("{d}");
+            }
+            return ExitCode::FAILURE;
+        }
+        let keys: Vec<&str> = keys.split_whitespace().collect();
+        return match rlml_core::rt::play::transcript(&model, seed, &keys) {
+            Ok(t) => {
+                print!("{t}");
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     for d in &report.0 {
         println!("{d}");
     }
