@@ -280,6 +280,8 @@ impl State {
         for _ in 0..=self.entities.len() {
             match &self.entities[cur].place {
                 Place::Map(p) => return Some(*p),
+                // `game`'s collections are not on a map (D 5.5)
+                Place::In { holder, .. } if *holder >= self.entities.len() => return None,
                 Place::In { holder, .. } => cur = *holder,
                 Place::Nowhere => return None,
             }

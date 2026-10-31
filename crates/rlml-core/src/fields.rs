@@ -174,6 +174,8 @@ pub struct Row {
     pub component: String,
     /// Fields given on the row, then the remaining fields' defaults.
     pub values: Vec<(String, String)>,
+    /// How many of `values` were given on the row.
+    pub given: usize,
 }
 
 impl Row {
@@ -196,15 +198,15 @@ impl Values<'_> {
         if names::is_vocabulary(comp) {
             let fields = engine_component(comp).ok_or_else(|| format!("unknown engine component `{comp}`"))?;
             return match comp {
-                "blocks" => self.blocks(args).map(|_| Row { component: comp.into(), values: vec![] }),
-                "timer" | "sound" => Ok(Row { component: comp.into(), values: vec![] }),
-                _ => self.fields(comp, &fields, args).map(|values| Row { component: comp.into(), values }),
+                "blocks" => self.blocks(args).map(|_| Row { component: comp.into(), values: vec![], given: 0 }),
+                "timer" | "sound" => Ok(Row { component: comp.into(), values: vec![], given: 0 }),
+                _ => self.fields(comp, &fields, args).map(|(values, given)| Row { component: comp.into(), values, given }),
             };
         }
         let def = self.m.resolve_kind(self.ns, comp, &[Kind::Component])?;
         let fields = component_fields(def);
-        let values = self.fields(&def.full, &fields, args)?;
-        Ok(Row { component: def.full.clone(), values })
+        let (values, given) = self.fields(&def.full, &fields, args)?;
+        Ok(Row { component: def.full.clone(), values, given })
     }
 
     /// `blocks move sight sound`, `blocks WALK`, `blocks none` (D 7.5, D 12.3).
@@ -221,7 +223,7 @@ impl Values<'_> {
         Ok(())
     }
 
-    fn fields(&self, comp: &str, fields: &[Field], args: &[Token]) -> Result<Vec<(String, String)>, String> {
+    fn fields(&self, comp: &str, fields: &[Field], args: &[Token]) -> Result<(Vec<(String, String)>, usize), String> {
         let mut given: Vec<(String, String)> = Vec::new();
         if !args.is_empty() {
             if fields.is_empty() {
@@ -260,6 +262,7 @@ impl Values<'_> {
                 ));
             }
         }
+        let count = given.len();
         for f in fields {
             if !given.iter().any(|(n, _)| n == &f.name)
                 && let Some(d) = &f.default
@@ -267,7 +270,7 @@ impl Values<'_> {
                 given.push((f.name.clone(), d.clone()));
             }
         }
-        Ok(given)
+        Ok((given, count))
     }
 
     /// Checks a value of field type `ty` (D 5.1).
