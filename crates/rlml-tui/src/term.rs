@@ -1,0 +1,55 @@
+//! The terminal loop: raw mode and the alternate screen on `/dev/tty`,
+//! frames drawn by changed cells, keys and resizes read as they come
+//! (Termplate's terminal layer). The terminal is restored on every exit.
+
+use std::io;
+use std::time::Instant;
+
+use rlml_core::model::Model;
+use termplate_core::engine::InputEvent;
+use termplate_core::keys::Binding;
+use termplate_core::style::StyleSheet;
+use termplate_term::{Screen, TtyGuard, map_event, no_color_from_env, terminal_size};
+
+use crate::app::App;
+
+/// Plays a new game in the terminal until the player quits. A runtime
+/// error ends the game and is returned after the terminal is restored.
+pub fn play(m: &Model, seed: u64) -> Result<(), String> {
+    let (guard, tty) = TtyGuard::new(false).map_err(|e| format!("cannot open the terminal: {e}"))?;
+    let no_color = no_color_from_env(std::env::var("NO_COLOR").ok().as_deref());
+    let mut screen = Screen::new(tty, StyleSheet::default(), no_color);
+    let result = run(m, seed, &mut screen);
+    drop(guard);
+    result
+}
+
+fn run(m: &Model, seed: u64, screen: &mut Screen<std::fs::File>) -> Result<(), String> {
+    let io = |e: io::Error| e.to_string();
+    let start = Instant::now();
+    let mut app = App::new(m, seed, terminal_size())?;
+    loop {
+        // in-between frames first, each shown `frame` long (M 7.2)
+        for f in std::mem::take(&mut app.frames) {
+            screen.draw(&f).map_err(io)?;
+            std::thread::sleep(app.frame_time());
+        }
+        screen.draw(&app.draw()).map_err(io)?;
+        if app.quit {
+            return Ok(());
+        }
+        if crossterm::event::poll(app.wait()).map_err(io)?
+            && let Some(ev) = map_event(crossterm::event::read().map_err(io)?)
+        {
+            match ev {
+                InputEvent::Key(code, mods) => app.key(Binding::key(code, mods), start.elapsed())?,
+                InputEvent::Resize(w, h) => {
+                    app.resize(w, h);
+                    screen.invalidate();
+                }
+                _ => {}
+            }
+        }
+        app.tick(start.elapsed())?;
+    }
+}

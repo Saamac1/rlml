@@ -155,6 +155,7 @@ name = "rlml"
 version = "0.1.0"
 dependencies = [
  "rlml-core",
+ "rlml-tui",
 ]
 
 [[package]]
@@ -169,6 +170,7 @@ dependencies = [
 name = "rlml-tui"
 version = "0.1.0"
 dependencies = [
+ "crossterm",
  "rlml-core",
  "termplate-core",
  "termplate-term",

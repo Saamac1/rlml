@@ -49,6 +49,12 @@ impl<'m> Runner<'m> {
     /// Runs until the player's turn. Without a player, at most `rounds`
     /// rounds go by (M 6.1.2: the world goes on at the `round` pace).
     pub fn run(&mut self, rounds: i64) -> RtResult<Status> {
+        self.run_with(rounds, &mut |_| {})
+    }
+
+    /// `run`, calling `seen` after every actor's turn and every round, for
+    /// the presentation's in-between frames (M 7.2).
+    pub fn run_with(&mut self, rounds: i64, seen: &mut dyn FnMut(&mut World)) -> RtResult<Status> {
         let start_turn = self.w.s.game.turn();
         loop {
             let Some(map) = self.w.s.active_map() else { return Ok(Status::NoPlayer { rounds: 0 }) };
@@ -70,6 +76,7 @@ impl<'m> Runner<'m> {
                     return Ok(Status::Input);
                 }
                 self.turn(wake.entity)?;
+                seen(&mut self.w);
                 continue;
             }
             // nothing more at this moment: the active map changes (M 6.7)
@@ -89,6 +96,7 @@ impl<'m> Runner<'m> {
             self.w.s.game.time = next;
             if next == boundary {
                 self.round()?;
+                seen(&mut self.w);
             }
         }
     }

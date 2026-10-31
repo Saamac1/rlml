@@ -44,11 +44,13 @@ impl Files for DiskFiles {
 
 const USAGE: &str = "usage: rlml check GAME [--lib DIR]
        rlml run GAME [--seed N] [--keys \"KEY KEY …\"] [--lib DIR]
+       rlml play GAME [--seed N] [--lib DIR]
 
 check loads the game and reports load errors and warnings (M 2).
 run plays a new game without a screen: each key is one player's turn,
 and the map, HP and log are printed after it. Keys are the key names of
 the game's `keys` contexts, separated by spaces (`l l > j`).
+play plays a new game in the terminal; ctrl+c leaves.
 
 GAME is the game's main file or its folder (then game.rlml, game.md or
 game.rlml.md). The engine library holds lib/std.rlml; it is found with
@@ -62,7 +64,7 @@ fn main() -> ExitCode {
     let mut keys = String::new();
     let mut i = 0;
     let command = args.first().cloned().unwrap_or_default();
-    if command != "check" && command != "run" {
+    if !["check", "run", "play"].contains(&command.as_str()) {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     }
@@ -73,7 +75,7 @@ fn main() -> ExitCode {
                 lib = Some(PathBuf::from(&args[i + 1]));
                 i += 1;
             }
-            "--seed" if command == "run" && i + 1 < args.len() => {
+            "--seed" if command != "check" && i + 1 < args.len() => {
                 match args[i + 1].parse() {
                     Ok(n) => seed = n,
                     Err(_) => {
@@ -120,6 +122,21 @@ fn main() -> ExitCode {
     let engine = lib.or_else(|| Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")).filter(|p| p.join("lib/std.rlml").is_file()));
     let files = DiskFiles { game: root, engine };
     let (model, report) = rlml_core::check_game(&files, &main);
+    if command == "play" {
+        if report.has_errors() {
+            for d in report.errors() {
+                eprintln!("{d}");
+            }
+            return ExitCode::FAILURE;
+        }
+        return match rlml_tui::term::play(&model, seed) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("{e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     if command == "run" {
         if report.has_errors() {
             for d in report.errors() {
