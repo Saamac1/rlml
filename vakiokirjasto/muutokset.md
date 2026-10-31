@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 31.10.2026 (ajon ensimmäinen versio):** viestien järjestys kuolemassa on avoin kysymys (luku [14](14-avoimet-kysymykset.md)).
+
 **Muutokset 31.10.2026 (tyyppitarkistus):** `SPAWN_PLAYER` ottaa hallintaan kortista syntyneen kokoelman ensimmäisen jäsenen (`spawn(…).first`), koska kortin `spawn` palauttaa kokoelman ja `control` ottaa entiteetin (luku [8](08-kasittelijat.md); moottoridokumentti, luku [9.3](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).
 
 **Muutokset 31.10.2026 (lataajan ensimmäinen versio):** STD on tiedostoina kansiossa `lib/std/`. `FLEE`-komennon parametri on taulukossa `threat` kuten koodissa, koska `from` on parametrin lähteen avainsana (luku [5](05-komennot.md)). Lataajan löytämät avoimet kohdat ovat luvussa [14](14-avoimet-kysymykset.md).

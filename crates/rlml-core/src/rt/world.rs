@@ -27,6 +27,7 @@ pub type RtResult<T> = Result<T, String>;
 /// A map block's drawing, legend rows by character and `at:` rows.
 type MapParts = (Vec<String>, Vec<(char, RawItem)>, Vec<RawItem>);
 
+#[derive(Clone)]
 pub struct World<'m> {
     pub m: &'m Model,
     pub s: State,
@@ -36,6 +37,39 @@ pub struct World<'m> {
     pub created: Vec<EntityId>,
     /// Runtime warnings, such as a full collection (D 5.4).
     pub warnings: Vec<String>,
+    /// Log messages written so far (D 11.4).
+    pub log: Vec<LogEntry>,
+    /// Sounds made since the last wake (M 6.8).
+    pub sounds: Vec<Noise>,
+    /// Travels waiting for the action's end (M 6.1.7).
+    pub travels: Vec<Travel>,
+    /// Nested calls and events now (M 6.2, `game.call_depth`).
+    pub depth: u32,
+}
+
+/// A `log` call: the message key and its text arguments.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LogEntry {
+    pub key: String,
+    pub args: Vec<(String, Value)>,
+}
+
+/// A `noise` call (M 6.8).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Noise {
+    pub at: Pos,
+    pub kind: String,
+    pub source: Option<EntityId>,
+    pub time: i64,
+}
+
+/// A `travel` call, done at the action's end (M 6.1.7, M 6.7).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Travel {
+    pub who: EntityId,
+    pub map: String,
+    pub at: String,
+    pub align: bool,
 }
 
 /// `viive = max(1, ceil(hinta × 10 / nopeus))`; no wake at speed 0 or less
@@ -52,7 +86,7 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![] }
+        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0 }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {

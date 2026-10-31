@@ -4,6 +4,10 @@
 
 - **Paikanvaihto oletussuhteella.** Oletussuhde on tasan `FRIENDLY`, joten kaikki entiteetit ilman suhteita ovat ystäviä, ja paikanvaihdon rajaa vain tekoälyehto (luku [5](05-komennot.md)). Vaatiiko paikanvaihto yksilö- tai ryhmäsuhteen eikä pelkkää alignmentin oletusta? Muutos koskisi seuraajia, joiden suhde on nyt oletus (luku [6.1](06-tekoaly.md#61-seuraaja)).
 
+**Ajon ensimmäinen versio 31.10.2026.**
+
+- **Viestien järjestys kuolemassa.** `APPLY_DAMAGE` (`on HIT`) lähettää `DIED`-tapahtuman, jonka `DEATH_MESSAGE` kirjaa heti, ja vasta sen jälkeen `HIT`-tapahtuman `after`-vaihe ajaa `HIT_MESSAGE`-käsittelijän (luku [8](08-kasittelijat.md)). Pelaajan loki näyttää siksi ensin ”Kuolet.” ja sitten ”Otat 2 vahinkoa.”. Pitäisikö `APPLY_DAMAGE` lähettää `DIED` vasta `HIT`-tapahtuman jälkeen (esimerkiksi `after HIT` -käsittelijässä prioriteetilla −20), jotta vahinko kirjataan ennen kuolemaa?
+
 **Lataajan ensimmäinen versio 31.10.2026.** STD on nyt tiedostoina kansiossa `lib/std/`, ja lataaja tarkistaa sen. Seuraavat kohdat jouduttiin arvaamaan:
 
 - **Moduulien riippuvuudet.** Luvun [1.3](01-rajaus-periaatteet-ja-lataus.md#13-lataus-ja-moduulit) taulukon mukaan `core` ei tarvitse muita moduuleja, mutta `DEFAULT.PLAYER` käyttää komponentteja `HP`, `MELEE`, `PACK`, `ALIGNMENT` ja `FACTION`, tekoälyä `HUNTER` ja tileä `GLYPH.PLAYER`. Pelkkä `include lib/std/core.rlml` antaa siksi seitsemän latausvirhettä. Samoin `combat` käyttää datassa tileä `GLYPH.MISSILE` ja logiikassa nimiä `HOSTILES` (ai), `PACK` (items) ja `SOUND.SHOT` (sound). Pitäisikö `core`:n ottaa mukaan nämä moduulit, vai siirretäänkö `DEFAULT.PLAYER` omaan moduuliinsa?

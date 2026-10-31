@@ -212,8 +212,171 @@ trait Probe {
 impl Probe for World<'_> {
     /// The component names an instance of `kind` gets, from a copy.
     fn spawn_probe(&self, kind: &str) -> Vec<String> {
-        let mut w = World { m: self.m, s: self.s.clone(), rng: self.rng.clone(), created: vec![], warnings: vec![] };
+        let mut w = self.clone();
         let e = w.spawn(kind, &[], Place::Nowhere).unwrap();
         w.s.get(e).components.iter().map(|c| c.name.clone()).collect()
     }
+}
+
+// ---- the interpreter (R3) ----
+
+use rlml_core::rt::eval::Outcome;
+use rlml_core::rt::value::CommandValue;
+
+fn started(m: &Model) -> World<'_> {
+    let mut w = World::new_game(m, 7).unwrap();
+    w.begin().unwrap();
+    w
+}
+
+fn player(w: &World) -> usize {
+    w.s.player.expect("`begin` made a player")
+}
+
+fn cmd(name: &str) -> CommandValue {
+    CommandValue { name: name.into(), args: vec![] }
+}
+
+fn at(w: &World, e: usize) -> (i32, i32) {
+    let p = w.s.at(e).unwrap();
+    (p.x, p.y)
+}
+
+fn put(w: &mut World, e: usize, (x, y): (i32, i32)) {
+    let map = w.s.at(e).unwrap().map;
+    w.s.get_mut(e).place = Place::Map(Pos { map, x, y });
+}
+
+fn kinds(w: &World, kind: &str) -> Vec<usize> {
+    (0..w.s.entities.len()).filter(|&e| w.s.get(e).kind == kind && w.s.get(e).alive).collect()
+}
+
+fn log_texts(w: &World) -> Vec<String> {
+    w.log.iter().map(|l| w.text("fi", &l.key, &l.args)).collect()
+}
+
+#[test]
+fn begin_spawns_the_player() {
+    let f = mini();
+    let m = model(&f);
+    let w = started(&m);
+    let p = player(&w);
+    assert_eq!(w.s.get(p).kind, "HERO", "`PLAYER HERO` in the game block");
+    assert_eq!(at(&w, p), cells_of(&f.game["maps/caves.rlml"], "CAVE_A", '@')[0]);
+    assert_eq!(w.s.wake_of(p).unwrap().at, 0, "`control` wakes the player now (M 5.1)");
+    assert_eq!(field(&w, p, "STD.HP", "now"), &Value::Number(10), "inherited from STD.DEFAULT.PLAYER");
+    assert!(w.created.is_empty());
+}
+
+#[test]
+fn walking_and_walls() {
+    let f = mini();
+    let m = model(&f);
+    let mut w = started(&m);
+    let p = player(&w);
+    let (x, y) = at(&w, p);
+    assert_eq!(w.start_command(p, &cmd("STD.MOVE.EAST")).unwrap(), Outcome::Done { cost: 120 });
+    assert_eq!(at(&w, p), (x + 1, y));
+    assert_eq!(w.sounds.last().map(|s| s.kind.as_str()), Some("STD.SOUND.STEP"), "a step makes a sound (STD 5)");
+    w.start_command(p, &cmd("STD.MOVE.WEST")).unwrap();
+    w.start_command(p, &cmd("STD.MOVE.WEST")).unwrap();
+    assert_eq!(at(&w, p), (x - 1, y));
+    assert_eq!(w.start_command(p, &cmd("STD.MOVE.WEST")).unwrap(), Outcome::Failed { waited: false }, "a wall: the command fails and takes no time");
+    assert_eq!(at(&w, p), (x - 1, y));
+}
+
+#[test]
+fn sneaking_waits() {
+    let f = mini();
+    let m = model(&f);
+    let mut w = started(&m);
+    let p = player(&w);
+    assert_eq!(w.start_command(p, &cmd("STD.SNEAK")).unwrap(), Outcome::Done { cost: 0 });
+    let Outcome::Waiting { delay, state } = w.start_command(p, &cmd("STD.MOVE.EAST")).unwrap() else { panic!("`wait 120` while sneaking") };
+    assert_eq!(delay, 120);
+    let before = at(&w, p);
+    assert_eq!(w.continue_command(p, *state, true).unwrap(), Outcome::Done { cost: 120 });
+    assert_eq!(at(&w, p), (before.0 + 1, before.1), "the step happens after the wait");
+    assert_eq!(w.sounds.last().map(|s| s.kind.as_str()), Some("STD.SOUND.SNEAK"));
+}
+
+#[test]
+fn a_rat_bites_until_the_player_dies() {
+    let f = mini();
+    let m = model(&f);
+    let mut w = started(&m);
+    let p = player(&w);
+    let rat = kinds(&w, "RAT")[0];
+    let (x, y) = at(&w, p);
+    put(&mut w, rat, (x + 1, y));
+    let attack = CommandValue { name: "STD.ATTACK".into(), args: vec![(None, Value::Entity(p))] };
+    assert_eq!(w.start_command(rat, &attack).unwrap(), Outcome::Done { cost: 120 });
+    let hp = |w: &World| field(w, p, "STD.HP", "now").as_number().unwrap();
+    assert!((8..=9).contains(&hp(&w)), "1d2 damage: {}", hp(&w));
+    let first = &log_texts(&w)[0];
+    assert!(first == "Otat 1 vahinkoa." || first == "Otat 2 vahinkoa.", "{first}");
+    for _ in 0..20 {
+        if !w.s.get(p).alive {
+            break;
+        }
+        w.start_command(rat, &attack).unwrap();
+    }
+    assert!(!w.s.get(p).alive, "DEATH destroys the player too (STD 8)");
+    // DIED is sent inside HIT's `on` phase, so its messages come before the
+    // hit's own `after` message, which sees the dead handle (STD 8)
+    let log = log_texts(&w);
+    let n = log.len();
+    assert_eq!(log[n - 2], "Kuolet.");
+    assert!(log[n - 1].starts_with("Otat "), "{log:?}");
+    assert_eq!(w.s.player, Some(p), "`player` stays the dead handle (M 6.1.2)");
+}
+
+#[test]
+fn bumping_a_rat_attacks_it() {
+    let f = mini();
+    let m = model(&f);
+    let mut w = started(&m);
+    let p = player(&w);
+    let rat = kinds(&w, "RAT")[0];
+    let (x, y) = at(&w, p);
+    put(&mut w, rat, (x + 1, y));
+    // the rat's attitude to the player is 50 − |−100 − 0| = −50: enemies (STD 7)
+    let r = w.start_command(p, &cmd("STD.MOVE.EAST"));
+    // the hit message asks whether the player sees the rat, which the senses give
+    let err = r.unwrap_err();
+    assert!(err.contains("`sees` is not implemented yet"), "{err}");
+    assert_eq!(at(&w, p), (x, y), "a bump does not move");
+    assert!(field(&w, rat, "STD.HP", "now").as_number().unwrap() < 3, "the hit was applied before the message");
+}
+
+#[test]
+fn stairs_travel_at_the_action_end() {
+    let f = mini();
+    let m = model(&f);
+    let mut w = started(&m);
+    let p = player(&w);
+    let caves = &f.game["maps/caves.rlml"];
+    let down = cells_of(caves, "CAVE_A", '>')[0];
+    put(&mut w, p, down);
+    assert_eq!(w.start_command(p, &cmd("STD.TAKE_EXIT")).unwrap(), Outcome::Done { cost: 120 });
+    assert_eq!(at(&w, p), down, "the move waits for the action's end (M 6.7)");
+    assert_eq!(w.s.maps.len(), 2, "the target map loads at the call");
+    w.end_action().unwrap();
+    let to = w.s.at(p).unwrap();
+    assert_eq!(w.s.maps[to.map].name, "CAVE_B");
+    assert_eq!((to.x, to.y), cells_of(caves, "CAVE_B", '<')[0], "arrives at `START` on the up stairs");
+    assert!(w.s.maps[0].frozen_at.is_some(), "the map left behind is frozen (M 6.1.8)");
+    assert_eq!(w.s.active_map(), Some(to.map));
+}
+
+#[test]
+fn texts_fill_placeholders() {
+    let f = mini();
+    let m = model(&f);
+    let w = started(&m);
+    let rat = kinds(&w, "RAT")[0];
+    assert_eq!(w.text("fi", "STD.MESSAGE.COMBAT.HIT", &[("TARGET".into(), Value::Entity(rat)), ("AMOUNT".into(), Value::Number(2))]), "rotta ottaa 2 vahinkoa.");
+    assert_eq!(w.text("fi", "NO.SUCH.KEY", &[]), "NO.SUCH.KEY", "a missing text shows as its key (M 7.3)");
+    let hero = player(&w);
+    assert_eq!(w.text("fi", "STD.MESSAGE.COMBAT.DIED", &[("VICTIM".into(), Value::Entity(hero))]), "sinä kuolee.", "HERO.NAME");
 }
