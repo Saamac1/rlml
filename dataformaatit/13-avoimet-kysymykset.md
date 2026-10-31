@@ -33,6 +33,8 @@ Suljettu 25.10.2026 (robotfindskitten-toteutustesti): jokerin laji ja tekstiavai
 - **Liikkumistavat.** Liikkumistapa on iso nimi (`blocks WALK`, `- movement mode WALK`, luku [7.5](07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#75-tilen-ominaisuudet-tiles)), mutta sitä ei määritellä missään, joten nimenhaku ei löydä sitä. Lisäksi moottori tuntee liikkumistavan `MISSILE` (moottoridokumentti, luku [9.3](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)), vaikka luvun [2.1](02-yleinen-syntaksi.md#21-nimet-ja-sanasto) mukaan moottori ei tunne yhtään isolla kirjoitettua nimeä. Toteutus (31.10.2026) hyväksyy minkä tahansa ison nimen kentässä `movement.mode`, rivillä `blocks` sekä RogueScriptin argumenteissa `ray(…, mode: …)` ja `blocks(p, …)`. Pitäisikö liikkumistavat julistaa (esimerkiksi osiossa `modes`), ja onko `MISSILE` poikkeus nimisääntöön?
 - **Jokeri hakupolulla.** Luku [3](03-tiedostot-ja-include.md) kertoo hakujärjestyksen yhdelle tiedostolle mutta ei jokerille (`include std/text/*`). Toteutus käyttää ensimmäistä hakupaikkaa, jossa kansio on olemassa, ja varoittaa, jos kansiossa ei ole yhtään tiedostoa.
 
+Suljettu 31.10.2026: numeronäppäimistö päätteessä. `numN` on päätteessä sama kuin `N`, ja toistolaskurin numerot ohittavat sidonnat (luku [11.3](11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad)).
+
 Suljettu 25.10.2026 (Rogue-toteutustesti): pinot ilman `merge`-sääntöä. Kortin määrä synnyttää aina niin monta ilmentymää, ja `merge` päättää vain, näkyvätkö ne pinona (luvut [5.4](05-komponentit-ja-entiteetit.md#54-kokoelmat) ja [6.1](06-pakat-ja-taulut.md#61-pakka)).
 
 ---

@@ -839,6 +839,8 @@ impl Checker<'_> {
     fn keys(&mut self) {
         for (name, blocks) in &self.m.contexts {
             let mut seen: BTreeMap<String, usize> = BTreeMap::new();
+            // keys by their terminal key: `num8` is `8` there (D 11.3)
+            let mut terminal: BTreeMap<String, (String, String, usize)> = BTreeMap::new();
             for b in blocks {
                 for item in &b.items {
                     let (_, row) = item.marker();
@@ -852,9 +854,24 @@ impl Checker<'_> {
                     if n >= row.tokens.len() {
                         self.r.push(item.err("a key row names the action and then its keys"));
                     }
+                    let action = row.span(0, n.min(row.tokens.len())).to_string();
                     for k in &row.tokens[n.min(row.tokens.len())..] {
                         if let Some(line) = seen.insert(k.text.clone(), item.line) {
                             self.r.push(item.err(format!("key `{}` is bound twice in context `{name}` (also line {line})", k.text)));
+                            continue;
+                        }
+                        let key = terminal_key(&k.text);
+                        match terminal.get(&key) {
+                            Some((other, other_action, line)) if *other != k.text && *other_action != action => {
+                                self.r.push(item.warn(format!(
+                                    "`{}` and `{other}` (line {line}) are the same key in a terminal, bound to `{action}` and `{other_action}` in context `{name}` (D 11.3)",
+                                    k.text
+                                )));
+                            }
+                            Some(_) => {}
+                            None => {
+                                terminal.insert(key, (k.text.clone(), action.clone(), item.line));
+                            }
                         }
                     }
                 }
@@ -972,6 +989,14 @@ impl Checker<'_> {
                 self.r.push(item.warn(format!("tile `{}` is not used in a legend, a style or logic: a typo?", row.key())));
             }
         }
+    }
+}
+
+/// A key as a terminal sees it: `numN` is the digit `N` (D 11.3).
+fn terminal_key(k: &str) -> String {
+    match k.strip_prefix("num") {
+        Some(d) if d.len() == 1 && d.chars().all(|c| c.is_ascii_digit()) => d.to_string(),
+        _ => k.to_string(),
     }
 }
 

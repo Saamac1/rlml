@@ -94,6 +94,17 @@ fn keys_and_menus() {
     let mut f = mini();
     edit(&mut f, "ui/main.rlml", "- pass z", "- pass s");
     expect_error(&run(&f), "key `s` is bound twice in context `GAME`");
+    // `num8` and `8` are one key in a terminal: a warning, since another
+    // platform tells them apart (D 11.3)
+    let mut f = mini();
+    edit(&mut f, "ui/main.rlml", "- WAIT s", "- WAIT s 8\n- pass num8");
+    let r = run(&f);
+    assert!(!r.has_errors());
+    let w: Vec<String> = r.warnings().map(|d| d.to_string()).collect();
+    assert!(w.iter().any(|m| m.contains("`num8` and `8` (line") && m.contains("same key in a terminal")), "{w:#?}");
+    let mut f = mini();
+    edit(&mut f, "ui/main.rlml", "- MOVE.NORTH k up", "- MOVE.NORTH k up num8 8");
+    assert!(run(&f).0.is_empty(), "the same action under both names is fine");
     let mut f = mini();
     edit(&mut f, "ui/main.rlml", "- RESUME", "- RESUMEE");
     expect_error(&run(&f), "item `RESUMEE` has no action");
