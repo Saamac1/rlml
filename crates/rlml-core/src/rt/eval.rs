@@ -1160,7 +1160,13 @@ impl World<'_> {
 
     /// Sends an event: game events by full name, engine events by their
     /// lower-case name. Handlers run before `emit` returns (M 6.2).
-    pub fn emit(&mut self, event: &str, mut args: Vec<Value>, caller: &Env) -> RtResult<()> {
+    pub fn emit(&mut self, event: &str, args: Vec<Value>, caller: &Env) -> RtResult<()> {
+        self.emit_to(event, args, caller, Scope::All)
+    }
+
+    /// Sends an event to some of its handlers: `turn` goes to each
+    /// instance's components and once to the general handlers (M 6.1.4).
+    pub fn emit_to(&mut self, event: &str, mut args: Vec<Value>, caller: &Env, scope: Scope) -> RtResult<()> {
         let engine = names::is_vocabulary(event);
         let subject = args.first().and_then(Value::as_entity);
         if let Some(s) = subject
@@ -1172,7 +1178,7 @@ impl World<'_> {
         self.enter(caller)?;
         let phases: &[Phase] = if engine { &[Phase::On, Phase::After] } else { &[Phase::Before, Phase::On, Phase::After] };
         for &phase in phases {
-            for h in self.handlers(event, phase, subject) {
+            for h in self.handlers(event, phase, subject).into_iter().filter(|h| scope.takes(h.component.is_some())) {
                 // a component removed before its turn is skipped (RS 4)
                 if let Some(c) = &h.component
                     && !subject.is_some_and(|s| self.s.get(s).has(c))
@@ -1785,12 +1791,11 @@ impl World<'_> {
                 self.s.wakes.push(super::state::Wake { entity: t.who, at, seq });
             }
             if self.s.player == Some(t.who) {
+                // the active map changes at the microstep's end (M 6.7)
                 if let Some(p) = from
                     && p.map != id
                 {
-                    let now = self.s.game.time;
-                    self.s.maps[p.map].freeze(now);
-                    self.s.maps[id].thaw(now);
+                    self.switch = Some((p.map, id));
                 }
                 self.s.last_player_map = Some(id);
             }
@@ -1803,6 +1808,16 @@ impl World<'_> {
             self.emit("arrive", vec![Value::Entity(t.who), Value::Name(name), Value::Pos(to)], &env)?;
         }
         Ok(())
+    }
+
+    /// Freezes the map the player left and thaws the one it came to, at
+    /// the microstep's end (M 6.1.8, M 6.7).
+    pub fn apply_switch(&mut self) {
+        if let Some((from, to)) = self.switch.take() {
+            let now = self.s.game.time;
+            self.s.maps[from].freeze(now);
+            self.s.maps[to].thaw(now);
+        }
     }
 
     // ---- texts (D 10, M 7.3) ----
@@ -1877,6 +1892,26 @@ impl World<'_> {
             });
         }
         format!("{kind}.{suffix}")
+    }
+}
+
+/// Which handlers an event goes to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    All,
+    /// Only the subject's components' handlers.
+    Components,
+    /// Only the general handlers.
+    General,
+}
+
+impl Scope {
+    fn takes(self, component: bool) -> bool {
+        match self {
+            Scope::All => true,
+            Scope::Components => component,
+            Scope::General => !component,
+        }
     }
 }
 

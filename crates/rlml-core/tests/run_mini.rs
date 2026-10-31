@@ -362,6 +362,7 @@ fn stairs_travel_at_the_action_end() {
     assert_eq!(at(&w, p), down, "the move waits for the action's end (M 6.7)");
     assert_eq!(w.s.maps.len(), 2, "the target map loads at the call");
     w.end_action().unwrap();
+    w.apply_switch();
     let to = w.s.at(p).unwrap();
     assert_eq!(w.s.maps[to.map].name, "CAVE_B");
     assert_eq!((to.x, to.y), cells_of(caves, "CAVE_B", '<')[0], "arrives at `START` on the up stairs");
@@ -379,4 +380,164 @@ fn texts_fill_placeholders() {
     assert_eq!(w.text("fi", "NO.SUCH.KEY", &[]), "NO.SUCH.KEY", "a missing text shows as its key (M 7.3)");
     let hero = player(&w);
     assert_eq!(w.text("fi", "STD.MESSAGE.COMBAT.DIED", &[("VICTIM".into(), Value::Entity(hero))]), "sinä kuolee.", "HERO.NAME");
+}
+
+// ---- the scheduler (R4) ----
+
+use rlml_core::rt::run::{Runner, Status};
+
+const SCHED: &str = r#"game T
+- start ROOM
+- COUNTER
+
+include lib/std.rlml
+
+settings
+- style ascii
+- language fi
+
+component COUNTER
+- turns number
+- player_wakes number
+- slow_done number
+
+entity BOT
+- ai behavior IDLER
+- TICKS
+
+entity FAST extends BOT
+- movement speed 20
+
+entity FAILING extends BOT
+- ai behavior FAILER
+
+map ROOM
+
+```
+#@bfx#
+```
+
+legend:
+- # WALL
+- @ FLOOR as START
+- b FLOOR with BOT
+- f FLOOR with FAST
+- x FLOOR with FAILING
+
+```roguescript
+component TICKS(n: number = 0):
+    on wake():
+        self.TICKS.n += 1
+
+ai IDLER:
+    return STD.WAIT()
+
+command NOPE() cost 60:
+    return false
+
+ai FAILER:
+    return NOPE()
+
+command SLOWLY() cost 60:
+    wait 120
+    game.COUNTER.slow_done += 1
+
+on turn() as COUNT_TURNS:
+    game.COUNTER.turns += 1
+
+on wake(who) as COUNT_PLAYER when who == player:
+    game.COUNTER.player_wakes += 1
+```
+"#;
+
+fn counter(w: &World, f: &str) -> i64 {
+    w.s.game.components.iter().find(|c| c.name == "COUNTER").unwrap().get(f).unwrap().as_number().unwrap()
+}
+
+fn ticks(w: &World, kind: &str) -> i64 {
+    let e = kinds(w, kind)[0];
+    field(w, e, "TICKS", "n").as_number().unwrap()
+}
+
+#[test]
+fn rounds_wakes_and_speed() {
+    let f = files(&[("game.rlml", SCHED)]);
+    let m = model(&f);
+    let mut r = Runner::new(started(&m));
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(r.w.s.game.time, 0, "the player acts first, at 0 (M 5.1)");
+    assert_eq!(counter(&r.w, "player_wakes"), 1);
+    assert!(r.player(&cmd("STD.WAIT")).unwrap());
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(r.w.s.game.time, 120);
+    assert_eq!(counter(&r.w, "turns"), 1, "the round at 120, none at 0 (M 6.1.4)");
+    // at 120 the player's wake (scheduled at 0) comes before the fast
+    // one's (scheduled at 60): the sequence number decides (M 6.1.2)
+    assert_eq!(ticks(&r.w, "FAST"), 1);
+    assert_eq!(ticks(&r.w, "BOT"), 1);
+    assert!(r.player(&cmd("STD.WAIT")).unwrap());
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(r.w.s.game.time, 240);
+    assert_eq!(ticks(&r.w, "FAST"), 3, "speed 20 wakes at 60, 120 and 180 (M 6.1.3)");
+    assert_eq!(ticks(&r.w, "BOT"), 2);
+    // an ai's failure loses the turn: the default delay, not its cost 60 (M 6.1.5)
+    let failing = kinds(&r.w, "FAILING")[0];
+    assert_eq!(r.w.s.wake_of(failing).unwrap().at, 360);
+    assert_eq!(counter(&r.w, "player_wakes"), 3);
+    assert_eq!(counter(&r.w, "turns"), 2);
+}
+
+#[test]
+fn the_players_failure_and_free_actions_take_no_time() {
+    let f = files(&[("game.rlml", SCHED)]);
+    let m = model(&f);
+    let mut r = Runner::new(started(&m));
+    r.run(0).unwrap();
+    assert!(!r.player(&cmd("NOPE")).unwrap(), "the command failed");
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(r.w.s.game.time, 0, "no time went by");
+    assert!(r.player(&cmd("STD.SNEAK")).unwrap(), "`cost 0`");
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(r.w.s.game.time, 0);
+    assert_eq!(counter(&r.w, "player_wakes"), 1, "no new `wake` for the same turn");
+}
+
+#[test]
+fn a_waiting_command_goes_on_by_itself() {
+    let f = files(&[("game.rlml", SCHED)]);
+    let m = model(&f);
+    let mut r = Runner::new(started(&m));
+    r.run(0).unwrap();
+    assert!(r.player(&cmd("SLOWLY")).unwrap());
+    assert_eq!(counter(&r.w, "slow_done"), 0);
+    assert_eq!(r.run(0).unwrap(), Status::Input, "no input while the command waits (M 6.1.6)");
+    assert_eq!(counter(&r.w, "slow_done"), 1);
+    assert_eq!(r.w.s.game.time, 180, "wait 120, then the cost 60");
+    assert_eq!(counter(&r.w, "player_wakes"), 3, "the continuation is a wake too (M 6.1.6)");
+}
+
+#[test]
+fn the_world_goes_on_without_a_player() {
+    let f = files(&[("game.rlml", SCHED)]);
+    let m = model(&f);
+    let mut r = Runner::new(started(&m));
+    r.run(0).unwrap();
+    let p = r.w.s.player.unwrap();
+    let env = rlml_core::rt::eval::Env::new(rlml_core::rt::eval::BodyKind::Handler, "test", None, "test");
+    r.w.destroy(p, &env).unwrap();
+    assert_eq!(r.run(3).unwrap(), Status::NoPlayer { rounds: 3 });
+    assert_eq!(counter(&r.w, "turns"), 3);
+    assert!(ticks(&r.w, "BOT") >= 3, "the others act (M 6.1.2)");
+}
+
+#[test]
+fn the_minigame_runs_until_the_rats_need_their_senses() {
+    let f = mini();
+    let m = model(&f);
+    let mut r = Runner::new(started(&m));
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert!(r.player(&cmd("STD.MOVE.EAST")).unwrap());
+    // the rats wake at 120 and their HUNTER asks what they see
+    let err = r.run(0).unwrap_err();
+    assert!(err.contains("not implemented yet"), "{err}");
 }

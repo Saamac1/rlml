@@ -45,6 +45,8 @@ pub struct World<'m> {
     pub travels: Vec<Travel>,
     /// Nested calls and events now (M 6.2, `game.call_depth`).
     pub depth: u32,
+    /// The active map's change at the microstep's end: from and to.
+    pub switch: Option<(MapId, MapId)>,
 }
 
 /// A `log` call: the message key and its text arguments.
@@ -86,7 +88,7 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0 }
+        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {
