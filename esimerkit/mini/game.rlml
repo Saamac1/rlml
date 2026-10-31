@@ -23,7 +23,7 @@ settings
 
 tiles
 - WALL blocks move sight sound
-- default blocks none
+- default blocks none lit
 
 entity HERO extends STD.DEFAULT.PLAYER
 - render GLYPH.HERO

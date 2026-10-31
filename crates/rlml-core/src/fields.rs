@@ -65,7 +65,9 @@ pub fn engine_component(name: &str) -> Option<Vec<Field>> {
         "hearing" => vec![f("acuity", "number", Some("0"))],
         "name" => vec![f("text", "text", None)],
         "revealed" => vec![],
-        "blocks" | "timer" | "sound" => vec![],
+        // a source of a continuous sound: `- sound SOUND.MUSIC_BOX` (D 12.3)
+        "sound" => vec![f("kind", "name", None)],
+        "blocks" | "timer" => vec![],
         _ => return None,
     })
 }
@@ -199,7 +201,7 @@ impl Values<'_> {
             let fields = engine_component(comp).ok_or_else(|| format!("unknown engine component `{comp}`"))?;
             return match comp {
                 "blocks" => self.blocks(args).map(|_| Row { component: comp.into(), values: vec![], given: 0 }),
-                "timer" | "sound" => Ok(Row { component: comp.into(), values: vec![], given: 0 }),
+                "timer" => Ok(Row { component: comp.into(), values: vec![], given: 0 }),
                 _ => self.fields(comp, &fields, args).map(|(values, given)| Row { component: comp.into(), values, given }),
             };
         }

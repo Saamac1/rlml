@@ -20,7 +20,7 @@ settings
 
 tiles
 - WALL blocks move sight sound
-- default blocks none
+- default blocks none lit
 
 entity HERO extends STD.DEFAULT.PLAYER
 - render GLYPH.HERO
@@ -72,6 +72,7 @@ Asettelu (`- m map`, `- l LOG`), kartat `CAVE_A` ja `CAVE_B` sekä `tiles.glyphs
 - **Liike:** `MOVE.EAST` palauttaa `STEP`-komennon, joka kysyy eston ytimillä `CAN_STEP` ja `BLOCKER` ja siirtää ytimellä `DO_STEP` (luku [5](05-komennot.md)).
 - **Lyönti:** rotan suhde pelaajaan on `50 - |-100 - 0|` = −50, joten törmäys palauttaa `ATTACK`-komennon ja `HUNTER` hyökkää näkemäänsä tai kuulemaansa pelaajaan (luvut [6](06-tekoaly.md) ja [7](07-suhteet-ja-vihamielisyys.md)).
 - **Kuolema:** `APPLY_DAMAGE` ja `DEATH` tuhoavat kuolleen, myös pelaajan, ja maailma jatkaa `round 250ms` -tahdilla (luku [8](08-kasittelijat.md)).
+- **Valaistus:** `- default blocks none lit` valaisee koko luolan, joten pelaaja ja rotat näkevät koko näkösäteensä (`sight radius`). Ilman sitä mikään ruutu ei ole valaistu, ja jokainen näkee vain viereiset ruudut (moottoridokumentti, luku [7.2](../moottori/07-esitys.md#72-kartan-piirtäminen)).
 - **Kartanvaihto:** `TAKE_EXIT` kutsuu `travel`-funktiota, siirto tehdään toiminnon lopussa ja pelaaja saapuu kohdekartan `START`-nimiöön (luku [5](05-komennot.md)).
 
 ---

@@ -47,6 +47,14 @@ pub struct World<'m> {
     pub depth: u32,
     /// The active map's change at the microstep's end: from and to.
     pub switch: Option<(MapId, MapId)>,
+    /// Sounds ever made; `sounds` holds the newest of them.
+    pub sounds_made: u64,
+    /// Where each listener's wake interval starts in the sound count.
+    pub heard_mark: std::collections::BTreeMap<EntityId, u64>,
+    /// What each listener heard at its last wake, loudest first (M 6.8).
+    pub heard: std::collections::BTreeMap<EntityId, Vec<super::value::Sound>>,
+    /// The player's last view, for a dead player's `sees` (M 7.2).
+    pub last_view: Option<(MapId, std::collections::BTreeSet<(i32, i32)>)>,
 }
 
 /// A `log` call: the message key and its text arguments.
@@ -88,7 +96,7 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None }
+        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {

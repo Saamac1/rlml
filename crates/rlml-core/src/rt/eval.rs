@@ -1439,8 +1439,9 @@ impl World<'_> {
             "line" => {
                 let (x, y) = (self.area(&a0, env, pos)?, self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?);
                 match (x.cells().first(), y.cells().first()) {
-                    (Some(p), Some(q)) => Value::Area(Area::new(line(*p, *q))),
-                    _ => Value::Area(Area::default()),
+                    // a line keeps its order (M 9.3)
+                    (Some(p), Some(q)) => Value::List(line(*p, *q).into_iter().map(Value::Pos).collect()),
+                    _ => Value::List(vec![]),
                 }
             }
             "move" => self.engine_move(&args, env, pos)?,
@@ -1452,6 +1453,7 @@ impl World<'_> {
                 };
                 let source = self.arg(&args, 2, "source").and_then(Value::as_entity);
                 self.sounds.push(Noise { at: p, kind, source, time: self.s.game.time });
+                self.sounds_made += 1;
                 Value::None
             }
             "spawn" => self.engine_spawn(&args, env, pos)?,
@@ -1528,7 +1530,46 @@ impl World<'_> {
             }
             // presentation without a screen does nothing (M 9.3)
             "fly" | "play" | "pan" | "shake" | "fade" | "reveal" => Value::None,
-            "sees" | "heard" | "hears" | "path" | "ray" => return Err(self.rt_err(env, pos, format!("`{f}` is not implemented yet: sight, hearing and paths come with the senses"))),
+            "sees" => {
+                let a = self.entity_arg(Some(&a0), f, env, pos)?;
+                let b = self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?;
+                Value::Bool(self.sees(a, b.cells()))
+            }
+            "heard" => {
+                let a = self.entity_arg(Some(&a0), f, env, pos)?;
+                Value::Collection(self.heard.get(&a).cloned().unwrap_or_default().into_iter().map(Value::Sound).collect())
+            }
+            "hears" => {
+                let a = self.entity_arg(Some(&a0), f, env, pos)?;
+                let b = self.arg(&args, 1, "b").and_then(Value::as_entity);
+                Value::Bool(self.heard.get(&a).is_some_and(|hs| hs.iter().any(|s| s.source.is_some() && s.source == b)))
+            }
+            "path" => {
+                let from = self.area(&a0, env, pos)?;
+                let to = self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?;
+                let who = self.arg(&args, 2, "for").and_then(Value::as_entity);
+                match from.cells().first() {
+                    Some(p) => Value::List(self.route(*p, to.cells(), who).into_iter().map(Value::Pos).collect()),
+                    None => Value::List(vec![]),
+                }
+            }
+            "ray" => {
+                let a = self.area(&a0, env, pos)?.cells().first().copied();
+                let b = self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?.cells().first().copied();
+                let who = self.arg(&args, 2, "for").and_then(Value::as_entity);
+                let range = match self.arg(&args, 3, "range").cloned() {
+                    Some(v) => self.number(v, env, pos)?,
+                    None => 0,
+                };
+                let mode = match self.arg(&args, 4, "mode") {
+                    Some(Value::Name(n)) => Some(n.clone()),
+                    _ => None,
+                };
+                match (a, b) {
+                    (Some(a), Some(b)) => Value::List(self.ray(a, b, who, range, mode.as_deref()).into_iter().map(Value::Pos).collect()),
+                    _ => Value::List(vec![]),
+                }
+            }
             other => return Err(self.rt_err(env, pos, format!("engine function `{other}` is not implemented yet"))),
         })
     }
@@ -1602,42 +1643,42 @@ impl World<'_> {
     /// mode)? Tiles by their property ladder, entities by their `blocks`;
     /// `who` leaves itself out and brings its movement mode (M 9.3, D 7.5).
     pub fn blocks(&self, p: Cell, what: &str, who: Option<EntityId>, tiles: bool) -> bool {
+        (tiles && self.blocks_tiles(p, what, who)) || self.blocks_entities(p, what, who)
+    }
+
+    /// The tiles' part of `blocks`; outside the map everything blocks.
+    pub fn blocks_tiles(&self, p: Cell, what: &str, who: Option<EntityId>) -> bool {
         let m = &self.s.maps[p.map];
         if !m.inside(p.x, p.y) {
             return true;
         }
         let mode = who.and_then(|w| self.s.get(w).get("movement")).and_then(|c| c.get("mode")).and_then(|v| if let Value::Name(n) = v { Some(n.clone()) } else { None });
-        if tiles {
-            for l in 0..m.layers.len() {
-                let Some(t) = m.tile(l, p.x, p.y) else { continue };
-                let blocks = self.tile_property(t, "blocks");
-                if blocks.iter().any(|b| b == what) {
+        for l in 0..m.layers.len() {
+            let Some(t) = m.tile(l, p.x, p.y) else { continue };
+            let blocks = self.tile_property(t, "blocks");
+            if blocks.iter().any(|b| b == what) {
+                return true;
+            }
+            if what == "move"
+                && let Some(mode) = &mode
+            {
+                if blocks.iter().any(|b| b == mode) {
                     return true;
                 }
-                if what == "move"
-                    && let Some(mode) = &mode
-                {
-                    if blocks.iter().any(|b| b == mode) {
-                        return true;
-                    }
-                    let only = self.tile_property(t, "only");
-                    if !only.is_empty() && !only.contains(mode) {
-                        return true;
-                    }
+                let only = self.tile_property(t, "only");
+                if !only.is_empty() && !only.contains(mode) {
+                    return true;
                 }
-            }
-        }
-        for e in self.s.entities_at(p) {
-            if Some(e) == who {
-                continue;
-            }
-            if let Some(Value::List(vs)) = self.s.get(e).get("blocks").and_then(|c| c.get("values"))
-                && vs.iter().any(|v| *v == Value::Name(what.to_string()))
-            {
-                return true;
             }
         }
         false
+    }
+
+    /// The entities' part of `blocks`: their own `blocks` component.
+    pub fn blocks_entities(&self, p: Cell, what: &str, who: Option<EntityId>) -> bool {
+        self.s.entities_at(p).into_iter().any(|e| {
+            Some(e) != who && matches!(self.s.get(e).get("blocks").and_then(|c| c.get("values")), Some(Value::List(vs)) if vs.iter().any(|v| *v == Value::Name(what.to_string())))
+        })
     }
 
     /// A tile property's values down the ladder: the exact name, index

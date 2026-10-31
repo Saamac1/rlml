@@ -110,7 +110,13 @@ impl<'m> Runner<'m> {
         self.end_action()
     }
 
+    /// The start of a wake: `hear` for new sounds, then `wake` (M 6.8,
+    /// M 6.1.5).
     fn wake_event(&mut self, e: EntityId) -> RtResult<()> {
+        self.w.hear_events(e)?;
+        if !self.w.s.get(e).alive {
+            return Ok(());
+        }
         let mut env = engine_env("wake");
         env.map = self.w.s.at(e).map(|p| p.map);
         self.w.emit("wake", vec![Value::Entity(e)], &env)

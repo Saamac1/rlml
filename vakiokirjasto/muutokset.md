@@ -4,7 +4,7 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
-**Muutokset 31.10.2026 (ajon ensimmäinen versio):** viestien järjestys kuolemassa on avoin kysymys (luku [14](14-avoimet-kysymykset.md)).
+**Muutokset 31.10.2026 (ajon ensimmäinen versio):** viestien järjestys kuolemassa on avoin kysymys (luku [14](14-avoimet-kysymykset.md)). Minipelin luolat ovat valaistuja (`default … lit`, luku [12](12-minipeli-std-lla.md)).
 
 **Muutokset 31.10.2026 (tyyppitarkistus):** `SPAWN_PLAYER` ottaa hallintaan kortista syntyneen kokoelman ensimmäisen jäsenen (`spawn(…).first`), koska kortin `spawn` palauttaa kokoelman ja `control` ottaa entiteetin (luku [8](08-kasittelijat.md); moottoridokumentti, luku [9.3](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).
 

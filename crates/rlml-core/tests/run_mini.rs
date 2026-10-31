@@ -341,12 +341,11 @@ fn bumping_a_rat_attacks_it() {
     let (x, y) = at(&w, p);
     put(&mut w, rat, (x + 1, y));
     // the rat's attitude to the player is 50 − |−100 − 0| = −50: enemies (STD 7)
-    let r = w.start_command(p, &cmd("STD.MOVE.EAST"));
-    // the hit message asks whether the player sees the rat, which the senses give
-    let err = r.unwrap_err();
-    assert!(err.contains("`sees` is not implemented yet"), "{err}");
+    assert_eq!(w.start_command(p, &cmd("STD.MOVE.EAST")).unwrap(), Outcome::Done { cost: 120 }, "the attack's cost");
     assert_eq!(at(&w, p), (x, y), "a bump does not move");
-    assert!(field(&w, rat, "STD.HP", "now").as_number().unwrap() < 3, "the hit was applied before the message");
+    let hp = field(&w, rat, "STD.HP", "now").as_number().unwrap();
+    assert!(hp < 3);
+    assert_eq!(log_texts(&w), [format!("rotta ottaa {} vahinkoa.", 3 - hp)], "the player sees the rat next to it");
 }
 
 #[test]
@@ -530,14 +529,130 @@ fn the_world_goes_on_without_a_player() {
     assert!(ticks(&r.w, "BOT") >= 3, "the others act (M 6.1.2)");
 }
 
+// ---- the senses (R5) ----
+
+/// Runs the player's commands, one per turn, and gives the runner.
+fn play<'m>(m: &'m Model, setup: impl FnOnce(&mut World), cmds: &[&str]) -> Runner<'m> {
+    let mut w = World::new_game(m, 7).unwrap();
+    w.begin().unwrap();
+    setup(&mut w);
+    let mut r = Runner::new(w);
+    for c in cmds {
+        if r.run(0).unwrap() != Status::Input {
+            break;
+        }
+        r.player(&cmd(c)).unwrap();
+    }
+    r
+}
+
 #[test]
-fn the_minigame_runs_until_the_rats_need_their_senses() {
+fn in_the_dark_the_player_sees_only_next_to_it() {
+    let mut f = mini();
+    let g = f.game.get_mut("game.rlml").unwrap();
+    *g = g.replace("- default blocks none lit", "- default blocks none");
+    let m = model(&f);
+    let mut w = started(&m);
+    let p = player(&w);
+    let view = w.field_of_view(p).unwrap();
+    let (x, y) = at(&w, p);
+    assert_eq!(view.len(), 9, "no `lit` tiles: only `dark` 1 (M 7.2)");
+    assert!(view.iter().all(|(vx, vy)| (vx - x).abs() <= 1 && (vy - y).abs() <= 1));
+    let far = Pos { map: 0, x: x + 2, y };
+    assert!(!w.sees(p, &[far]));
+}
+
+#[test]
+fn the_minigame_caves_are_lit() {
     let f = mini();
     let m = model(&f);
-    let mut r = Runner::new(started(&m));
-    assert_eq!(r.run(0).unwrap(), Status::Input);
-    assert!(r.player(&cmd("STD.MOVE.EAST")).unwrap());
-    // the rats wake at 120 and their HUNTER asks what they see
-    let err = r.run(0).unwrap_err();
-    assert!(err.contains("not implemented yet"), "{err}");
+    let mut w = started(&m);
+    let p = player(&w);
+    let at = w.s.at(p).unwrap();
+    assert!(w.field_of_view(p).unwrap().len() > 9, "`default … lit`: the player's radius 8");
+    assert!(w.sees(p, &[Pos { y: at.y + 3, ..at }]));
+}
+
+#[test]
+fn a_lit_map_shows_the_room() {
+    let lit = format!("{DATA}\ntiles\n- default lit\n- WALL blocks move sight\n");
+    let f = files(&[("game.rlml", &lit)]);
+    let m = model(&f);
+    let mut w = started(&m);
+    let p = player(&w);
+    let goblin = kinds(&w, "GOBLIN")[0];
+    let gp = w.s.at(goblin).unwrap();
+    assert!(w.sees(p, &[gp]), "`default lit`: radius 8 in light");
+}
+
+#[test]
+fn a_rat_hears_steps_and_hunts() {
+    let f = mini();
+    let m = model(&f);
+    let mut r = play(
+        &m,
+        |w| {
+            // one rat three floor cells south of the player, the others gone
+            let p = w.s.player.unwrap();
+            let at = w.s.at(p).unwrap();
+            let rats = kinds(w, "RAT");
+            w.s.get_mut(rats[0]).place = Place::Map(Pos { y: at.y + 3, ..at });
+            for &other in &rats[1..] {
+                w.s.get_mut(other).alive = false;
+            }
+        },
+        // a step south: the rat, two cells away, hears it at level 1 (M 6.8)
+        &["STD.MOVE.SOUTH", "STD.WAIT", "STD.WAIT", "STD.WAIT", "STD.WAIT"],
+    );
+    let p = r.w.s.player.unwrap();
+    let rat = kinds(&r.w, "RAT")[0];
+    assert_eq!(r.w.s.at(rat).unwrap().distance(r.w.s.at(p).unwrap()), 1, "the rat came next to the player");
+    assert!(field(&r.w, p, "STD.HP", "now").as_number().unwrap() < 10, "and bit: {:?}", log_texts(&r.w));
+    assert!(r.w.heard.contains_key(&rat), "the rat listened at its wake (M 6.8)");
+    let _ = r.run(0);
+}
+
+#[test]
+fn the_rat_hears_the_step_and_its_own_sounds_mask() {
+    let f = mini();
+    let m = model(&f);
+    let mut w = started(&m);
+    let p = player(&w);
+    let rat = kinds(&w, "RAT")[0];
+    let at = w.s.at(p).unwrap();
+    w.s.get_mut(rat).place = Place::Map(Pos { x: at.x + 2, ..at });
+    w.listen(rat);
+    w.start_command(p, &cmd("STD.MOVE.EAST")).unwrap();
+    let heard = w.listen(rat);
+    assert_eq!(heard.len(), 1);
+    assert_eq!((heard[0].kind.as_str(), heard[0].level, heard[0].source), ("STD.SOUND.STEP", 2, Some(p)), "level 3, one step away");
+    assert!(w.listen(rat).is_empty(), "a sound is heard in one wake interval");
+}
+
+#[test]
+fn routes_go_around_walls() {
+    let f = mini();
+    let m = model(&f);
+    let w = started(&m);
+    let p = player(&w);
+    let from = w.s.at(p).unwrap();
+    let caves = &f.game["maps/caves.rlml"];
+    let (dx, dy) = cells_of(caves, "CAVE_A", '>')[0];
+    let route = w.route(from, &[Pos { map: 0, x: dx, y: dy }], Some(p));
+    assert_eq!(route.last(), Some(&Pos { map: 0, x: dx, y: dy }));
+    assert!(route.windows(2).all(|s| s[0].distance(s[1]) == 1), "one step at a time");
+    assert!(route.iter().all(|c| !w.blocks_tiles(*c, "move", Some(p))), "never through a wall");
+    assert_eq!(w.route(from, &[Pos { map: 0, x: dx, y: dy }], Some(p)), route, "the same route every time");
+}
+
+#[test]
+fn a_whole_run_is_reproducible() {
+    let f = mini();
+    let m = model(&f);
+    let keys = ["STD.MOVE.EAST", "STD.MOVE.EAST", "STD.WAIT", "STD.MOVE.SOUTH", "STD.WAIT", "STD.MOVE.EAST", "STD.WAIT", "STD.WAIT"];
+    let a = play(&m, |_| {}, &keys);
+    let b = play(&m, |_| {}, &keys);
+    assert_eq!(a.w.s, b.w.s);
+    assert_eq!(a.w.log, b.w.log);
+    assert!(a.w.s.game.time > 0);
 }
