@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 31.10.2026 (toistettavuuden algoritmit):** satunnaislukugeneraattori on xoshiro256\*\* SplitMix64-alustuksella, ja väli, noppa, `chance`, joukosta arvonta, sekoitus, kyselyn kopio ja esityksen virta on kuvattu tarkasti (luku [4.1](04-satunnaisuus-ja-toistettavuus.md#41-satunnaisvirrat)), samoin ruutu joukosta (luku [4.3](04-satunnaisuus-ja-toistettavuus.md#43-yksi-ruutu-joukosta)). Näköyhteys on symmetrinen varjonheitto (luku [7.2](07-esitys.md#72-kartan-piirtäminen)) ja reitinhaku A\*-haku kiinteillä tasatilanteilla (luku [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).
+
 **Muutokset 31.10.2026 (moottorin funktioiden allekirjoitukset):** sanasto luettelee myös äänifunktion `noise` (luku [9.1](09-moottorin-funktiot-ja-tapahtumat.md#91-sanasto)). Funktioiden parametrit on nimetty englanniksi kuten muutkin nimet, joten ne käyvät nimetyiksi argumenteiksi: `travel(…, map:)`, `rect(…, size:)` tai `rect(…, width:, height:)`, `put(…, card:)`, `add(…, other:)`, `text_of`, `say` ja `log` (`key`), `external(program:)`, `delete_save(target:)` ja `play(sound:)` (luku [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).
 
 **Muutokset 30.10.2026 (kielitiedoston otsikko):** moottori valitsee kielitiedostot niiden `language`-otsikon mukaan, ja väärin sijoitettu otsikko on latausvirhe (luvut [2](02-lataus.md) ja [7.3](07-esitys.md#73-tekstit)).

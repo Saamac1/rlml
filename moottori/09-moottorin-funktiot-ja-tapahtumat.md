@@ -100,7 +100,9 @@ Lyhenteet: *alue* on `area`, ja sen paikalla käyvät myös `pos`, kartalla olev
 | `pos(x: number, y: number)` | `pos` |  |
 | `region(p: pos, of: area)` | `area` | `of`-joukon yhtenäinen osa, johon `p` kuuluu (4-naapurusto); käy kaikkialla, esimerkiksi pelaajan huone `region(player.at, of: at(FLOOR))` |
 
-**Satunnaisuus** (kyselyjä, kutsujan virta)
+**Reitinhaku.** `path` on A\*-haku. Askel viereiseen ruutuun maksaa 1 kaikissa kahdeksassa suunnassa, ja `for`-reitillä estävän toimijan ruutu maksaa 4. Heuristiikka on Chebyshev-etäisyys lähimpään kohderuutuun. Avoimista ruuduista laajennetaan pienin arvio (kustannus + heuristiikka), tasatilanteessa pienin heuristiikka ja sitten ensimmäinen lukujärjestyksessä. Naapurit käydään järjestyksessä `north`, `northeast`, `east`, `southeast`, `south`, `southwest`, `west`, `northwest`, ja ruudun edeltäjäksi jää ensimmäinen, joka tuotti sen pienimmän kustannuksen. Haku päättyy, kun kohdejoukon ruutu otetaan laajennettavaksi. Jos lähtöruutu kuuluu kohteeseen, reitti on tyhjä. Ilman reittiä tulos on tyhjä joukko.
+
+**Satunnaisuus** (kyselyjä, kutsujan virta, algoritmit luvussa [4.1](04-satunnaisuus-ja-toistettavuus.md#41-satunnaisvirrat))
 
 | Kutsu | Paluu | Huomiot |
 | --- | --- | --- |
