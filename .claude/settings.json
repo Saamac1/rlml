@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo test -q)",
+      "Bash(cargo clippy -q --all-targets)",
+      "Bash(cargo build -q)",
+      "Bash(cargo test)",
+      "Bash(cargo clippy --all-targets)",
+      "Bash(cargo test -q --workspace)",
+      "Bash(cargo clippy --all-targets -q -- -D warnings)",
+      "Bash(cargo build)",
+      "Bash(cargo build -q -p rlml-core)",
+      "Bash(cargo build -q -p rlml-tui)",
+      "Bash(cargo clippy -q --all-targets -- -D warnings)"
+    ]
+  }
+}
