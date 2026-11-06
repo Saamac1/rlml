@@ -32,7 +32,7 @@
 - `a and b` on leikkaus, `a or b` yhdiste ja `a - b` erotus.
 - `a where ehto` suodattaa, ja `it` on ruutu: `near(self, 1) where entities(in: it).count == 0` (luku [5.3](05-funktiot-ja-lausekkeet.md#53-lausekkeet)).
 - `a.count` on koko, ja `p in a` testaa jäsenyyden.
-- **Paljastus.** `reveal(a)` lisää joukon ruudut pelaajan muistiin kuin ne olisi nähty, esimerkiksi taikakartan lukemisessa `reveal(tiles())`. Se ei tuo ruutuja näkökenttään, joten `sees` ei muutu. Entiteetin voi näyttää näkökentän ulkopuolella moottorin komponentilla `revealed` (moottoridokumentti, luku [7.2](../moottori/07-esitys.md#72-kartan-piirtäminen)).
+- **Paljastus.** `reveal(a)` lisää joukon ruudut kartan muistiin, joka on kaikkien pelaajien yhteinen, kuin ne olisi nähty, esimerkiksi taikakartan lukemisessa `reveal(tiles())`. Se ei tuo ruutuja näkökenttään, joten `sees` ei muutu. Entiteetin voi näyttää näkökentän ulkopuolella moottorin komponentilla `revealed` (moottoridokumentti, luku [7.2](../moottori/07-esitys.md#72-kartan-piirtäminen)).
 - **Muunnos.** Sijainti, kartalla oleva entiteetti ja ruutujen lista (`list pos`) käyvät ruutujoukoksi; sijainti ja entiteetti tuottavat yhden ruudun joukon.
 - **Yksi ruutu joukosta.** Kun funktio tarvitsee yhden ruudun (`move`, `spawn`, `tile`) ja saa joukon, se arpoo ruudun kutsujan satunnaisvirrasta.
 - **Tyhjä joukko ei ole virhe.** Yhden ruudun tarvitseva funktio epäonnistuu silloin: `move` ja `tile` palauttavat `false`, `spawn` palauttaa `none` tai tyhjän kokoelman. Poikkeus on `travel`, jonka puuttuva kohdenimiö on virhe (luku [6.4](#64-siirtyminen-kartalta-toiselle)).
@@ -70,10 +70,10 @@ generator FIELD(depth: number) size 40x20:
 map FIELD_A generate FIELD(depth: 1)
 map FIELD_B generate FIELD(depth: 1)
 
-on enter(who, p, prev) when who == player and p in label(EAST):
+on enter(who, p, prev) when seat_of(who) != none and p in label(EAST):
     travel(who, FIELD_B, at: WEST, align: true)
 
-on enter(who, p, prev) when who == player and p in label(WEST):
+on enter(who, p, prev) when seat_of(who) != none and p in label(WEST):
     travel(who, FIELD_A, at: EAST, align: true)
 ```
 

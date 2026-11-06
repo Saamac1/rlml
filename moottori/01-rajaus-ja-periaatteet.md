@@ -15,9 +15,9 @@ Raja kulkee kirjainkoossa: moottori lukee vain pienillä kirjoitettuja nimiä ei
 
 ## 1.2 Periaatteet
 
-- **Moottori ei tunne pelin käsitteitä.** Kuolema, vahinko, inventaario ja pelaaja ovat sääntöjä ja sisältöä, eivät moottorin ominaisuuksia ([RS 1](../roguescript/01-rajaus-ja-periaatteet.md)). Moottori tarjoaa tapahtumat ja funktiot, joiden varaan säännöt rakennetaan.
+- **Moottori ei tunne pelin käsitteitä.** Kuolema, vahinko, inventaario ja pelaaja ovat sääntöjä ja sisältöä, eivät moottorin ominaisuuksia ([RS 1](../roguescript/01-rajaus-ja-periaatteet.md)). Moottori tuntee vain ohjauksen: istuimen eli ihmispelaajan ja sen jäsenet, joiden vuorolla se odottaa syötettä (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)). Moottori tarjoaa tapahtumat ja funktiot, joiden varaan säännöt rakennetaan.
 - **Tyhjä peli ei sisällä mitään.** Moottori käynnistää järjestelmän vain, jos sen osio on kirjoitettu ([D 1.1](../dataformaatit/01-rajaus-ja-periaatteet.md#11-periaatteet)). Ilman ääni-ilmoituksia ei ole ääntä, ilman `terrain`-osiota on yksi maastokerros, ilman `profile`-lohkoa ei ole profiilia.
-- **Toistettavuus on moottorin lupaus.** Sama data ja sama siemen tuottavat saman aloituksen, samat nopanheitot ja saman kulun samoilla syötteillä (luku [4](04-satunnaisuus-ja-toistettavuus.md)). Profiili kuuluu syötteisiin: pelikerta näkee profiilin aloitushetken tilannekuvan (luku [5.6](05-aloitus-tallennus-ja-checkpointit.md#56-profiili)).
+- **Toistettavuus on moottorin lupaus.** Sama data ja sama siemen tuottavat saman aloituksen, samat nopanheitot ja saman kulun samoilla syötteillä (luku [4](04-satunnaisuus-ja-toistettavuus.md)). Profiili ja liitettyjen istuinten määrä kuuluvat syötteisiin: pelikerta näkee profiilin aloitushetken tilannekuvan (luku [5.6](05-aloitus-tallennus-ja-checkpointit.md#56-profiili)).
 - **Virheet kerrotaan aikaisin ja tarkasti.** Kaikki, minkä voi tarkistaa ilman pelin tilaa, tarkistetaan latauksessa (luku [2.5](02-lataus.md#25-tarkistukset)).
 - **Projekti on vain luettavaa.** Moottori kirjoittaa ajon aikana vain käyttäjädatakansioon ([D 3.2](../dataformaatit/03-tiedostot-ja-include.md#32-pelaajan-oma-data)). Poikkeus on äänten renderöinti kehityksessä (luku [7.6](07-esitys.md#76-ääni)).
 

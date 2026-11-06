@@ -41,7 +41,7 @@ component POISONED(turns: number = 5, damage: dice = 1d2):
 Paikallinen nimi on muuttuja, parametri tai silmukan muuttuja. Se kirjoitetaan pienillä, ja se ei saa olla varattu sana. Varatut sanat ovat suljettu luettelo:
 
 - **avainsanat:** `component`, `event`, `on`, `before`, `after`, `as`, `priority`, `when`, `hide`, `disabled`, `fn`, `present`, `query`, `command`, `cost`, `from`, `aim`, `ai`, `generator`, `map`, `transient`, `generate`, `size`, `scene`, `timeline`, `background`, `realtime`, `track`, `loop`, `mark`, `always`, `if`, `elif`, `else`, `for`, `in`, `where`, `repeat`, `while`, `break`, `match`, `choice`, `emit`, `wait`, `confirm`, `open`, `return`, `cancel`, `has`, `no`, `is`, `and`, `or`, `not`, `namespace`, `override`, `extends`
-- **kontekstinimet:** `self`, `holder`, `actor`, `it`, `player`, `game`, `map`, `camera`, `profile`
+- **kontekstinimet:** `self`, `holder`, `actor`, `it`, `player`, `players`, `game`, `map`, `camera`, `profile`
 - **arvot:** `true`, `false`, `none`, `all`, suunnat (`north` …) ja suhteelliset suunnat (`front` …)
 
 Säännöt:

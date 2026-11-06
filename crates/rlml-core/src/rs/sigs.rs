@@ -94,9 +94,9 @@ changes move(e: entity, to: area|collection, [via: ?]) -> bool
 changes tile(p: area, t: name|none, [layer: name], [label: label]) -> bool
 changes tag(a: area, n: label) -> area
 query entities([in: area]) -> collection
-changes control(e: entity) -> entity
+changes control(e: entity, [seat: number]) -> entity
 changes travel(e: entity, map: name, [at: label], [align: bool]) -> entity
-changes follow(c: camera, e: entity) -> none
+changes follow(c: camera, [e: entity]) -> none
 
 # Ruutujoukot
 query tiles() -> area
@@ -148,6 +148,14 @@ query max(a: number, b: number) -> number
 query distance(a: area, b: area) -> number
 query nearest(j: set, a: area) -> member
 query sees(a: entity, b: area) -> bool
+query sees(a: collection, b: area) -> bool
+query in_view(x: area) -> bool
+query seats() -> list number
+query seat_of(e: entity) -> number
+query members(n: number) -> collection
+query active(n: number) -> entity
+query view_width() -> number
+query view_height() -> number
 query text_of(key: name, …) -> text query_or_present
 
 # Generointi
@@ -299,6 +307,7 @@ pub fn engine_event(name: &str) -> Option<Vec<(&'static str, Ty)>> {
         "leave" => vec![("who", Entity), ("p", Pos)],
         "arrive" | "depart" => vec![("who", Entity), ("map", Name), ("p", Pos)],
         "hear" => vec![("who", Entity), ("s", Sound)],
+        "join" | "part" => vec![("seat", Number)],
         _ => return Option::None,
     })
 }
@@ -333,6 +342,8 @@ pub fn game_field(name: &str) -> Option<Ty> {
         "start" | "keys" | "title" | "layout" | "naming" | "walk" | "walk_stop" => Name,
         "at" => Area,
         "seed" | "turn" | "time" | "call_depth" | "loop_steps" | "masking" => Number,
+        "party" | "leash" => Name,
+        "seats" => Range,
         _ => return Option::None,
     })
 }

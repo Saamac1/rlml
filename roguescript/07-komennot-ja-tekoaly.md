@@ -100,6 +100,7 @@ ai ROGUE_MONSTER:
 ```
 
 - **Pelaajan tekoäly.** Pelaajan `ai`-komponenttia moottori ei kutsu pelaajan vuorolla, paitsi kun asetus `idle` laukeaa: silloin tekoälyn palauttama komento ajetaan pelaajan komentona (moottoridokumentti, luku [6.1.2](../moottori/06-ajo.md#612-toimijat-ja-ajoitin)). Logiikka voi vaihtaa pelaajan tekoälyn, esimerkiksi sekavuudessa (`CONFUSED`) tai automaattisessa tutkimisessa.
+- **Ryhmän tekoäly.** Kun istuimella on monta jäsentä ja `game`-lohkon `party` on `switch`, muut kuin ohjattava jäsen toimivat omalla `ai`-komponentillaan, ja jäsen ilman sitä lepää. `party each` kysyy syötteen jokaiselta jäseneltä (moottoridokumentti, luku [6.1.5](../moottori/06-ajo.md#615-vuoron-kulku)).
 
 ---
 

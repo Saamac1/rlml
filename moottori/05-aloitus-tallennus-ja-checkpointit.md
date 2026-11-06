@@ -13,7 +13,7 @@ Uuden pelin tila on laskettu oletustallennus, checkpoint 0 ([D 3.3](../dataforma
 5. aloituskartan valinta (`start` kartta, pakka tai taulu) kenttään `game.start`,
 6. aloituskartan lataus: legend tai generaattori, `with`-entiteetit, kokoelmien täyttö ja kerrosten `fill`,
 7. aloituskohdan haku (`at` tai nimiö `START`) ruutujoukoksi kenttään `game.at`,
-8. tapahtuma `begin`, jonka käsittelijät luovat pelaajan ja kutsuvat `control` ([RS 10.1](../roguescript/10-aloitus-ja-checkpointit.md#101-aloitus)).
+8. tapahtuma `begin`, jonka käsittelijät luovat pelaajan ja kutsuvat `control` ([RS 10.1](../roguescript/10-aloitus-ja-checkpointit.md#101-aloitus)). Moninpelissä liitetyt istuimet ovat tiedossa ennen tätä vaihetta, ja liitettyjen istuinten määrä kuuluu aloituksen syötteisiin kuten profiili (luku [8.2](08-syote.md#82-istuimet-ja-laitteet)).
 
 Aloituksessa `game.time` on 0. Kartan latauksessa syntyneet toimijat saavat ensimmäisen herätyksensä hetkeen 0 + viive(oletushinta), ja `control` antaa pelaajalle herätyksen hetkeen 0 (luku [6.1.2](06-ajo.md#612-toimijat-ja-ajoitin)).
 
@@ -21,7 +21,7 @@ Checkpoint 0 on tila `begin`-käsittelijöiden jälkeen. Jonoon laitetut etualan
 
 ## 5.2 Tallennus
 
-- **Tilannekuva.** Tallennus sisältää koko tilan (luku [3.1](03-pelin-tila.md#31-tilan-osat)), myös `game`-kentät, pelaajan, ajoituksen ja profiilin näkymän. Ladattu peli käyttää siksi aloitushetken `game`-arvoja, vaikka data tai pelaajan `overrides/` olisi sen jälkeen muuttunut. Muoto on moottorin oma, ja tiedostot ovat käyttäjädatakansion `saves/`-kansiossa.
+- **Tilannekuva.** Tallennus sisältää koko tilan (luku [3.1](03-pelin-tila.md#31-tilan-osat)), myös `game`-kentät, pelaajan ja istuimet, ajoituksen ja profiilin näkymän. Laitteet eivät kuulu tallennukseen (luku [8.2](08-syote.md#82-istuimet-ja-laitteet)). Ladattu peli käyttää siksi aloitushetken `game`-arvoja, vaikka data tai pelaajan `overrides/` olisi sen jälkeen muuttunut. Muoto on moottorin oma, ja tiedostot ovat käyttäjädatakansion `saves/`-kansiossa.
 - **Tallennuskohta.** Pelaaja voi tallentaa vain toimintojen välissä, käytännössä silloin, kun moottori odottaa pelaajan syötettä (luku [6.1.7](06-ajo.md#617-toiminto)). Etualan kohtauksen, dialogin ja `open`-valikon aikana tallennus on estetty. Moottori voi tallentaa kohtausta edeltävän tilan automaattisesti (luku [5.4](#54-automaattinen-tallennus)).
 - **Kohtauksista kuvaus.** Pysyvä tila muuttuu vasta kokonaisen toiminnon lopussa, joten moottori tallentaa kohtauksista vain kuvauksen ([RS 11.1](../roguescript/11-tallennus-ja-korvaaminen.md#111-tallennus)). Ainoa tallennettava suorituskohta on odottavan komennon polku (luku [6.1.6](06-ajo.md#616-monivaiheinen-komento)):
 
@@ -41,28 +41,28 @@ Checkpoint 0 on tila `begin`-käsittelijöiden jälkeen. Jonoon laitetut etualan
 
 - **Lataus.** Ladattu peli jatkaa tilannekuvasta. Tapahtuma `begin` ei laukea. Odottava komento jatkaa suorituskohdastaan, tai se hylätään, jos komennon runko on muuttunut tallennuksen jälkeen (luku [6.1.6](06-ajo.md#616-monivaiheinen-komento)).
 
-**Tallennuksen rajaus.** Kartan otsikon määre `nosave` ([D 8.1](../dataformaatit/08-kartat-ja-prefabit.md#81-karttatiedosto)) estää pelaajan oman tallennuksen ja `quit`-tallennuksen, kun pelaaja on kartalla, ja valikon `save`-kohta näkyy himmennettynä. Automaattinen tallennus ja checkpoint noudattavat kohtiaan normaalisti.
+**Tallennuksen rajaus.** Kartan otsikon määre `nosave` ([D 8.1](../dataformaatit/08-kartat-ja-prefabit.md#81-karttatiedosto)) estää pelaajan oman tallennuksen ja `quit`-tallennuksen, kun pelaaja on kartalla, moninpelissä kun yksikin jäsen on kartalla, ja valikon `save`-kohta näkyy himmennettynä. Automaattinen tallennus ja checkpoint noudattavat kohtiaan normaalisti.
 
 ## 5.3 Checkpointit
 
 - `checkpoint()` ottaa tilannekuvan, mukaan lukien pelin virran tilan ja ajoituksen. Kuva otetaan sen toiminnon lopussa, jossa kutsu tehtiin (luku [6.1.7](06-ajo.md#617-toiminto)). Milloin sitä kutsutaan, on logiikan päätös. Viimeisin checkpoint kuuluu tallennukseen, joten `rollback()` toimii myös ladatussa pelissä. Checkpoint 0 tallentuu samoin, kun peli on alkanut.
-- `rollback()` lataa viimeisimmän checkpointin sellaisena kuin se tallennettiin. Lataus tehdään toiminnon lopussa, joten käynnissä oleva käsittelijäketju ajetaan loppuun. Jos sama toiminto kutsuu molempia, viimeinen kutsu ratkaisee. Profiilin kirjoitukset eivät peruunnu (luku [5.6](#56-profiili)).
+- `rollback()` lataa viimeisimmän checkpointin sellaisena kuin se tallennettiin. Istuintaulu palautuu checkpointin mukaiseksi. Istuin, joka on liitetty checkpointin jälkeen, säilyy liitettynä tyhjänä, eivätkä laitteet muutu. Lataus tehdään toiminnon lopussa, joten käynnissä oleva käsittelijäketju ajetaan loppuun. Jos sama toiminto kutsuu molempia, viimeinen kutsu ratkaisee. Profiilin kirjoitukset eivät peruunnu (luku [5.6](#56-profiili)).
 - Moottori ei päätä, mitä kuolemassa tapahtuu, eikä kuolema päätä peliä. Kun pelaajaa ei ole, maailma jatkaa kulkuaan (luku [6.1.2](06-ajo.md#612-toimijat-ja-ajoitin)), ja pelistä poistutaan taukovalikosta (luku [8](08-syote.md)).
 
 ## 5.4 Automaattinen tallennus
 
 Moottori tallentaa pelin automaattisesti kohdissa, jotka peli valitsee. Paikkamäärä ja kohdat ovat dataa ([D 3.4](../dataformaatit/03-tiedostot-ja-include.md#34-automaattinen-tallennus-autosave)), ja logiikka voi pyytää tallennuksen funktiolla `autosave()`.
 
-- **Paikat.** `slots 0` ei tallenna automaattisesti. `slots 1` on permadeath: yksi paikka, jonka jokainen tallennus korvaa, ja pelaajan oma `save` tallentaa samaan paikkaan ja lopettaa pelin. `slots N` on pino: uusin menee päälle, ja vanhin putoaa pois, kun paikat ovat täynnä. Pelaajan omat tallennukset ovat silloin omissa paikoissaan pinon ulkopuolella. Omien paikkojen määrä on autosave-osion manual N (oletus 3, 0 = ei omaa tallennusta). quit noudattaa riviä quit: save (oletus) tallentaa moodissa 0 omaan lopetuspaikkaansa ja moodissa N pinoon, none ei tallenna. Moodissa 1 oma tallennus ja quit käyttävät aina ainoaa paikkaa. Ilman autosave-osiota pätevät slots 0 ja oletukset.
+- **Paikat.** `slots 0` ei tallenna automaattisesti. `slots 1` on permadeath: yksi paikka, jonka jokainen tallennus korvaa, ja pelaajan oma `save` tallentaa samaan paikkaan ja lopettaa pelin, moninpelissä kaikilta istuimilta. `slots N` on pino: uusin menee päälle, ja vanhin putoaa pois, kun paikat ovat täynnä. Pelaajan omat tallennukset ovat silloin omissa paikoissaan pinon ulkopuolella. Omien paikkojen määrä on autosave-osion manual N (oletus 3, 0 = ei omaa tallennusta). quit noudattaa riviä quit: save (oletus) tallentaa moodissa 0 omaan lopetuspaikkaansa ja moodissa N pinoon, none ei tallenna. Moodissa 1 oma tallennus ja quit käyttävät aina ainoaa paikkaa. Ilman autosave-osiota pätevät slots 0 ja oletukset.
 - **Lukitus.** Paikkamäärä luetaan uuden pelin alussa ja tallentuu pelikerran mukana, joten `overrides/` ei muuta sitä kesken pelin. Tallennuskohdat luetaan aina datasta.
 - **Rajalla.** Automaattinen tallennus tehdään aina toimintojen rajalla, joten tila on eheä. Kohdat ovat:
 
 | Kohta | Milloin |
 | --- | --- |
-| `input` | moottori odottaa pelaajan syötettä; `every N` tallentaa joka N:nnellä kerralla |
+| `input` | moottori odottaa pelaajan syötettä; `every N` tallentaa joka N:nnellä kerralla, ja moninpelissä kaikkien istuinten odotukset lasketaan yhteen |
 | `scene` | ennen etualan kohtausta, dialogia tai `open`-valikkoa |
 | `checkpoint` | kun `checkpoint()` toteutuu toiminnon lopussa |
-| `arrive` | pelaaja saapuu kartalle, myös `travel`-kutsulla nykyiseen karttaan (luku [6.7](06-ajo.md#67-siirtyminen-kartalta-toiselle)) |
+| `arrive` | pelaaja saapuu kartalle, myös `travel`-kutsulla nykyiseen karttaan (luku [6.7](06-ajo.md#67-siirtyminen-kartalta-toiselle)); ryhmän siirto tallentaa kerran toiminnossa |
 
 - **Logiikka.** `autosave()` tehdään toiminnon lopussa kuten `checkpoint()`. Monta pyyntöä samassa toiminnossa tuottaa yhden tallennuksen.
 - **Haarautuminen.** Kun pelaaja lataa pinosta vanhemman tallennuksen ja jatkaa, uudemmat tallennukset jäävät pinoon. Pino järjestyy kirjoitusajan mukaan.

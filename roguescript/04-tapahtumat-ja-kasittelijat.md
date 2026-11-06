@@ -68,7 +68,7 @@ component HOLY_SHIELD:
 
 ## 4.1 Moottorin tapahtumat
 
-Moottorin tapahtumat ovat `begin` (luku [10](10-aloitus-ja-checkpointit.md)), `turn`, `wake`, `created`, `removed`, `enter`, `leave`, arrive, depart ja hear (`hear(who, s)`, komponentissa `hear(s)`, moottoridokumentti luku [6.8](../moottori/06-ajo.md#68-äänet-ja-kuuleminen)). Niiden nimet ovat pieniä, koska ne ovat moottorin sanastoa. Moottori lähettää ne itse, kun se on tehnyt muutoksen, joten niillä on vain vaiheet `on` ja `after`. `before` ja `cancel` niissä ovat latausvirheitä. Toiminnon estäminen kuuluu komentoon.
+Moottorin tapahtumat ovat `begin` (luku [10](10-aloitus-ja-checkpointit.md)), `turn`, `wake`, `created`, `removed`, `enter`, `leave`, `arrive`, `depart`, `join`, `part` ja `hear` (`hear(who, s)`, komponentissa `hear(s)`, moottoridokumentti luku [6.8](../moottori/06-ajo.md#68-äänet-ja-kuuleminen)). Niiden nimet ovat pieniä, koska ne ovat moottorin sanastoa. Moottori lähettää ne itse, kun se on tehnyt muutoksen, joten niillä on vain vaiheet `on` ja `after`. `before` ja `cancel` niissä ovat latausvirheitä. Toiminnon estäminen kuuluu komentoon.
 
 Yleinen käsittelijä saa subjektin ensimmäisenä parametrina. Komponentin käsittelijässä subjekti on `self`, eikä sitä kirjoiteta, kuten pelin omissakin tapahtumissa (luku [4](#)). Parametrien nimet ovat vapaat, mutta niiden määrän on vastattava muotoa.
 
@@ -83,10 +83,13 @@ Yleinen käsittelijä saa subjektin ensimmäisenä parametrina. Komponentin käs
 | `leave` | `leave(who, p)` | `leave(p)` | entiteetti poistui ruudusta `p` |
 | `arrive` | `arrive(who, map, p)` | `arrive(map, p)` | entiteetti saapui kartalle ruutuun `p` |
 | `depart` | `depart(who, map, p)` | `depart(map, p)` | entiteetti lähti kartalta ruudusta `p` |
+| `join` | `join(seat)`, subjekti `game` | – | istuin `seat` liittyi kesken pelin |
+| `part` | `part(seat)`, subjekti `game` | – | istuin `seat` poistuu; sen jäsenillä on vielä `seat` |
 
 - **Ruutu ja kartta.** `enter` ja `leave` koskevat ruutua, `arrive` ja `depart` karttaa (luku [6.4](06-ruudut-ja-paikkahaku.md#64-siirtyminen-kartalta-toiselle)). Siirto kokoelmaan on lähtö kartalta ja siirto kokoelmasta maahan saapuminen.
 - **Siirron jälkeen.** Moottori siirtää entiteetin ensin ja lähettää tapahtumat sitten, joten käsittelijä näkee sen uudessa sijainnissa. Ruutujoukkofunktiot käyttävät kontekstin `map`-karttaa, ja `arrive`- ja `depart`-käsittelijässä se on tapahtuman kartta.
 - **Syntymä ja tuho** eivät lähetä ruutu- ja karttatapahtumia: `created` ja `removed` korvaavat ne.
+- **Istuimet.** `join` ja `part` lähetetään toiminnon lopussa, kun pelaaja liittyy tai poistuu kesken pelin paikallisessa moninpelissä (dataformaatit, luku [3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)). Subjekti on `game` kuten `turn`-tapahtumassa, joten parametri on vain istuimen numero. `part`-käsittelijän jälkeen moottori poistaa jäseniltä `seat`-komponentin. Uuden pelin alussa liitetyt istuimet eivät saa `join`-tapahtumaa, vaan `begin` näkee ne funktiolla `seats()` (luku [10.1](10-aloitus-ja-checkpointit.md#101-aloitus)).
 - `turn` lähetetään kierroksen rajalla aktiivisten karttojen ilmentymille ja kerran yleisille käsittelijöille, joissa subjekti on `game`. Sillä ei ole parametreja, ja kierros luetaan kentästä `game.turn` (`on turn():`).
 - `wake` lähetetään toimijalle sen jokaisella herätyksellä, myös monivaiheisen komennon jatkossa. Tila, joka vaikuttaa toimijan omaan tahtiin, kirjoitetaan tähän (moottoridokumentti, luvut [6.1.4](../moottori/06-ajo.md#614-mikroaskeleen-vaiheet) ja [6.1.5](../moottori/06-ajo.md#615-vuoron-kulku)).
 - **`removed` ja `remove`.** `remove(e, KOMP)` poistaa komponentin eikä lähetä tapahtumaa. `removed` kuuluu ilmentymän tuholle. Sen käsittelijä voi pudottaa tavarat ennen kuin kokoelmien jäsenet tuhotaan.

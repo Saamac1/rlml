@@ -3,7 +3,7 @@
 # 8. Syöte
 
 - **Kontekstipino.** Moottori pinoaa näppäinkontekstit. `modal` antaa syötteet vain päällimmäiselle, `passthrough` päästää sitomattomat läpi ([D 11.3](../dataformaatit/11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad)).
-- Moottorin kontekstit ovat `MENU`, `DIALOGUE`, `SCENE`, `AIM`, `DIRECTION`, `LOOK` ja `ALWAYS`. Valikko ja modaalinen paneeli käyttävät kontekstia `MENU`. Pelin peruskonteksti nimetään game-lohkon kentällä keys ([D 3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)). Se on pinon pohjalla koko ajon, myös pelin omassa alkuvalikossa. **Kohdistus.** Parametrin lähde `aim N at JOUKKO` (RogueScript, luku [7.1](../roguescript/07-komennot-ja-tekoaly.md#71-komennot)) kysyy kohteen pelaajan asetuksen `targeting` mukaan ([D 3.2](../dataformaatit/03-tiedostot-ja-include.md#32-pelaajan-oma-data)): `cursor` avaa kohdistimen kontekstiin `AIM`, ja se alkaa lähimmästä ehdokkaasta; `list` näyttää ehdokkaat valikkona ja korostaa valitun kartalla; `auto` valitsee lähimmän kysymättä. Kontekstin `AIM` toiminnot ovat `cursor.north` … `cursor.northwest`, `next` ja `prev` (ehdokkaat etäisyysjärjestyksessä), `confirm` ja `back`. Kohdistin liikkuu kantaman sisällä myös ehdokkaiden ulkopuolelle, ja `back` peruu komennon ilman ajan kulumista. Jos `list`-asetuksella ehdokkaita ei ole, moottori avaa kohdistimen. **Tyhjä lähde.** Jos parametrin `from`-joukko on tyhjä, komento epäonnistuu ennen kysymistä eikä vie aikaa (RogueScript, luku [7.1](../roguescript/07-komennot-ja-tekoaly.md#71-komennot)).
+- Moottorin kontekstit ovat `MENU`, `DIALOGUE`, `SCENE`, `AIM`, `DIRECTION`, `LOOK`, `JOIN` ja `ALWAYS`. `JOIN` on moninpelin liittymisruutu (luku [8.2](#82-istuimet-ja-laitteet)). Valikko ja modaalinen paneeli käyttävät kontekstia `MENU`. Pelin peruskonteksti nimetään game-lohkon kentällä keys ([D 3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)). Se on pinon pohjalla koko ajon, myös pelin omassa alkuvalikossa. **Kohdistus.** Parametrin lähde `aim N at JOUKKO` (RogueScript, luku [7.1](../roguescript/07-komennot-ja-tekoaly.md#71-komennot)) kysyy kohteen pelaajan asetuksen `targeting` mukaan ([D 3.2](../dataformaatit/03-tiedostot-ja-include.md#32-pelaajan-oma-data)): `cursor` avaa kohdistimen kontekstiin `AIM`, ja se alkaa lähimmästä ehdokkaasta; `list` näyttää ehdokkaat valikkona ja korostaa valitun kartalla; `auto` valitsee lähimmän kysymättä. Kontekstin `AIM` toiminnot ovat `cursor.north` … `cursor.northwest`, `next` ja `prev` (ehdokkaat etäisyysjärjestyksessä), `confirm` ja `back`. Kohdistin liikkuu kantaman sisällä myös ehdokkaiden ulkopuolelle, ja `back` peruu komennon ilman ajan kulumista. Jos `list`-asetuksella ehdokkaita ei ole, moottori avaa kohdistimen. **Tyhjä lähde.** Jos parametrin `from`-joukko on tyhjä, komento epäonnistuu ennen kysymistä eikä vie aikaa (RogueScript, luku [7.1](../roguescript/07-komennot-ja-tekoaly.md#71-komennot)).
 - **Sidonnat.** Iso nimi ajaa komennon, pieni nimi moottorin toiminnon. Moottori tulkitsee muuntonäppäimet, näppäinten nimet ja gamepadin paikkapohjaiset painikkeet sekä `deadzone`-arvon.
 - **Oletussidonnat.** Moottori sitoo omien kontekstiensa toiminnot. Jos peli sitoo saman toiminnon samassa kontekstissa, pelin rivi korvaa oletuksen, ja pelaajan `overrides/keys.rlml` korvaa molemmat.
 
@@ -56,6 +56,8 @@
 | `skip`, `restart`, `rewind` | kohtauksen ohjaus (luku [6.4](06-ajo.md#64-kohtaukset)) |
 | `travel_to` | kulkee osoittimen ruutuun klikkausmatkana (luku [8.1](#81-hiiri)) |
 | `look` | avaa katselukursorin, kontekstin `LOOK` (luku [8.1](#81-hiiri)) |
+| `join` | liittää laitteen uudeksi istuimeksi (luku [8.2](#82-istuimet-ja-laitteet)) |
+| `leave_seat` | poistaa laitteen istuimen; piilossa, kun istuimia on enintään alaraja (luku [8.2](#82-istuimet-ja-laitteet)) |
 
 `toggle PANEELI` näyttää tai piilottaa nimetyn paneelin (luku [7.7](07-esitys.md#77-paneelit)). Sidonta kirjoitetaan toiminnon ja paneelin nimellä: `- toggle DEBUG f12`.
 
@@ -91,6 +93,35 @@ Hiiri on valinnainen syöte: kaiken, minkä hiirellä voi tehdä, voi tehdä my�
 5. **Ilman `walk`-kenttää** `travel_to` ja katselukursorin `confirm` eivät tee mitään, ja `click` kartalla on sitomaton.
 
 Matka ei ole moottorin komento eikä kuulu tallennukseen: tallennettava tila on askelten välissä tavallinen syötteen odotus. Automaattisen tallennuksen kohta `input` (luku [5.4](05-aloitus-tallennus-ja-checkpointit.md#54-automaattinen-tallennus)) ei laukea matkan askelten välissä, ja `idle` ei laukea matkan aikana. Toistossa matka näkyy askelina samoin kuin näppäimillä kuljettu reitti.
+
+## 8.2 Istuimet ja laitteet
+
+Moninpelissä (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)) laite on näppäimistöosa ([D 11.3](../dataformaatit/11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad)), peliohjain tai hiiri. Reititin kuvaa laitteen istuimeksi. Ydin saa syötteen parina (istuin, toiminto) eikä tiedä laitteista mitään.
+
+**Liittymisruutu: konteksti `JOIN`.** Järjestys on moottorin pelivalitsin, pelin alkuvalikko, `new_game`, liittymisruutu ja laskettu aloitus. Ruutu näytetään vain, kun `seats`-yläraja on yli 1, ja `new_game` pelin aikana ei ohita sitä.
+
+- Laite, joka valitsi `new_game`, on istuin 1. Muut laitteet liittyvät toiminnolla `join` ja saavat seuraavan vapaan numeron.
+- `back` liitetyltä laitteelta poistaa sen istuimen. `confirm` miltä tahansa liitetyltä laitteelta aloittaa pelin, kun istuimia on vähintään alaraja.
+- **Oletussidonnat:** `join` on `enter` ja peliohjaimella `start`, `confirm` on `enter`, ja `back` on `esc`. Liittämättömältä laitteelta `enter` on `join` ja liitetyltä `confirm`.
+- **Aloitus.** Liitettyjen istuinten määrä kuuluu aloituksen syötteisiin (luku [5.1](05-aloitus-tallennus-ja-checkpointit.md#51-uusi-peli)), ja `begin` näkee istuimet funktiolla `seats()`.
+
+**Liittyminen kesken pelin.** `join` pelin peruskontekstissa vapaalta laitteelta liittää uuden istuimen, kun istuimia on alle ylärajan. Peli sitoo `join`in tähän kontekstiin itse. Etualan kohtauksen, dialogin tai valikon aikana painallus hylätään. Liittyminen on oma toimintonsa, ja moottori lähettää sen lopussa tapahtuman `join(seat)`, jonka subjekti on `game` (luku [6.1.7](06-ajo.md#617-toiminto)). Jos mikään käsittelijä ei anna istuimelle hahmoa, istuin jää tyhjäksi.
+
+**Poistuminen.** `leave_seat` kuuluu pelin taukovalikkoon, ja moottori piilottaa sen, kun istuimia on enintään alaraja. Viimeinen istuin poistuu `quit`-toiminnolla. Moottori lähettää toiminnon lopussa tapahtuman `part(seat)`, ja käsittelijöiden jälkeen istuimen jäsenet menettävät `seat`-komponentin ja istuin ja laite vapautuvat. Muiden istuinten numerot eivät muutu, ja vapautunut numero annetaan seuraavalle liittyjälle.
+
+**Reititys.**
+
+- **Vuorolla** vain vuorossa olevan istuimen laite ohjaa, myös parametrikyselyt (`from`, `aim`, `ask`), toistolaskuri ja `look`. `pass` toimii miltä tahansa istuimelta.
+- **Valikkoa, dialogia ja kohtausta** ohjaa avaajan istuin, ja jos avaaja ei ole jäsen, mikä tahansa istuin. Sidonnasta avattu valikko ajaa pelaajan komennon avaajan istuimen ohjattavalle (luku [7.5](07-esitys.md#75-valikot)). `more`-sivutusta (luku [7.4](07-esitys.md#74-loki-ja-dialogit)) kuittaa mikä tahansa istuin.
+- **`ALWAYS`** toimii kaikilta laitteilta, ja taukovalikkoa ohjaa sen avannut laite.
+- **Muiden istuinten painallukset** hylätään eivätkä jonoudu. `join` toimii vapailta laitteilta.
+- **Näppäimistöosat.** Konteksti ilman `keyboard N` -osioita käyttää osan 1 sidontoja kaikille näppäimistön istuimille, ja reititys rajaa ohjaajan. `{^TOIMINTO}` (luku [7.3](07-esitys.md#73-tekstit)) näyttää osan 1 näppäimen.
+- **Hiiri** kuuluu osan 1 istuimelle. Hover toimii aina, ja hiiren toiminnot toimivat vain hiiren istuimen vuorolla.
+- **Klikkausmatka** (luku [8.1](#81-hiiri)) etenee vain matkaajan vuoroilla, ja muiden istuinten vuorot kulkevat välissä. Vain matkaajan istuimen painallus pysäyttää sen. Muiden istuinten odotukset ovat tavallisia syötteen odotuksia, ja `on input` laskee ne.
+
+**Tallennus ja lataus.** Tallennukseen kuuluvat istuinten numerot, jäsenyydet, ohjattavat ja `player`, mutta eivät laitteet (luku [5.2](05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)). Latauksessa liittymisruutu kysyy laitteen jokaiselle tallennetulle istuimelle numerojärjestyksessä. Istuin, jolle ei tule laitetta (`skip` tai `confirm` ennen sitä), poistuu kuten `part` ennen ensimmäistä syötettä. Uusia istuimia voi liittää ylärajaan asti.
+
+**Syöteloki.** Toisto ja `rlml run` -transkriptit kirjaavat syötteet pareina (istuin, toiminto), ja `join` ja `leave_seat` ovat rivejä muiden joukossa (luku [4](04-satunnaisuus-ja-toistettavuus.md)).
 
 ---
 

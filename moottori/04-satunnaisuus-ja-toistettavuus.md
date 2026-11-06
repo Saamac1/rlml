@@ -29,7 +29,7 @@ Moottori valitsee virran kutsujan lajin perusteella. Kirjoittaja ei valitse virt
 
 Toistettavuus vaatii, että satunnaisuuden lisäksi kaikki järjestys on määrätty:
 
-- **Joukot:** entiteetit luontijärjestyksessä, ruudut lukujärjestyksessä (ylhäältä alas, vasemmalta oikealle). Listat säilyttävät oman järjestyksensä ([RS 2.6](../roguescript/02-yleinen-syntaksi.md#26-tyypit)).
+- **Joukot:** entiteetit luontijärjestyksessä, ruudut lukujärjestyksessä (ylhäältä alas, vasemmalta oikealle). Poikkeus ovat istuinten jäsenet `players` ja `members(n)`, jotka ovat istuinnumeron ja jäseneksi tulon järjestyksessä (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)). Listat säilyttävät oman järjestyksensä ([RS 2.6](../roguescript/02-yleinen-syntaksi.md#26-tyypit)).
 - **Käsittelijät:** prioriteetti, sitten latausjärjestys; kun sama käsittelijä osuu useaan kohteeseen, subjekti tulee ennen `modifies`-jäseniä ja jäsenet luontijärjestyksessä (luku [6.2](06-ajo.md#62-tapahtumat), [RS 4](../roguescript/04-tapahtumat-ja-kasittelijat.md)).
 - **Herätykset:** hetki, sitten järjestysnumero (luku [6.1.2](06-ajo.md#612-toimijat-ja-ajoitin)).
 - **Mikroaskeleen vaiheet:** kierros, ajastimet, taustakohtaukset ja herätykset kiinteässä järjestyksessä (luku [6.1.4](06-ajo.md#614-mikroaskeleen-vaiheet)).

@@ -56,6 +56,7 @@ Muutoshistoria: [muutokset.md](muutokset.md).
   - [7.7 Paneelit](07-esitys.md#77-paneelit)
 - [8. Syöte](08-syote.md)
   - [8.1 Hiiri](08-syote.md#81-hiiri)
+  - [8.2 Istuimet ja laitteet](08-syote.md#82-istuimet-ja-laitteet)
 - [9. Moottorin funktiot ja tapahtumat](09-moottorin-funktiot-ja-tapahtumat.md)
   - [9.1 Sanasto](09-moottorin-funktiot-ja-tapahtumat.md#91-sanasto)
   - [9.2 Funktion kuvaus](09-moottorin-funktiot-ja-tapahtumat.md#92-funktion-kuvaus)

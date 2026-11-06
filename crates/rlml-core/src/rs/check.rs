@@ -30,7 +30,7 @@ pub fn engine_function(name: &str) -> Option<FnKind> {
 }
 
 /// Context names (RS 2.4).
-const CONTEXT: &[&str] = &["self", "holder", "actor", "it", "player", "game", "map", "camera", "profile"];
+const CONTEXT: &[&str] = &["self", "holder", "actor", "it", "player", "players", "game", "map", "camera", "profile"];
 
 /// Engine component names usable as values in calls (`ai(behavior: …)`).
 const ENGINE_COMPONENTS: &[&str] = &[
@@ -736,6 +736,7 @@ impl Body<'_> {
         match w {
             "self" | "holder" | "actor" | "player" => return Ty::Entity,
             "camera" => return Ty::Camera,
+            "players" => return Ty::Collection(Member::Entity),
             _ => {}
         }
         if CONTEXT.contains(&w) || VALUES.contains(&w) {

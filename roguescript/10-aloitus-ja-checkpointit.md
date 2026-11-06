@@ -8,16 +8,18 @@ Aloitus on dataa (`game`-lohko, dataformaatit luku [3.3](../dataformaatit/03-tie
 
 ```roguescript
 on begin() as STD.SPAWN_PLAYER:
-    if game has PLAYER:
-        control(spawn(game.PLAYER.class, at: game.at).first)
-    else:
-        control(spawn(DEFAULT.PLAYER, at: game.at))
+    for n in seats():
+        if game has PLAYER:
+            control(spawn(game.PLAYER.class, at: game.at).first, seat: n)
+        else:
+            control(spawn(DEFAULT.PLAYER, at: game.at), seat: n)
 
 on begin():
     start(INTRO())
 ```
 
 - `control(entiteetti)` tekee ilmentymästä pelaajan: `player` viittaa siihen, ja moottori odottaa sen vuorolla syötettä. Kutsu toimii myös myöhemmin, esimerkiksi ruumiin vaihdossa (`control(golem)`).
+- **Istuimet.** `seats()` palauttaa liitettyjen istuinten numerot, yksinpelissä `[1]`. `control(e, seat: n)` tekee ilmentymästä istuimen `n` jäsenen ja ohjattavan. `player` on vuorossa oleva jäsen, ja `players` on kaikkien istuinten elävät jäsenet (moottoridokumentti, luku [6.1.2](../moottori/06-ajo.md#612-toimijat-ja-ajoitin)). Vakiokirjaston käsittelijä sijoittaa istuimen 1 jälkeiset hahmot vapaisiin ruutuihin aloituskohdan ympärille, mikä on esimerkissä jätetty pois.
 - **Vakiokirjasto tekee oletuksen.** `STD.SPAWN_PLAYER` on vakiokirjaston nimetty käsittelijä, joten peli ilman omaa logiikkaa saa pelaajan. Entiteetti valitaan `game`-lohkon vakiokirjaston komponentilla `PLAYER`, jonka kenttä `class` on kortti ja oletus `STD.DEFAULT.PLAYER` (`- PLAYER FIGHTER`). Pelin pelaajaentiteetit nimetään siksi muulla nimellä kuin `PLAYER`. Peli korvaa sen tavalliseen tapaan (`override on begin() as STD.SPAWN_PLAYER:`).
 - **Aloituskohta.** `game.at` on `game`-lohkon `at`-haun tulos ruutujoukkona, ja oletus on aloituskartan nimiö `START`. `spawn` arpoo joukosta ruudun pelin virrasta (luku [6.2](06-ruudut-ja-paikkahaku.md#62-operaatiot)), joten monen ruudun `START` on satunnainen aloituspiste.
 - Ennen ensimmäistä `control`-kutsua `player` on `none`. Kartan latauksen `created`-käsittelijät eivät siis näe pelaajaa.
@@ -40,6 +42,15 @@ on DIED(victim, killer) when victim == player and game has no PERMADEATH:
 on DIED(victim, killer) when victim == player and game has PERMADEATH:
     delete_save(all)
     start(GAMEOVER())
+```
+
+Moninpelissä `player` on vuorossa ollut jäsen, joka ei välttämättä ole kuollut. Ehto `seat_of(victim) != none` tunnistaa jäsenen kuoleman, ja koko ryhmän kuolema on `players.count == 0`. `DIED`-käsittelijässä uhri on vielä elossa, joten se lasketaan erikseen:
+
+```roguescript
+after DIED(victim, killer) when seat_of(victim) != none and game has PERMADEATH:
+    if (players where it != victim).count == 0:
+        delete_save(all)
+        start(GAMEOVER())
 ```
 
 `delete_save(kohde)` poistaa viimeisimmän checkpointin (`checkpoint`), pelikerran automaattiset tallennukset (`auto`) tai molemmat (`all`). Se tehdään toiminnon lopussa, ja pelaajan omat tallennukset jäävät (moottoridokumentti, luku [5.5](../moottori/05-aloitus-tallennus-ja-checkpointit.md#55-tallennuksen-poisto)). Pelaaja voi poistaa oman checkpointinsa valikon kohdasta, joka kutsuu `delete_save(checkpoint)`. Profiiliin (luku [10.4](#104-profiili-profile)) `delete_save` ei koske.

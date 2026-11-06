@@ -103,7 +103,7 @@ pub enum Outcome {
     Waiting { delay: i64, state: Box<Suspended> },
 }
 
-const CONTEXT: &[&str] = &["self", "holder", "actor", "it", "player", "game", "map", "camera", "profile"];
+const CONTEXT: &[&str] = &["self", "holder", "actor", "it", "player", "players", "game", "map", "camera", "profile"];
 
 impl World<'_> {
     fn rt_err(&self, env: &Env, pos: Pos, msg: impl Into<String>) -> String {
@@ -473,6 +473,7 @@ impl World<'_> {
             "holder" => ent(env.holder),
             "actor" => ent(env.actor),
             "player" => ent(self.s.player),
+            "players" => Value::Collection(self.s.player.filter(|&e| self.s.get(e).alive).map(Value::Entity).into_iter().collect()),
             "map" => env.map.map(|m| Value::Name(self.s.maps[m].name.clone())).unwrap_or(Value::None),
             _ if CONTEXT.contains(&w) => Value::None,
             _ => {

@@ -30,7 +30,7 @@ Kierroksen raja on mikroaskel, joka on jaollinen luvulla 120. Raja on se hetki, 
 
 ### 6.1.2 Toimijat ja ajoitin
 
-Toimija on ilmentymä, joka saa vuoroja: pelaaja (viimeisimmän `control`-kutsun kohde) tai kartalla oleva ilmentymä, jolla on moottorin komponentti `ai`. Moottori pitää herätysjonoa, jossa jokaisella toimijalla on enintään yksi herätys.
+Toimija on ilmentymä, joka saa vuoroja: pelaaja (viimeisimmän `control`-kutsun kohde, moninpelissä istuimen jäsen, luku [6.1.10](#6110-istuimet-ja-ryhmä)) tai kartalla oleva ilmentymä, jolla on moottorin komponentti `ai`. Moottori pitää herätysjonoa, jossa jokaisella toimijalla on enintään yksi herätys.
 
 Herätys on pari (hetki, järjestysnumero). Hetki on mikroaskel, jolloin toimija saa vuoron tai sen keskeneräinen komento jatkuu. Järjestysnumero kasvaa yhdellä jokaisesta jonoon laitetusta herätyksestä koko pelin ajan, ja se tallentuu.
 
@@ -59,7 +59,7 @@ Aloituksessa `begin`-käsittelijän luoma pelaaja toimii siis hetkellä 0, ja ka
 - **Paluu.** Kun pelaaja saa herätyksen tai `control()` antaa uuden pelaajan, moottori odottaa taas syötettä.
 - **Aloitus ilman pelaajaa.** `begin` ilman `control`-kutsua on sallittu, ja peli alkaa silloin ilman pelaajaa.
 
-**Odotusaika: `idle`.** Asetus `idle` ([D 3.2](../dataformaatit/03-tiedostot-ja-include.md#32-pelaajan-oma-data)) päättää vuoron, jota pelaaja ei käytä. Kun moottori odottaa pelaajan syötettä vuorolla ja aika kuluu ilman painallusta, moottori antaa pelaajan komennon itse.
+**Odotusaika: `idle`.** Moninpelissä ajastin on istuinkohtainen (luku [6.1.10](#6110-istuimet-ja-ryhmä)). Asetus `idle` ([D 3.2](../dataformaatit/03-tiedostot-ja-include.md#32-pelaajan-oma-data)) päättää vuoron, jota pelaaja ei käytä. Kun moottori odottaa pelaajan syötettä vuorolla ja aika kuluu ilman painallusta, moottori antaa pelaajan komennon itse.
 
 - `idle 4s ai` kutsuu pelaajan `ai behavior` -funktiota ([RS 7.2](../roguescript/07-komennot-ja-tekoaly.md#72-tekoäly)) ja ajaa sen palauttaman komennon pelaajan komentona. Pelaajan säännöt pätevät: hinta 0 on sallittu, ja epäonnistunut komento ei kuluta aikaa, jolloin moottori odottaa taas syötettä.
 - `idle 4s ai STD.WAIT` käyttää varakomentoa, jos pelaajalla ei ole `ai`-komponenttia. Ilman varakomentoa `idle` ei silloin tee mitään.
@@ -215,6 +215,7 @@ Toiminto sisältää kaikki tapahtumat, jotka se lähettää (`emit` on synkroni
 **Toiminnon loppu.** Kutsut, jotka tehdään toiminnon lopussa, kerätään toiminnon aikana ja suoritetaan kiinteässä järjestyksessä:
 
 1. **Siirrot.** `travel`-pyynnöt kutsujärjestyksessä tapahtumineen (`leave`, `depart`, `arrive`, luku [6.7](#67-siirtyminen-kartalta-toiselle)). Saman entiteetin useasta pyynnöstä ratkaisee viimeinen. Siirtojen käsittelijät kuuluvat samaan toimintoon, joten niiden `start`-, `checkpoint`- ja muut pyynnöt käsitellään tässä samassa lopussa.
+   - **Istuimet.** `join`- ja `part`-tapahtumat istuinnumeron järjestyksessä siirtojen jälkeen (luku [8.2](08-syote.md#82-istuimet-ja-laitteet)). `part`-käsittelijöiden jälkeen istuimen jäsenet menettävät `seat`-komponentin.
 2. **`rollback`.** Jos se on pyydetty, moottori lataa checkpointin, ja loput kohdat ohitetaan ladatun tilan mukaisesti: ladattu tila sisältää oman jononsa.
 3. **`checkpoint`.** Tilannekuva otetaan siirtojen jälkeen, joten se näkee entiteetit kohdekartoillaan.
 4. **`delete_save`.**
@@ -227,7 +228,7 @@ Järjestyksen ansiosta käsittelijä voi siirtää pelaajan ja käynnistää koh
 
 ### 6.1.8 Aktiiviset kartat ja jäädytys
 
-Aika kulkee vain aktiivisella kartalla. Aktiivinen kartta on pelaajan kartta, ja jos pelaaja on kokoelmassa, sen ylimmän kantajan kartta. Jos pelaajaa ei ole, aktiivinen kartta on se, jolla pelaaja viimeksi oli, ja kamera jää sinne. Ilman pelaajaa alkanut peli käyttää aloituskarttaa (`game.start`). Muut kartat ovat jäädytettyjä: niiden toimijat eivät herää, ajastimet eivät etene eikä `turn` tavoita niiden ilmentymiä.
+Aika kulkee vain aktiivisella kartalla. Moninpelissä aktiivisia ovat kaikki jäsenten kartat (luku [6.1.10](#6110-istuimet-ja-ryhmä)). Aktiivinen kartta on pelaajan kartta, ja jos pelaaja on kokoelmassa, sen ylimmän kantajan kartta. Jos pelaajaa ei ole, aktiivinen kartta on se, jolla pelaaja viimeksi oli, ja kamera jää sinne. Ilman pelaajaa alkanut peli käyttää aloituskarttaa (`game.start`). Muut kartat ovat jäädytettyjä: niiden toimijat eivät herää, ajastimet eivät etene eikä `turn` tavoita niiden ilmentymiä.
 
 - **Kartan kello.** Jokaisella kartalla on oma kello, joka kulkee vain, kun kartta on aktiivinen: se on `game.time` vähennettynä ajalla, jonka kartta on ollut jäädytettynä. Kartan herätykset ovat sen kellon ajassa, joten jäädytetyn kartan herätykset odottavat sellaisinaan. Kello alkaa ensimmäisessä latauksessa arvosta game.time. Herätyksen hetki on aina sen kartan kellossa, jolla toimija on ajoitushetkellä.
 - **Sulatus.** Kun kartta tulee taas aktiiviseksi, sen kello jatkaa siitä, mihin se pysähtyi. Järjestysnumerot säilyvät, joten kartan sisäinen järjestys ei muutu. Hirviö, jolta puuttui 30 mikroaskelta vuoroon pelaajan lähtiessä, saa vuoronsa 30 mikroaskelta pelaajan paluun jälkeen.
@@ -257,6 +258,50 @@ Aloituskartalla on peikko (nopeus 10) ja lepakko (nopeus 20). Ne syntyvät karta
 | 240 | 4 | lepakko #9 | lepakko 300 #12 |
 
 Hetkellä 120 peikko toimii ennen pelaajaa, koska sen herätys ajoitettiin ensin (#1 < #4). Myrkky vaikuttaa ennen kenenkään vuoroa, koska vaihe 1 tulee ennen herätyksiä. Pelaajalta kysytään syötettä seuraavan kerran vasta, kun `DIG` on valmis.
+
+### 6.1.10 Istuimet ja ryhmä
+
+Paikallisessa moninpelissä samalla koneella pelaa 1–8 ihmistä yhteistyössä yhteisellä ruudulla ([D 3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)). Sama malli kattaa ryhmän, jonka hahmojen välillä yksi pelaaja vaihtaa. Ilman `seats`-kenttää peli on yhden istuimen peli, ja tämän luvun säännöt palautuvat edellisten lukujen yksinpelin sääntöihin. Perustelut ovat lisädokumentissa [RLML-moninpeli](../RLML-moninpeli.md).
+
+- **Istuin** on yksi ihmispelaaja: numero 1…8 ja jäsenet. Istuimet kuuluvat pelin tilaan ja tallentuvat, laitteet eivät (luku [8.2](08-syote.md#82-istuimet-ja-laitteet)).
+- **Jäsen** on entiteetti, jolla on moottorin komponentti `seat` (kenttä `n`). Istuimella voi olla monta jäsentä, jolloin ne ovat ryhmä.
+- **Ohjattava** on istuimen jäsen, jonka vuorolla moottori odottaa istuimen syötettä. Istuimella on enintään yksi ohjattava.
+- **Tyhjä istuin** on istuin ilman jäseniä, esimerkiksi kuolleen pelaajan. Se katsoo peliä ja voi saada hahmon logiikalta.
+- **`player`** on ohjattava, jonka vuoro on käynnissä, ja vuorojen välissä viimeksi vuorossa ollut. Yhden istuimen pelissä merkitys on sama kuin edellisissä luvuissa.
+- **`players`** on kaikkien istuinten elävät jäsenet kokoelmana istuinnumeron ja jäseneksi tulon järjestyksessä. Järjestys poikkeaa luontijärjestyksestä (luku [4](04-satunnaisuus-ja-toistettavuus.md)).
+
+**Toimija.** Jäsen on toimija, vaikka sillä ei ole `ai`-komponenttia ja vaikka se ei ole ohjattava. Jäsen pysyy siis jonossa ohjauksen vaihtuessa, jolloin vaihtamalla ei saa ilmaisia vuoroja. Toimijuus päättyy, kun ilmentymä menettää `seat`-komponentin eikä sillä ole `ai`-komponenttia, esimerkiksi ruumiin vaihdossa tai `part`-tapahtuman jälkeen. Datan rivi `- seat N` pääsee jonoon syntyessään kuten `ai`-ilmentymä (luku [3.2](03-pelin-tila.md#32-ilmentymän-syntyminen)).
+
+**Vuoron valinta.** Vaihe 2 (luku [6.1.5](#615-vuoron-kulku)) ratkaistaan `wake`-käsittelijöiden jälkeen, joten käsittelijä voi vaihtaa ohjauksen ennen valintaa. Valinta riippuu `game`-lohkon kentästä `party`:
+
+| Toimija | `party switch` (oletus) | `party each` |
+| --- | --- | --- |
+| ohjattava jäsen | istuimen syöte | istuimen syöte |
+| muu jäsen | `ai`, ilman sitä lepo oletushinnalla | tulee ohjattavaksi, istuimen syöte |
+| muu toimija | `ai` | `ai` |
+
+- Kun moottori alkaa odottaa syötettä, `player` asetetaan vuorossa olevaan jäseneen. Tasatilanteessa istuimilla ei ole etuoikeutta, vaan järjestysnumero ratkaisee.
+- Lepo onnistuu aina eikä tarvitse komentoa.
+- **Ohjaus siirtyy.** Säännöllä `party switch` ohjaus siirtyy, kun ohjattavalta puuttuu herätys ja saman istuimen muulla jäsenellä on herätys. Silloin ensimmäinen herätetty muu jäsen tulee vaiheessa 2 ohjattavaksi ja odottaa istuimen syötettä. Ilman sääntöä halvaantunut ohjattava pitäisi pelin kulussa ilman syötettä, eikä pelaaja pääsisi vaihtamaan.
+
+**`control`.**
+
+- **`control(e)`**: jos `e` on istuimen jäsen, siitä tulee sen istuimen ohjattava. Muuten `e` korvaa `player`-hahmon: `e` saa tämän istuimen, ja entinen menettää `seat`-komponentin, joten ruumiin vaihto toimii kuten luvussa [6.1.2](#612-toimijat-ja-ajoitin). Kun `player` on `none` tai kuollut kahva, istuin on se, jolla `player` viimeksi oli. Jos sellaista ei ole, kuten `begin`-käsittelijässä, istuin on 1.
+- **`control(e, seat: n)`** tekee `e`:stä istuimen `n` jäsenen ja ohjattavan, ja entinen ohjattava jää jäseneksi. Istuimen on oltava liitetty, muuten kutsu on käyttöhetken virhe. `e` lähtee entiseltä istuimeltaan.
+- **Jonoon tulo** on kuten luvussa [6.1.2](#612-toimijat-ja-ajoitin): herätys hetkeen nyt vain, jos `e`:llä ei ole herätystä.
+- **Vaihto kesken vuoron.** Jos ohjattava `A` odottaa syötettä ja maksuton komento kutsuu `control(B)` saman istuimen jäsenelle, `A`:n vuoro jatkuu vaiheesta 2 muun jäsenen säännöllä eli tekoälylle tai levolle. `B` toimii omalla herätyksellään. Vaihto ei anna ylimääräisiä vuoroja eikä vie niitä. Maksuton komento antaa istuimelle uuden vuoron samalla hetkellä vain, jos `B`:llä on herätys nyt (luku [6.1.3](#613-hinta-ja-nopeus)).
+- `remove(e, seat)` irrottaa jäsenen istuimeltaan. Kuollut jäsen poistuu istuimelta tuhoutuessaan.
+
+**Kierrokset ilman pelaajan vuoroa** (luku [6.1.2](#612-toimijat-ja-ajoitin)) pätevät, kun yhdelläkään istuimella ei ole jäsentä, jolla on herätys. `pass` toimii miltä tahansa istuimelta.
+
+**`idle`** koskee jokaista istuimen vuoroa erikseen. Ajastin alkaa, kun moottori alkaa odottaa istuimen syötettä, ja vain vuorossa olevan istuimen painallus nollaa sen.
+
+**Aktiiviset kartat.** Aktiivisia ovat kaikki kartat, joilla on jäseniä, ja ilman jäseniä luvun [6.1.8](#618-aktiiviset-kartat-ja-jäädytys) kartta. Kartta-alue näyttää `player`-hahmon kartan. Vakiokirjasto pitää ryhmän samalla kartalla, joten useampi aktiivinen kartta on poikkeus.
+
+- **Kellot.** Aktiivisten karttojen kellot etenevät yhdessä, ja niiden herätykset ovat samassa jonossa. Kartan kello pysähtyy vasta, kun kartta jäädytetään.
+- **Jäädytys.** Lähtökartta jäädytetään, kun sen viimeinen jäsen lähtee (luku [6.7](#67-siirtyminen-kartalta-toiselle)). `transient`-kartta hylätään samalla hetkellä. Siirto samalle `transient`-kartalle luo sen uudelleen vain, jos kartalla ei ole muita jäseniä. Muuten siirto on tavallinen siirto kartan sisällä. Saman toiminnon monta `travel`-kutsua samaan `transient`-karttaan luovat sen kerran.
+- **Kartta-alueen kartta.** Aktiivinen kartta tarkoittaa `game`-subjektin `turn`-tapahtumalle, paneeleille, listavalikoille ja `naming`-kyselylle kartta-alueen karttaa (luku [6.2](#62-tapahtumat)).
+- `scope: map` -taustakohtaus päättyy, kun kartan viimeinen jäsen lähtee.
 
 ## 6.2 Tapahtumat
 
@@ -335,12 +380,12 @@ Moottori toteuttaa datan haun `at` / `near` / `from` ja RogueScriptin ruutujoukk
 - **Saapumisruutu.** Oletuksena moottori arpoo saapumisruudun kohderyhmästä kutsujan virrasta. `align: true` valitsee kohderyhmästä ruudun, jolla on sama indeksi kuin siirtyjän lähtöruudulla omassa nimiöryhmässään. Jos kohderyhmässä on vähemmän ruutuja, valitaan viimeinen. Jos lähtöruudulla ei ole nimiötä, ruutu arvotaan. Puuttuva `at` vie nimiöön `START`.
 - **Puuttuva nimiö** kohdekartassa on virhe. Piirretylle kartalle lataus tarkistaa sen, kun kartta ja nimiö ovat kutsussa vakioita. Generoidulle kartalle se on käyttöhetken virhe.
 - **Tapahtumat.** Moottori siirtää entiteetin ja lähettää sitten `leave(who, p)` ja `depart(who, lähtökartta, p)` sekä `arrive(who, kohdekartta, saapumisruutu)`. Saapumisruudussa ei lähetetä tapahtumaa `enter`, joten pelaaja ei pomppaa heti takaisin. Järjestys: kohdekartta ladataan ja nimiö tarkistetaan travel-kutsun hetkellä, jolloin kohdekartan created-tapahtumat lähetetään. Siirto ja tapahtumat leave, depart ja arrive tehdään toiminnon lopussa ensimmäisenä (luku [6.1.7](#617-toiminto)), joten käsittelijät eivät näe siirtoa kesken jakelun, ja kutsun jälkeiset rivit näkevät entiteetin vielä lähtökartalla. Jos sama toiminto siirtää saman entiteetin useasti, viimeinen kutsu ratkaisee. Saman toiminnon etualan kohtaukset alkavat siirtojen jälkeen. Aktiivinen kartta vaihtuu mikroaskeleen lopussa: lähtökartta ajaa saman hetken loput herätykset ennen jäädytystä, ja kohdekartta jatkaa kellostaan.
-- **Aika.** Siirtyjän herätys muunnetaan kohdekartan kelloon, ja jäljellä oleva odotus säilyy. Kun pelaaja siirtyy, lähtökartta jäädytetään ja kohdekartta sulatetaan (luku [6.1.8](#618-aktiiviset-kartat-ja-jäädytys)).
+- **Aika.** Siirtyjän herätys muunnetaan kohdekartan kelloon, ja jäljellä oleva odotus säilyy. Kun pelaaja siirtyy, lähtökartta jäädytetään ja kohdekartta sulatetaan (luku [6.1.8](#618-aktiiviset-kartat-ja-jäädytys)). Moninpelissä lähtökartta jäädytetään vasta, kun sen viimeinen jäsen lähtee (luku [6.1.10](#6110-istuimet-ja-ryhmä)).
 - **Pysyvyys.** Kohdekartta ladataan, kun sille saavutaan ensimmäisen kerran, ja se säilyy sen jälkeen: paluu löytää kartan sellaisena kuin se jäi, ja tallennus sisältää kaikki ladatut kartat. Kullakin kartan nimellä on yksi ilmentymä. `transient`-kartta ([D 8.1](../dataformaatit/08-kartat-ja-prefabit.md#81-karttatiedosto), [RS 8.2](../roguescript/08-generointi.md#82-generoitu-kartta)) hylätään, kun pelaaja lähtee siltä, ja se ladataan tai generoidaan uudelleen seuraavalla saapumisella. Sen entiteetit poistuvat ilman tapahtumia, ja niiden kahvat kuolevat.
 
 **Sama kartta.** `travel` siirtyjän nykyiseen karttaan on aina sallittu, ja sen tapahtumat ovat samat kuin muussakin siirrossa: `leave`, `depart` ja `arrive`, joten automaattinen tallennus `on arrive` toteutuu.
 
-- **`transient`-kartta** hylätään ja luodaan uudelleen toiminnon lopussa ennen saapumista, kuten pelaajan lähtiessä. Siirtyjä ja sen kokoelmat säilyvät, mutta kartan muut entiteetit poistuvat ilman tapahtumia. Uusi kartta saa uuden kellon arvosta `game.time`, ja generaattori näkee sillä hetkellä voimassa olevan `game`-tilan (luku [6.5](#65-generointi)). Näin yksi kartta `LEVEL` riittää koko luolastolle.
+- **`transient`-kartta** hylätään ja luodaan uudelleen toiminnon lopussa ennen saapumista, kuten pelaajan lähtiessä. Moninpelissä näin käy vain, jos kartalla ei ole muita jäseniä (luku [6.1.10](#6110-istuimet-ja-ryhmä)). Siirtyjä ja sen kokoelmat säilyvät, mutta kartan muut entiteetit poistuvat ilman tapahtumia. Uusi kartta saa uuden kellon arvosta `game.time`, ja generaattori näkee sillä hetkellä voimassa olevan `game`-tilan (luku [6.5](#65-generointi)). Näin yksi kartta `LEVEL` riittää koko luolastolle.
 - **Pysyvä kartta** säilyttää tilansa ja kellonsa, ja siirtyjä vain siirtyy nimiöön. Ero `move`-kutsuun on tapahtumissa: `move` lähettää `leave` ja `enter`, `travel` tapahtumat `leave`, `depart` ja `arrive`.
 - **Muut toimijat.** Pelaajan siirtyessä samalle kartalle aktiivinen kartta ei vaihdu, joten jäädytystä ja sulatusta ei tehdä. `transient`-kartan uusi ilmentymä on aktiivinen heti saapumisesta.
 
@@ -356,7 +401,7 @@ Pelimaailman ääni on pelin tilaa, jonka olennot kuulevat. Se on eri asia kuin 
 - **Peitto.** Kuulija kuulee herätysvälinsä äänet: edellisen herätyksen jälkeen syntyneet kertaäänet ja välin aikana soineet jatkuvat äänet. Välin kovimmin kuultu ääni peittää äänet, jotka kuuluvat sitä vähintään `game.masking` tasoa hiljempaa (oletus 3). Vieressä huutava (taso 8) peittää kahden ruudun päästä kuuluvat askeleet (taso 1), ja vieressä soiva soittorasia peittää askeleet koko ajan. Kuulija kuulee myös omat äänensä, ja ne peittävät muita: oma askel (taso 3 omassa ruudussa) peittää kaukaiset askeleet. Kuunteleva pysyy siksi paikallaan tai hiipii (vakiokirjasto, `SNEAK`).
 - **Arvo ja kyselyt.** Kuultu ääni on arvo `sound` (RogueScript, luku [2.6](../roguescript/02-yleinen-syntaksi.md#26-tyypit)), jolla on kentät `.kind`, `.at` (lähteen ruutu), `.source` (entiteetti tai `none`) ja `.level` (kuultu taso). `heard(a: entity) -> collection sound` palauttaa a:n herätysvälin kuuluvat äänet kovimmasta alkaen, ja `hears(a: entity, b: entity) -> bool` on tosi, jos jonkin niistä lähde on b. Ilman `hearing`-komponenttia tulos on tyhjä.
 - **Tapahtuma.** Kun kuulija herää, moottori lähettää ennen sen vuoroa tapahtuman `hear(who, s)` jokaisesta uudesta kuuluvasta äänestä kovimmasta alkaen. Omasta äänestä (`s.source == who`) tapahtumaa ei tule, vaikka ääni peittää. Jatkuvasta äänestä tapahtuma tulee vain, kun se alkaa kuulua. Vakiokirjasto kirjoittaa pelaajalle lajin kuvauksen `<LAJI>.DESC` lokiin, kun lähde ei näy.
-- **Ääniefekti.** Kun pelaaja kuulee äänen, moottori soittaa lajin `effect`-äänen kuullun tason mukaisella voimakkuudella. Jatkuva ääni soi silmukkana niin kauan kuin se kuuluu.
+- **Ääniefekti.** Kun pelaaja kuulee äänen, moottori soittaa lajin `effect`-äänen kuullun tason mukaisella voimakkuudella. Moninpelissä ääni soi kerran, kun yksikin jäsen kuulee sen, ja voimakkuus on kovin kuultu taso. Jatkuva ääni soi silmukkana niin kauan kuin se kuuluu.
 - **Jäädytys.** Jäädytetyn kartan äänet eivät kuulu, ja niiden kestot odottavat kartan kellon mukana.
 
 ## 6.9 Kiertävä kartta

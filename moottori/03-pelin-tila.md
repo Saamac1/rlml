@@ -8,9 +8,9 @@ Moottori omistaa pelin koko tilan:
 
 - **Ilmentymät** komponentteineen ja kenttien arvoineen.
 - **Sijainnit.** Jokainen ilmentymä on joko kartan ruudussa tai toisen ilmentymän kokoelmassa. Sijainti on suhde, ei komponentti ([D 5.2](../dataformaatit/05-komponentit-ja-entiteetit.md#52-entiteetit)).
-- **Pelikerran tila `game`:** moottorin kentät `start`, `at`, `seed`, `turn` ja `time`, rajat `call_depth` ja `loop_steps` (luku [2.6](02-lataus.md#26-virheiden-lajit)) sekä kirjoittajan komponentit ([D 3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus), [D 5.5](../dataformaatit/05-komponentit-ja-entiteetit.md#55-pelikerran-tila-game)). Lisäksi pelikerralle lukittu automaattisen tallennuksen paikkamäärä (luku [5.4](05-aloitus-tallennus-ja-checkpointit.md#54-automaattinen-tallennus)).
+- **Pelikerran tila `game`:** moottorin kentät `start`, `at`, `seed`, `turn` ja `time`, rajat `call_depth` ja `loop_steps` (luku [2.6](02-lataus.md#26-virheiden-lajit)) sekä kirjoittajan komponentit ([D 3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus), [D 5.5](../dataformaatit/05-komponentit-ja-entiteetit.md#55-pelikerran-tila-game)). Lisäksi pelikerralle lukittu automaattisen tallennuksen paikkamäärä (luku [5.4](05-aloitus-tallennus-ja-checkpointit.md#54-automaattinen-tallennus)) ja istuinmäärän raja `seats` ([D 3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)).
 - **Profiilin näkymä:** profiilin tilannekuva pelikerran alusta ja pelikerran omat kirjoitukset (luku [5.6](05-aloitus-tallennus-ja-checkpointit.md#56-profiili)). Itse profiili on moottorin oma tiedosto eikä kuulu pelikerran tilaan.
-- **Pelaaja:** viimeisimmän `control`-kutsun kohde ([RS 10.1](../roguescript/10-aloitus-ja-checkpointit.md#101-aloitus)).
+- **Pelaaja:** viimeisimmän `control`-kutsun kohde ([RS 10.1](../roguescript/10-aloitus-ja-checkpointit.md#101-aloitus)). Moninpelissä istuintaulu: liitetyt istuimet, niiden jäsenet ja ohjattavat sekä `player` (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)).
 - **Kartat:** kaikki ladatut kartat (luku [6.7](06-ajo.md#67-siirtyminen-kartalta-toiselle)): ruutujen maastokerrokset, nimiöt, johtimet, muuttujat (`vars:`) sekä pelaajan muistamat ja paljastetut ruudut (luku [7.2](07-esitys.md#72-kartan-piirtäminen)).
 - **Ajoitus:** herätysjono järjestysnumeroineen, seuraava järjestysnumero ja karttojen kellot (luku [6.1.8](06-ajo.md#618-aktiiviset-kartat-ja-jäädytys)).
 - **Pakkojen tila:** jokaisen jaetun pakan ja `deck copy` -kentän kopion nostopino ja poistopakka ([D 6.2](../dataformaatit/06-pakat-ja-taulut.md#62-tila-sekoitus-ja-nosto)). Taulut ovat tilattomia ([D 6.5](../dataformaatit/06-pakat-ja-taulut.md#65-taulut)).
@@ -55,6 +55,7 @@ Moottori määrittelee pienillä kirjoitetut komponentit, ja vain se antaa niill
 | `render` | piirtää ilmentymän annetulla tilellä |
 | `movement` | lukee liikkumistavan ja nopeuden; nopeus skaalaa komennon hinnan viiveeksi, ja normaalinopeus ja oletus on 10 (luku [6.1.3](06-ajo.md#613-hinta-ja-nopeus)) |
 | `ai` | tekee ilmentymästä toimijan ja kutsuu nimettyä tekoälyfunktiota sen vuorolla (luku [6.1.2](06-ajo.md#612-toimijat-ja-ajoitin)) |
+| `seat` | tekee ilmentymästä istuimen `n` jäsenen ja toimijan; logiikka antaa sen yleensä kutsulla `control(e, seat: n)` (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)) |
 | `sight` | laskee näkökentän säteillä `radius` (valaistut ruudut) ja `dark` (pimeät ruudut, oletus 1): `sees()`, `fog`-kerros ja `remember` (luku [7.2](07-esitys.md#72-kartan-piirtäminen)) |
 | `light` | laskee valon säteen ja kaaren; valaistu ruutu näkyy koko näkösäteellä (luku [7.2](07-esitys.md#72-kartan-piirtäminen)) |
 | `facing` | antaa suhteellisille suunnille vertailukohdan |

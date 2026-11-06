@@ -10,13 +10,13 @@ Kaikki moottorin nimet ovat pieniä.
 
 | Laji | Nimet |
 | --- | --- |
-| komponentit | `render`, `movement`, `ai`, `sight`, `light`, `facing`, `timer`, `interior`, `shape`, `label`, `wire`, `blocks`, `hearing`, `sound`, `name`, `revealed` |
-| tapahtumat | `begin`, `turn`, `wake`, `created`, `removed`, `enter`, `leave`, `arrive`, `depart`, `hear` |
-| toiminnot | `save`, `quit`, `pass`, `repeat`, `help`, `confirm`, `back`, `close`, `resume`, `skip`, `restart`, `rewind`, `new_game`, `load_game`, `exit`, `next`, `prev`, `cursor.<suunta>`, `toggle`, `travel_to`, `look` |
+| komponentit | `render`, `movement`, `ai`, `sight`, `light`, `facing`, `timer`, `interior`, `shape`, `label`, `wire`, `blocks`, `hearing`, `sound`, `name`, `revealed`, `seat` |
+| tapahtumat | `begin`, `turn`, `wake`, `created`, `removed`, `enter`, `leave`, `arrive`, `depart`, `hear`, `join`, `part` |
+| toiminnot | `save`, `quit`, `pass`, `repeat`, `help`, `confirm`, `back`, `close`, `resume`, `skip`, `restart`, `rewind`, `new_game`, `load_game`, `exit`, `next`, `prev`, `cursor.<suunta>`, `toggle`, `travel_to`, `look`, `join`, `leave_seat` |
 | hiiren nimet | `click`, `rclick`, `mclick`, `wheel.up`, `wheel.down` (luku [8.1](08-syote.md#81-hiiri)) |
 | asettelun lähteet | `map`, `hover` (luku [7.1](07-esitys.md#71-asettelu)) |
-| kontekstinimet | `self`, `holder`, `actor`, `it`, `player`, `game`, `profile`, `map`, `camera` |
-| `game`-kentät | `start`, `at`, `seed`, `turn`, `time`, `call_depth`, `loop_steps`, `keys`, `title`, `layout`, `naming`, `masking`, `walk`, `walk_stop` |
+| kontekstinimet | `self`, `holder`, `actor`, `it`, `player`, `players`, `game`, `profile`, `map`, `camera` |
+| `game`-kentät | `start`, `at`, `seed`, `turn`, `time`, `call_depth`, `loop_steps`, `keys`, `title`, `layout`, `naming`, `masking`, `walk`, `walk_stop`, `seats`, `party`, `leash` |
 | entiteetin kentät | `at`, `map`, `kind`, `slot`, `stack` |
 | tilen ominaisuudet | `blocks`, `only`, `lit`, `forget` ([D 7.5](../dataformaatit/07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#75-tilen-ominaisuudet-tiles)) |
 | valikon määreet | `list`, `final` ([D 11.2](../dataformaatit/11-kayttoliittyman-data.md#112-valikot)) |
@@ -26,7 +26,7 @@ Kaikki moottorin nimet ovat pieniä.
 | listat | `insert`, `remove_at`, `index_of` ([RS 2.6](../roguescript/02-yleinen-syntaksi.md#26-tyypit)) |
 | satunnaisuus | `choose`, `shuffled`, `pick`, `chance` |
 | pakat ja taulut | `draw`, `peek`, `put`, `add`, `reset`, `copy`, `shuffle`; taululle vain `draw` ja `spawn` |
-| kyselyt | `min`, `max`, `distance`, `nearest`, `sees`, `blocks`, `tile_of`, `hears`, `heard`, `adjacent`, `ray`, `text_of` |
+| kyselyt | `min`, `max`, `distance`, `nearest`, `sees`, `blocks`, `tile_of`, `hears`, `heard`, `adjacent`, `ray`, `text_of`, `seats`, `seat_of`, `members`, `active`, `in_view`, `view_width`, `view_height` |
 | generointi | `carve`, `footprint`, `stamp`, `external`, `scatter` |
 | kohtaukset | `start`, `stop`, `say`, `log` |
 | esitys | `play`, `pan`, `shake`, `fade`, `light`, `fly`, `reveal`, `today` |
@@ -79,7 +79,7 @@ Lyhenteet: *alue* on `area`, ja sen paikalla käyvät myös `pos`, kartalla olev
 | `tile(p: alue, t: name\|none, layer: name = oletuskerros, label: name)` | `bool` | muuttaa | arpoo ruudun joukosta; `none` tyhjentää kerroksen |
 | `tag(a: area, n: name)` | `area` | muuttaa | nimeää joukon kaikki ruudut ([RS 6.4](../roguescript/06-ruudut-ja-paikkahaku.md#64-siirtyminen-kartalta-toiselle)) |
 | `entities(in: area = tiles())` | `collection` | kysely | luontijärjestyksessä |
-| `control(e: entity)` | `entity` | muuttaa | tekee `e`:stä pelaajan; herätys luvun [6.1.2](06-ajo.md#612-toimijat-ja-ajoitin) mukaan |
+| `control(e: entity, seat: number = none)` | `entity` | muuttaa | tekee `e`:stä pelaajan; herätys luvun [6.1.2](06-ajo.md#612-toimijat-ja-ajoitin) mukaan; `seat:` tekee `e`:stä istuimen jäsenen ja ohjattavan, ja istuimen on oltava liitetty (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)) |
 | `travel(e: entity, map: name, at: name = START, align: bool = false)` | `entity` | muuttaa | lähettää `leave`, `depart` ja `arrive` (luku [6.7](06-ajo.md#67-siirtyminen-kartalta-toiselle)); saapumisruutu arvotaan, ellei `align`; nykyinen kartta sallittu; puuttuva nimiö on virhe; siirto tehdään toiminnon lopussa ennen etualan kohtauksia (luku [6.1.7](06-ajo.md#617-toiminto)) |
 
 **Ruutujoukot** (kaikki kyselyjä)
@@ -94,7 +94,7 @@ Lyhenteet: *alue* on `area`, ja sen paikalla käyvät myös `pos`, kartalla olev
 | `rect(k: pos, size: size)` | `area` |  |
 | `rect(k: pos, width: number, height: number)` | `area` | koko luvuista ([RS 6.1](../roguescript/06-ruudut-ja-paikkahaku.md#61-joukon-tuottavat-funktiot)) |
 | `line(a: alue, b: alue)` | `area` |  |
-| `path(a: alue, b: alue, for: entity = none)` | `area` | reitti järjestyksessä; `.last` on määränpää; for: liikkujan liikkumistapa, through-joukko, esto sekä kentät dirs ja corners, ilman sitä vain tilejen move-esto ja kahdeksan suuntaa; lähtöruutu ei kuulu reittiin; `for`-reitillä estävä toimija (`ai` tai pelaaja) on läpipääsevä, mutta sen ruutu maksaa neljä askelta, jotta reitti kiertää jonon, jos voi |
+| `path(a: alue, b: alue, for: entity = none)` | `area` | reitti järjestyksessä; `.last` on määränpää; for: liikkujan liikkumistapa, through-joukko, esto sekä kentät dirs ja corners, ilman sitä vain tilejen move-esto ja kahdeksan suuntaa; lähtöruutu ei kuulu reittiin; `for`-reitillä estävä toimija (`ai`, pelaaja tai istuimen jäsen) on läpipääsevä, mutta sen ruutu maksaa neljä askelta, jotta reitti kiertää jonon, jos voi |
 | `label(n: name)` | `area` | nimiöryhmän ja nimettyjen entiteettien ruudut |
 | `edge(s: dir)` | `area` | reunarivi tai -sarake lukujärjestyksessä |
 | `pos(x: number, y: number)` | `pos` |  |
@@ -138,7 +138,7 @@ Tyhjä väli on tyhjä joukko kaikissa tuottavissa käytöissä: `for` ei kierr�
 
 Pakan `.count` on kenttä, ei kutsu. Esto ja maasto (kyselyjä): blocks(p: alue, what: move|sight|name, for: entity = none, tiles: bool = true) -> bool soveltaa tilen ominaisuuksien portaan ja kerrossäännön ([D 7.5](../dataformaatit/07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#75-tilen-ominaisuudet-tiles)) sekä entiteettien blocks-komponentin (luku [3.4](03-pelin-tila.md#34-moottorin-komponentit)); for jättää liikkujan itsensä pois ja käyttää sen through-joukkoa, ja joukolle tulos on tosi, jos jokin ruutu estää. Kun `what` on `move` ja `for` on annettu, kysely katsoo myös liikkujan liikkumistavan: tile tai entiteetti, joka estää `movement.mode`-tavan (`blocks WALK`) tai sallii vain muita tapoja (`only`), estää liikkujan. Näin `blocks(p, move, for: e)` riittää liikekomennon ehdoksi (STD `CAN_STEP`). tile\_of(p: pos, layer: name = oletuskerros) -> name|none palauttaa kerroksen tilen. `tiles: false` jättää tilet pois, jolloin `blocks` katsoo vain entiteettien omaa estoa. `adjacent(e: entity) -> area` palauttaa ruudut, joihin `e` voi astua yhdellä askeleella sen `movement`-kenttien `dirs` ja `corners` mukaan. Kohderuudun omaa estoa se ei katso, koska törmäys on liikekomennon asia. **Linja ja lento.** `line(a, b)` on Bresenhamin viiva ruudusta `a` ruutuun `b`, molemmat mukaan lukien; vinon askeleen tasatilanne ratkeaa vaakasuunnan hyväksi, joten tulos on deterministinen mutta ei symmetrinen. `ray(a: pos, b: pos, for: entity = none, range: number = 0, mode: name = none) -> area` palauttaa lentoreitin ilman lähtöruutua: linjan `a`:sta `b`:hen ja `range`-arvolla samaa suuntaa jatkaen, kunnes reitin pituus on `range`. Reitti päättyy ennen ensimmäistä ruutua, jonka tile estää arvolla `move` tai `mode`, tai jossa entiteetin `blocks` sisältää arvon `mode`. Olento, joka estää vain liikkeen, ei pysäytä lentoa, vaan osumat ovat logiikan asia. Esitysfunktio `fly(tile: name, route: area, speed: time)` piirtää ammuksen reittiä pitkin, eikä se muuta tilaa.
 
-**Kartat ja kamera.** `spawn(x: name|card|deck|table, map: name, at: name)` palauttaa saman kuin `spawn`, muuttaa tilaa ja synnyttää toisen kartan nimiöön (luku [6.7](06-ajo.md#67-siirtyminen-kartalta-toiselle)). `follow(c: camera, e: entity) -> none` muuttaa tilaa ja vaihtaa kameran kohteen (luku [7.1](07-esitys.md#71-asettelu)). `e.map`, `e.kind`, `e.slot` ja `e.stack` ovat kenttiä, eivät kutsuja (luvut [3.4](03-pelin-tila.md#34-moottorin-komponentit) ja [6.2](06-ajo.md#62-tapahtumat)).
+**Kartat ja kamera.** `spawn(x: name|card|deck|table, map: name, at: name)` palauttaa saman kuin `spawn`, muuttaa tilaa ja synnyttää toisen kartan nimiöön (luku [6.7](06-ajo.md#67-siirtyminen-kartalta-toiselle)). `follow(c: camera, e: entity = none) -> none` muuttaa tilaa ja vaihtaa kameran kohteen, ja ilman kohdetta palauttaa oletuksen (luku [7.1](07-esitys.md#71-asettelu)). `e.map`, `e.kind`, `e.slot` ja `e.stack` ovat kenttiä, eivät kutsuja (luvut [3.4](03-pelin-tila.md#34-moottorin-komponentit) ja [6.2](06-ajo.md#62-tapahtumat)).
 
 **Kyselyt**
 
@@ -148,6 +148,13 @@ Pakan `.count` on kenttä, ei kutsu. Esto ja maasto (kyselyjä): blocks(p: alue,
 | `distance(a: alue, b: alue)` | `number` | Chebyshev |
 | `nearest(j: joukko, a: alue)` | jäsen tai `none` | tasatilanteessa joukon järjestys; ruutujoukolle lähin ruutu |
 | `sees(a: entity, b: alue)` | `bool` | `sight`-komponentti ja valaistus (luku [7.2](07-esitys.md#72-kartan-piirtäminen)); `revealed` ja `reveal` eivät vaikuta |
+| `sees(a: collection, b: alue)` | `bool` | tosi, jos yksikin jäsen näkee; tyhjä kokoelma ei näe |
+| `in_view(x: alue)` | `bool` | yhteinen näkökenttä, ilman jäseniä viimeinen yhteinen näkökenttä (luku [7.2](07-esitys.md#72-kartan-piirtäminen)) |
+| `seats()` | `list number` | liitetyt istuimet numerojärjestyksessä; yksinpelissä `[1]` (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)) |
+| `seat_of(e: entity)` | `number` tai `none` | jäsenen istuin |
+| `members(n: number)` | `collection` | istuimen elävät jäsenet jäseneksi tulon järjestyksessä |
+| `active(n: number)` | `entity` tai `none` | istuimen ohjattava |
+| `view_width()`, `view_height()` | `number` | kartta-alueen koko ruutuina (luku [7.1](07-esitys.md#71-asettelu)) |
 | `text_of(key: name, …)` | `text` | kielen mukainen teksti paikkamerkit täytettyinä; vain kyselyssä, esityksessä, paneelissa, listavalikossa ja `naming`-kyselyssä (luku [7.3](07-esitys.md#73-tekstit)) |
 
 **Generointi** (pelin virta; `footprint` on kysely, muut muuttavat; `external` vain generaattorissa)
@@ -210,12 +217,13 @@ Samalla nimellä on useampi versio vain, kun ensimmäisen parametrin tyyppi erot
 | `draw` | pakka: muuttaa vastaanottajaa · taulu: kysely |
 | `add` | pakka ja pakka · entiteetti ja komponentti |
 | `remove` | entiteetti ja komponentti · sanakirja ja avain ([RS 2.6](../roguescript/02-yleinen-syntaksi.md#26-tyypit)) |
+| `sees` | entiteetti · kokoelma |
 | `spawn`, `scatter` | nimi → `entity` (`spawn`) · kortti, pakka tai taulu → `collection` |
 | `from` | kolmas argumentti luku: siirtymä · kolmas argumentti suunta: suunnassa |
 | `stop` | kahva · `track:` |
 | `rect` | kulma ja koko · kulma, leveys ja korkeus (argumenttien määrä) |
 
-Sama nimi on myös kahdessa lajissa: `at` (funktio, nimetty parametri ja `game`-kenttä), `label` ja `light` (komponentti ja funktio) sekä `repeat` (RogueScriptin silmukka ja moottorin toiminto). Sulut ja paikka erottavat ne, joten ne ovat sallittuja.
+Sama nimi on myös kahdessa lajissa: `at` (funktio, nimetty parametri ja `game`-kenttä), `label` ja `light` (komponentti ja funktio) sekä `repeat` (RogueScriptin silmukka ja moottorin toiminto), `join` (moottorin toiminto ja tapahtuma), `seats` (`game`-kenttä ja funktio) ja `turn` (tapahtuma, `game`-kenttä ja kartta-alueen määre). Sulut ja paikka erottavat ne, joten ne ovat sallittuja.
 
 ## 9.5 Ilmentymän elinkaari ja komponentit
 
@@ -223,7 +231,7 @@ Sama nimi on myös kahdessa lajissa: `at` (funktio, nimetty parametri ja `game`-
 
 **`remove(e, KOMP)`** poistaa komponentin kenttineen ja käsittelijöineen. Tapahtumaa ei lähetetä. Puuttuvan komponentin poisto ei tee mitään.
 
-- Moottorin komponentin poistolla on vaikutus: `ai` poistaa herätyksen, ellei `e` ole pelaaja; `timer` poistaa ajastimet; `render`, `sight` ja `light` lakkaavat piirtämästä, näkemästä ja valaisemasta; `revealed` lopettaa piirron näkökentän ulkopuolella.
+- Moottorin komponentin poistolla on vaikutus: `ai` poistaa herätyksen, ellei `e` ole pelaaja tai istuimen jäsen; `seat` irrottaa jäsenen istuimeltaan, ja herätys poistuu, ellei sillä ole `ai`-komponenttia; `timer` poistaa ajastimet; `render`, `sight` ja `light` lakkaavat piirtämästä, näkemästä ja valaisemasta; `revealed` lopettaa piirron näkökentän ulkopuolella.
 - Jos komponentin kentässä on kokoelma, sen jäsenet tuhotaan kuten `destroy`-kutsussa.
 
 **`add(e, KOMP(…))`** lisää komponentin. Moottori luo sen samoin kuin syntymässä (luku [3.2](03-pelin-tila.md#32-ilmentymän-syntyminen), askeleet 2–5): argumentit ovat ylikirjoitukset, puuttuvat kentät saavat oletusarvon, nopat heitetään ja kokoelmat täytetään.
@@ -254,6 +262,8 @@ Yleinen käsittelijä saa subjektin ensimmäisenä parametrina. Komponentin käs
 | `leave` | siirtyjä | `leave(who, p)` | `leave(p)` | siirron jälkeen; `p` on lähtöruutu | `move`, `travel` |
 | `arrive` | siirtyjä | `arrive(who, map, p)` | `arrive(map, p)` | kartalle saapumisen jälkeen; kohdekartta on ladattu ja sulatettu, ja `p` on saapumisruutu | `travel`, myös nykyiseen karttaan; `move` kokoelmasta |
 | `depart` | siirtyjä | `depart(who, map, p)` | `depart(map, p)` | lähdön jälkeen; `map` ja `p` ovat lähtökartta ja lähtöruutu | `travel`, myös nykyiseen karttaan; `move` kokoelmaan |
+| `join` | `game` | `join(seat)` | – | toiminnon lopussa siirtojen jälkeen, kun istuin liittyy kesken pelin (luku [8.2](08-syote.md#82-istuimet-ja-laitteet)) | liittyminen |
+| `part` | `game` | `part(seat)` | – | toiminnon lopussa siirtojen jälkeen, kun istuin poistuu; jäsenillä on vielä `seat` | `leave_seat`, latauksen ohitettu istuin |
 | `hear` | kuulija | `hear(who, s)` | `hear(s)` | herätyksen alussa ennen vuoroa, jokaisesta uudesta kuuluvasta äänestä kovimmasta alkaen (luku [6.8](06-ajo.md#68-äänet-ja-kuuleminen)) | ajoitin |
 
 **Sijainnin muutokset.** Moottori tekee siirron ensin ja lähettää tapahtumat sen jälkeen, joten käsittelijä näkee siirtyjän uudessa sijainnissaan.

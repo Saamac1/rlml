@@ -15,6 +15,7 @@ Kohtausten korutiineille ei tarvita suorituskohtaa, koska pysyvä tila muuttuu v
 | taulu | ei mitään: taulu on tilaton |
 | odottava komento (`wait N`, `wait scene`, `wait confirm` tai `open`) | komennon nimi, rungon tiiviste, argumentit, paikalliset nimet, kohta rakenteellisena polkuna (alla) ja `wait N` -odotuksessa jatkoherätys |
 | checkpoint | viimeisin checkpoint tilannekuvana (luku [10.2](10-aloitus-ja-checkpointit.md#102-checkpointit)) |
+| istuimet | istuinten numerot, jäsenyydet, ohjattavat ja `player`; laitteet eivät tallennu (moottoridokumentti, luku [5.2](../moottori/05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)) |
 | keskeneräinen tweeni pelin ajan taustakohtauksessa | jäljellä oleva reitti tai ruudut (luku [9.1](09-kohtaukset-ja-aikajanat.md#91-rivi)) |
 | profiili | aloitushetken tilannekuva ja pelikerran omat kirjoitukset; profiili itse tallentuu erikseen (luku [10.4](10-aloitus-ja-checkpointit.md#104-profiili-profile)) |
 
