@@ -105,9 +105,12 @@ impl<'m> Runner<'m> {
                     // a member: `wake` first, then the choice (M 6.1.10)
                     if self.woke.get(&e) != Some(&wake) {
                         // entries of turns that ended elsewhere (death, a
-                        // collection, another seat) go
-                        let s = &self.w.s;
-                        self.woke.retain(|&m, w| s.wake_of(m) == Some(*w));
+                        // collection, another seat) go, now and then: a new
+                        // entry never matches an old one anyway
+                        if self.woke.len() > 16 {
+                            let s = &self.w.s;
+                            self.woke.retain(|&m, w| s.wake_of(m) == Some(*w));
+                        }
                         self.woke.insert(e, wake);
                         self.wake_event(e)?;
                         // `wake` may end the turn: the member died or stopped acting

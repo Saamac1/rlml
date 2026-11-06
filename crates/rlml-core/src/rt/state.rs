@@ -397,9 +397,11 @@ impl State {
     }
 
     /// The one way membership changes (M 6.1.10): `e` joins seat `n` with
-    /// the engine component `seat` (D 5.3), or with `None` or a seat that is
-    /// not joined leaves its seat and loses the component. A controlled
-    /// member that moves to a seat without one stays controlled there.
+    /// the engine component `seat` (D 5.3), or with `None` leaves its seat
+    /// and loses the component. A seat that is not joined changes nothing.
+    /// A controlled member that moves to a seat without a living controlled
+    /// member stays controlled there; otherwise its old seat's next member
+    /// takes control, and `player` with it.
     pub fn set_seat(&mut self, e: EntityId, n: Option<SeatId>) {
         // a seat that is not joined changes nothing; callers report it
         if n.is_some_and(|n| self.seat(n).is_none()) || (n.is_some() && self.seat_of(e) == n) {
@@ -407,13 +409,14 @@ impl State {
         }
         let old = self.seat_of(e);
         let was_active = old.is_some_and(|o| self.seat(o).is_some_and(|s| s.active == Some(e)));
+        let free = n.is_some_and(|n| self.active(n).is_none());
         self.remove_member(e);
         let mut controlled = false;
         if let Some(n) = n
             && let Some(s) = self.seat_mut(n)
         {
             s.members.push(e);
-            if was_active && s.active.is_none() {
+            if was_active && free {
                 s.active = Some(e);
                 controlled = true;
             }
@@ -421,16 +424,17 @@ impl State {
         }
         // the old seat's control goes to its next living member, and
         // `player` follows when it was the moved one (M 6.1.10)
+        // only a move to another seat hands control over; leaving a seat
+        // (`remove(e, seat)`, a body swap) keeps `player` for the caller
         if was_active
             && !controlled
+            && n.is_some()
             && let Some(o) = old
+            && let Some(next) = self.seat_members(o).first().copied()
         {
-            let next = self.seat_members(o).first().copied();
-            if let Some(next) = next {
-                self.set_active(o, next);
-            }
+            self.set_active(o, next);
             if self.player == Some(e) {
-                self.player = next;
+                self.player = Some(next);
             }
         }
     }

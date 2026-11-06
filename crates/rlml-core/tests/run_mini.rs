@@ -1104,3 +1104,36 @@ fn an_unjoined_seat_changes_nothing() {
     assert_eq!((r.w.s.seat_of(a), r.w.s.active(1)), (Some(1), Some(a)), "seat 2 is not joined");
     assert!(r.w.s.get(a).has("seat"));
 }
+
+#[test]
+fn leaving_a_seat_keeps_the_player() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 1, |_| {});
+    let a = r.w.s.active(1).unwrap();
+    r.w.s.set_seat(a, None);
+    assert_eq!(r.w.s.player, Some(a), "`remove(player, seat)` leaves `player` to the caller (M 6.1.10)");
+    assert_eq!(r.w.s.seat_of(a), None);
+}
+
+#[test]
+fn a_dead_controlled_member_does_not_hold_a_seat() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 2, |_| {});
+    let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
+    let env = rlml_core::rt::eval::Env::new(rlml_core::rt::eval::BodyKind::Handler, "test", None, "test");
+    r.w.destroy(b, &env).unwrap();
+    r.w.s.set_seat(a, Some(2));
+    assert_eq!(r.w.s.active(2), Some(a), "seat 2 had no living controlled member");
+}
+
+#[test]
+fn the_view_and_the_screen_read_the_border_alike() {
+    for (size, border, want) in [("10x6", "single", (8, 4)), ("10x6", "thick", (10, 6)), ("10x6", "none", (10, 6)), ("2x1", "single", (2, 1))] {
+        let layout = format!("\nlayout L\n\n```\nm\n```\n\nlegend:\n- m map size {size}\n\npanels\n- map border {border}\n");
+        let f = files(&[("game.rlml", &format!("{SEATS}{layout}"))]);
+        let (m, _) = rlml_core::check_game(&f, "game.rlml");
+        assert_eq!(World::new(&m, 7).view_dims(), want, "size {size}, border {border}: an unknown style or a tiny area draws no border");
+    }
+}

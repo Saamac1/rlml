@@ -192,18 +192,19 @@ impl Model {
         def.and_then(|d| d.block())
     }
 
-    /// Does a `panels` row give area `name` a border (D 9.3)? A border takes
-    /// one cell on every side.
-    pub fn area_border(&self, name: &str) -> bool {
-        let mut border = false;
+    /// The border style `panels` rows give area `name` (D 9.3): the last
+    /// known style written for it, or `None`. The terminal draws it and the
+    /// core takes its cells off the map area, so both read it here.
+    pub fn panel_border(&self, name: &str) -> Option<&'static str> {
+        let mut border = None;
         for (_, item) in self.section_rows("panels") {
             let (_, row) = item.marker();
             if names::qualify(row.namespace.as_deref(), row.key()) != name && row.key() != name {
                 continue;
             }
             let words: Vec<&str> = row.tokens.iter().map(|t| t.text.as_str()).collect();
-            if let Some(b) = words.iter().position(|w| *w == "border").and_then(|i| words.get(i + 1)) {
-                border = *b != "none";
+            if let Some(b) = words.iter().position(|w| *w == "border").and_then(|i| words.get(i + 1)).and_then(|b| BORDER_STYLES.iter().find(|s| *s == b)) {
+                border = Some(*b);
             }
         }
         border
@@ -214,13 +215,16 @@ impl Model {
     pub fn map_area_cells(&self) -> (Option<i32>, Option<i32>) {
         let Some(b) = self.layout() else { return (None, None) };
         let cells = |s: Option<&str>| s.and_then(|s| s.parse::<i32>().ok()).filter(|&n| n > 0);
-        let inset = if self.area_border("map") { 2 } else { 0 };
+        let border = self.panel_border("map").is_some_and(|b| b != "none");
         for item in b.sub("legend") {
             let Ok((_, rest)) = glyph_char(item) else { continue };
             let words: Vec<&str> = rest.tokens.iter().map(|t| t.text.as_str()).collect();
             if words.first() == Some(&"map") {
                 let (w, h) = legend_size(&words);
-                return (cells(w).map(|n| (n - inset).max(1)), cells(h).map(|n| (n - inset).max(1)));
+                let (w, h) = (cells(w), cells(h));
+                // the terminal draws a border only on an area of 2x2 or more
+                let inset = if border && w.is_none_or(|n| n >= 2) && h.is_none_or(|n| n >= 2) { 2 } else { 0 };
+                return (w.map(|n| n - inset), h.map(|n| n - inset));
             }
         }
         (None, None)
@@ -495,27 +499,40 @@ pub fn row_tiles(rest: &RawItem) -> Vec<String> {
     out
 }
 
-/// The drawing character that starts a legend or `tiles.glyphs` row and the
 /// The written width and height of a layout legend row's words (D 11.1):
-/// `size WxH`, `size.width W` and `size.height H`, later words winning.
+/// `size WxH`, `size.width W` and `size.height H`, later words winning. A
+/// size word is a cell count, `N%` or `*`; a word that is not one leaves
+/// the earlier size, and a `size` pair counts only when both halves are.
 pub fn legend_size<'a>(words: &[&'a str]) -> (Option<&'a str>, Option<&'a str>) {
     let mut size = (None, None);
     for (i, w) in words.iter().enumerate() {
-        let next = words.get(i + 1).copied();
+        let next = words.get(i + 1).copied().filter(|n| size_word(n) || n.contains('x'));
         match *w {
             "size" => {
-                if let Some((a, b)) = next.and_then(|n| n.split_once('x')) {
+                if let Some((a, b)) = next.and_then(|n| n.split_once('x')).filter(|(a, b)| size_word(a) && size_word(b)) {
                     size = (Some(a), Some(b));
                 }
             }
-            "size.width" => size.0 = next,
-            "size.height" => size.1 = next,
+            "size.width" if next.is_some_and(size_word) => size.0 = next,
+            "size.height" if next.is_some_and(size_word) => size.1 = next,
             _ => {}
         }
     }
     size
 }
 
+/// A layout size word (D 11.1): cells `N` (1 or more), `N%` (1–100) or `*`.
+pub fn size_word(s: &str) -> bool {
+    match s.strip_suffix('%') {
+        Some(p) => p.parse::<u8>().is_ok_and(|n| (1..=100).contains(&n)),
+        None => s == "*" || s.parse::<usize>().is_ok_and(|n| n > 0),
+    }
+}
+
+/// Border styles of `panels` rows (D 9.3).
+pub const BORDER_STYLES: &[&str] = &["none", "single", "double", "rounded", "heavy", "ascii"];
+
+/// The drawing character that starts a legend or `tiles.glyphs` row and the
 /// rest of the row. A space is written `' '` (D 8.1, D 9.2).
 pub fn glyph_char(item: &RawItem) -> Result<(char, RawItem), String> {
     if item.text.starts_with("' '") {
@@ -612,5 +629,19 @@ mod tests {
         assert!(r.0.is_empty(), "{r:?}");
         assert_eq!(m.kind("STONE"), Some(Kind::Color));
         assert_eq!(m.settings()["round"].rest(1), "250ms");
+    }
+}
+
+#[cfg(test)]
+mod size_tests {
+    use super::*;
+
+    #[test]
+    fn legend_sizes() {
+        assert_eq!(legend_size(&["map", "size", "20x10"]), (Some("20"), Some("10")));
+        assert_eq!(legend_size(&["map", "size.width", "20", "size", "10xfoo"]), (Some("20"), None), "a broken pair is dropped whole");
+        assert_eq!(legend_size(&["map", "size", "24x*", "size.height", "50%"]), (Some("24"), Some("50%")));
+        assert_eq!(legend_size(&["map", "size.width", "0"]), (None, None));
+        assert!(size_word("100%") && !size_word("101%") && size_word("*") && !size_word("-3"));
     }
 }

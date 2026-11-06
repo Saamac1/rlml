@@ -93,11 +93,11 @@ fn panel_style(w: &World, name: &str) -> (Border, Style) {
         }
         let words: Vec<&str> = row.tokens.iter().map(|t| t.text.as_str()).collect();
         let after = |k: &str| words.iter().position(|x| *x == k).and_then(|i| words.get(i + 1));
-        if let Some(b) = after("border").and_then(|b| Border::parse(b)) {
-            border = b;
-        }
         style.fg = after("fg").and_then(|c| w.color(c, ns)).map(rgb).or(style.fg);
         style.bg = after("bg").and_then(|c| w.color(c, ns)).map(rgb).or(style.bg);
+    }
+    if let Some(b) = w.m.panel_border(name).and_then(Border::parse) {
+        border = b;
     }
     (border, style)
 }
