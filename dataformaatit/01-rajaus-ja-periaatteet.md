@@ -44,7 +44,8 @@ Datatiedostot viittaavat pelilogiikkaan muutamassa kohdassa. Näiden kohtien pai
 | paikalliset osiot | karttatiedosto | säännöt ja muut kartan vyöhykkeen osiot |
 | `collection ... modifies` | kokoelmakenttä | jäsenten muunnokset kantajaan |
 | checkpoint | tallennus (luku [3.2](03-tiedostot-ja-include.md#32-pelaajan-oma-data)) | milloin tilannekuva otetaan ja milloin se ladataan |
-| `begin` | aloitus (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)) | pelaajan luonti ja sijoitus |
+| `begin` | aloitus (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)) | pelaajan luonti ja sijoitus jokaiselle istuimelle |
+| `join` ja `part` | istuimet (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)) | liittyvän istuimen hahmo ja poistuvan istuimen jäsenet |
 | siirtyminen | nimiöt (luku [8.5](08-kartat-ja-prefabit.md#85-nimiöt-ryhmät-ja-johtimet)) | milloin ja mille kartalle siirrytään |
 
 - Datassa `when` esiintyy vain valikon kohdan ehdoissa `hide when` ja `disabled when`. Suodatin kirjoitetaan `where`, jossa `it` on jäsen (RogueScript, luku [5.3](../roguescript/05-funktiot-ja-lausekkeet.md#53-lausekkeet)), ja molemmat tulevat rivin loppuun. Pakan sisältöä ei rajata ehdoilla, vaan logiikka kokoaa pakan (luku [6.1](06-pakat-ja-taulut.md#61-pakka)).

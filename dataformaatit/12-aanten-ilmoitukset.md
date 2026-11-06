@@ -50,7 +50,7 @@ sounds
 - **Rivi** on `- NIMI level N [continuous] [effect ÄÄNI]`. Nimi on yleinen nimi, ja ryhmä `SOUND` on suositus.
 - **`level`** on voimakkuus lähteessä. Ääni heikkenee yhdellä tasolla ruutua kohden.
 - **`continuous`** tekee lajista jatkuvan äänen, joka soi kestonsa tai lähteensä elinajan. Ilman sitä laji on kertaääni.
-- **`effect`** viittaa ilmoitettuun ääneen (luku [12](#)), jonka moottori soittaa, kun pelaaja kuulee äänen.
+- **`effect`** viittaa ilmoitettuun ääneen (luku [12](#)), jonka moottori soittaa, kun pelaaja kuulee äänen. Moninpelissä ääni soi kerran, kun yksikin jäsen kuulee sen.
 - **Kuvaus** on tekstiavain `<LAJI>.DESC` (`SOUND.STEP.DESC Kuulet askelia.`).
 - **Lähde.** Moottorin komponentti `sound LAJI` tekee entiteetistä jatkuvan äänen lähteen (`- sound SOUND.MUSIC_BOX`). Kertaäänet ja kestolliset äänet syntyvät logiikasta funktiolla `noise` (moottoridokumentti, luku [6.8](../moottori/06-ajo.md#68-äänet-ja-kuuleminen)).
 - **Kuulija.** Moottorin komponentti `hearing [acuity N]` antaa entiteetille kuulon, ja `acuity` lisätään kuultuun tasoon (oletus 0).

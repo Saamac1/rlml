@@ -27,10 +27,12 @@ legend:
 - **Mitat:** legendin `size.width` ja `size.height` (luku [2.4](02-yleinen-syntaksi.md#24-arvot)) antavat alueen raitojen koon. Kun alue kattaa useamman raidan, mitta jaetaan niille raidoille, joilla ei vielä ole mittaa, niiden piirrosleveyden suhteessa. Ristiriitaiset mitat ja solumäärien ja prosenttien sekoittaminen samoilla raidoilla ovat latausvirheitä.
 - **Täyttö:** raita ilman mittaa täyttää jäljelle jäävän tilan muiden tällaisten kanssa niiden piirrosleveyden suhteessa. Piirros on asettelun pienin sallittu koko, ja alueen sisältö (paneelin piirros ja reuna) kasvattaa tarvittaessa sen raitoja. Jos kaikilla raidoilla on mitta, ylimääräinen tila menee viimeiselle.
 - **Alueen nimi** on yleinen nimi, johon paneelit (luvut [9.3](09-ulkoasu.md#93-paneelit-lokit-ja-esitys) ja [11.5](#115-paneelit)) ja loki (luku [11.4](#114-viestit-ja-loki)) viittaavat. Pieni nimi `map` on moottorin lähde, johon kartta piirretään.
-- **Hover-alue.** Pieni nimi `hover` on moottorin lähde, johon moottori kirjoittaa hiiren osoittimen, katselukursorin tai tähtäyksen kohdistimen alla olevan kohteen kuvauksen, mutta vain ruudusta, jonka pelaaja näkee tai muistaa. Asettelussa saa olla yksi `hover`-alue, ja toinen on latausvirhe (moottoridokumentti, luvut [7.1](../moottori/07-esitys.md#71-asettelu) ja [8.1](../moottori/08-syote.md#81-hiiri)).
+- **Hover-alue.** Pieni nimi `hover` on moottorin lähde, johon moottori kirjoittaa hiiren osoittimen, katselukursorin tai tähtäyksen kohdistimen alla olevan kohteen kuvauksen, mutta vain ruudusta, jonka pelaaja näkee tai muistaa. Moninpelissä näkökenttä on kaikkien jäsenten yhteinen. Asettelussa saa olla yksi `hover`-alue, ja toinen on latausvirhe (moottoridokumentti, luvut [7.1](../moottori/07-esitys.md#71-asettelu) ja [8.1](../moottori/08-syote.md#81-hiiri)).
 - **Paneelin parametrit.** Kun alueeseen piirretään parametrillinen paneeli (luku [11.5](#115-paneelit)), argumentit annetaan alueen nimen perään RogueScriptin muodossa (`- s STATS(player)`). Argumentit ovat kyselylausekkeita, jotka moottori laskee jokaisessa välikehyksessä.
 
-**Kameran seuranta.** Legendin `map`-rivi voi saada seurantatavan: `- m map follow center` (oletus) tai `- m map follow margin 4`. Kamera seuraa oletuksena pelaajaa, ja logiikka vaihtaa kohteen funktiolla `follow` (moottoridokumentti, luku [7.1](../moottori/07-esitys.md#71-asettelu)).
+**Kameran seuranta.** Legendin `map`-rivi voi saada seurantatavan: `- m map follow center` (oletus) tai `- m map follow margin 4`. Kamera seuraa oletuksena pelaajaa, moninpelissä kartta-alueen kartan jäsenten rajaavaa suorakulmiota, ja logiikka vaihtaa kohteen funktiolla `follow` (moottoridokumentti, luku [7.1](../moottori/07-esitys.md#71-asettelu)).
+
+**Vuoron merkki.** Kun jäseniä on useampi, moottori korostaa vuorossa olevan jäsenen ruudun. Kartta-alueen rivin määre `turn TYYLI` valitsee korostuksen, esimerkiksi `- m map follow center turn reverse`, ja ilman määrettä korostus on käänteiset värit.
 
 **Ruudukkomuoto.** Asettelun voi kirjoittaa myös alueiden nimistä koottuna ruudukkona, kun merkkipiirros on hankala. Tämä tekee saman asettelun kuin esimerkki yllä:
 
@@ -148,8 +150,8 @@ keys SCENE
 - rewind backspace
 ```
 
-- **Otsikko:** `keys KONTEKSTI [modal | passthrough]` ja `pad KONTEKSTI [deadzone P%]`.
-- **Rivi** on `- TOIMINTO näppäimet...`. Iso nimi on komento (`MOVE.NORTH`, `QUAFF`) ja pieni nimi moottorin toiminto (`save`, `quit`, `pass`, `help`, `confirm`, `back`, `close`, `resume`, `skip`, `restart`, `rewind`, `repeat`, `look`, `travel_to`). Kirjainkoko erottaa ne, joten samannimistä toimintoa ja komentoa ei voi syntyä.
+- **Otsikko:** `keys KONTEKSTI [modal | passthrough] [keyboard N]` ja `pad KONTEKSTI [deadzone P%]`.
+- **Rivi** on `- TOIMINTO näppäimet...`. Iso nimi on komento (`MOVE.NORTH`, `QUAFF`) ja pieni nimi moottorin toiminto (`save`, `quit`, `pass`, `help`, `confirm`, `back`, `close`, `resume`, `skip`, `restart`, `rewind`, `repeat`, `look`, `travel_to`, `join`, `leave_seat`). Kirjainkoko erottaa ne, joten samannimistä toimintoa ja komentoa ei voi syntyä.
 - **Kohtauksen toiminnot** `skip`, `restart` ja `rewind` toimivat kontekstissa `SCENE` (RogueScript, luku [9.8](../roguescript/09-kohtaukset-ja-aikajanat.md#98-luonnos-ohitus-ja-alusta-aloitus)).
 - **Vaihtoehdot** erotetaan välilyönnillä. Muuntonäppäimet ovat `ctrl`, `shift` ja `alt`, ja ne yhdistetään `+`-merkillä. Merkit `+` ja `-` kirjoitetaan `plus` ja `minus`. Erikoisnäppäimet ovat muun muassa `tab`, `enter`, `space`, `esc`, `backspace`, nuolet `up` `down` `left` `right` ja numeronäppäimistön `num0`…`num9`; `shift+tab` on tab vaihtonapilla. Vaihdetut merkit kirjoitetaan sellaisenaan (`?`, `#`).
 - **Numeronäppäimistö päätteessä.** Pääte ei erota numeronäppäimistöä tavallisista numeroista, joten päätteessä `numN` on sama näppäin kuin `N`: `num8`-sidonta laukeaa myös tavallisesta `8`-näppäimestä. Alusta, joka erottaa ne, käyttää niitä erikseen. Saman kontekstin `num8` ja `8` eri toiminnoille on päätteessä ristiriita, ja lataus varoittaa siitä, koska muualla sidonta on kelvollinen.
@@ -157,11 +159,32 @@ keys SCENE
 - **Gamepadin painikkeet** ovat paikkapohjaisia: `south`, `east`, `west`, `north`, `lb`, `rb`, `lt`, `rt`, `start`, `select`, `lstick`, `rstick` ja `dpad.up` jne. Tatit ovat suuntina (`lstick.up`).
 - **Ristiriita** samassa kontekstissa on virhe. Eri konteksteissa sama näppäin saa olla, mutta jos `ALWAYS`-kontekstin näppäin on sidottu myös muualla, lataus varoittaa.
 - **Kontekstit pinoutuvat** ajon aikana. Oletus on `modal`, jolloin vain päällimmäinen konteksti saa syötteet. `passthrough` päästää läpi syötteet, joita konteksti ei sido. `pad`-osio seuraa vastaavan `keys`-osion asetusta.
-- **Moottorin kontekstit** ovat `MENU`, `DIALOGUE`, `SCENE`, `AIM`, `DIRECTION`, `LOOK` ja `ALWAYS`. Pelin peruskonteksti nimetään `game`-lohkon kentällä `keys` (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)), ja se on pinon pohjalla myös pelin alkuvalikossa. Moottorin konteksteilla on oletussidonnat: valikossa ja dialogissa `cursor.north` `up k`, `cursor.south` `down j`, `confirm` `enter space` ja `back` `esc backspace`; kohtauksessa `confirm` `enter space`, `skip` `tab`, `restart` `r` ja `rewind` `backspace`; kohdistuksessa ja katselussa (`AIM`, `LOOK`) `cursor.*` nuolet, `hjklyubn` ja numeronäppäimistö, `next` `tab`, `prev` `shift+tab`, `confirm` `enter space` ja `back` `esc`. Peliohjaimella `dpad` liikuttaa kohdistinta, `south` vahvistaa ja `east` palaa. Pelin peruskontekstissa `travel_to` on oletuksena `click`. Valikoissa hiiri toimii ilman sidontoja: osoitin korostaa rivin, `click` valitsee, rulla vierittää ja `click` valikon ulkopuolella on `back`. Modaalinen paneeli käyttää kontekstin `MENU` sidontoja (luku [11.5](#115-paneelit)). Pelin oma rivi samalle toiminnolle samassa kontekstissa korvaa oletuksen (moottoridokumentti, luvut [8](../moottori/08-syote.md) ja [8.1](../moottori/08-syote.md#81-hiiri)).
+- **Moottorin kontekstit** ovat `MENU`, `DIALOGUE`, `SCENE`, `AIM`, `DIRECTION`, `LOOK`, `JOIN` ja `ALWAYS`. Pelin peruskonteksti nimetään `game`-lohkon kentällä `keys` (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)), ja se on pinon pohjalla myös pelin alkuvalikossa. Moottorin konteksteilla on oletussidonnat: valikossa ja dialogissa `cursor.north` `up k`, `cursor.south` `down j`, `confirm` `enter space` ja `back` `esc backspace`; kohtauksessa `confirm` `enter space`, `skip` `tab`, `restart` `r` ja `rewind` `backspace`; kohdistuksessa ja katselussa (`AIM`, `LOOK`) `cursor.*` nuolet, `hjklyubn` ja numeronäppäimistö, `next` `tab`, `prev` `shift+tab`, `confirm` `enter space` ja `back` `esc`. Peliohjaimella `dpad` liikuttaa kohdistinta, `south` vahvistaa ja `east` palaa. Pelin peruskontekstissa `travel_to` on oletuksena `click`. Valikoissa hiiri toimii ilman sidontoja: osoitin korostaa rivin, `click` valitsee, rulla vierittää ja `click` valikon ulkopuolella on `back`. Modaalinen paneeli käyttää kontekstin `MENU` sidontoja (luku [11.5](#115-paneelit)). Pelin oma rivi samalle toiminnolle samassa kontekstissa korvaa oletuksen (moottoridokumentti, luvut [8](../moottori/08-syote.md) ja [8.1](../moottori/08-syote.md#81-hiiri)).
 - **Pelaajan sidonnat** kirjoitetaan `overrides/keys.rlml`-tiedostoon, ja ne paikkaavat pelin sidonnat riveittäin (luvut [3.2](03-tiedostot-ja-include.md#32-pelaajan-oma-data) ja [4.8](04-nimiavaruudet.md#48-lohkojen-yhdistäminen-patch-new-ja-drop)). Kirjasto tai modi lisää sidontoja samoin `patch keys`-lohkolla.
 - `ALWAYS` on konteksti, jota moottori kuuntelee kaikkien muiden kontekstien päällä ja myös silloin, kun peli etenee ilman pelaajan vuoroa. Siihen sidotaan taukovalikko, jotta pelistä pääsee aina pois. Sama sidonta sulkee avoimen valikon; `open NIMI stack` -sidonta avaa sen sijaan aina uuden kerroksen. Lataus varoittaa, jos `ALWAYS`-kontekstin näppäin on sidottu myös muualla (moottoridokumentti, luku [8](../moottori/08-syote.md)).
 - `pass` ajaa seuraavan kierroksen heti, kun pelaajalla ei ole vuoroa (luku [3.2](03-tiedostot-ja-include.md#32-pelaajan-oma-data)).
 - **Toistolaskuri.** `repeat` avaa lukukentän. Numerot kirjoittavat kenttään sidonnoista riippumatta, myös numeronäppäimistön numerot, ja ensimmäinen muu näppäin päättää sen ja tulkitaan komennon näppäimeksi: `#20s` etsii 20 kertaa. Luku menee komennon `count`-parametriin (RogueScript, luku [7.1](../roguescript/07-komennot-ja-tekoaly.md#71-komennot)), ja `back` peruu (moottoridokumentti, luku [8](../moottori/08-syote.md)).
+
+**Näppäimistöosat.** Paikallisessa moninpelissä (`seats`, luku [3.3](03-tiedostot-ja-include.md#33-aloitus)) näppäimistön voi jakaa usealle istuimelle. Osa on näppäimistön sidontojen joukko, ei istuinnumero, koska istuinten numerot riippuvat liittymisjärjestyksestä.
+
+```
+keys GAME
+- MOVE.NORTH k up
+- SWITCH tab
+
+keys GAME keyboard 2
+- MOVE.NORTH w
+- SWITCH q
+- join e
+```
+
+- **Osa 1** on osio ilman `keyboard`-määrettä. `keyboard N` on lisäosa. Osio tunnistetaan kontekstin nimestä ja osan numerosta, joten `keys GAME` ja `keys GAME keyboard 2` ovat eri lohkoja yhdistämisessä ja pelaajan `overrides/`-paikkauksessa. `modal` ja `passthrough` annetaan osassa 1, ja lisäosan eri arvo on latausvirhe.
+- **Ristiriita.** Sama näppäin kahdessa näppäimistöosassa samassa kontekstissa on latausvirhe, koska moottori ei tietäisi, kenen painallus se on.
+- **Muut kontekstit.** Konteksti ilman lisäosia, kuten moottorin `MENU` oletuksineen, käyttää osan 1 sidontoja kaikille näppäimistön istuimille, ja ohjaajan rajaa reititys (moottoridokumentti, luku [8](../moottori/08-syote.md)).
+- **Peliohjaimet** käyttävät samaa `pad`-osiota. Laite erottaa istuimet, joten ohjainkohtaisia osioita ei tarvita. **Hiiri** kuuluu osan 1 istuimelle.
+- **`join`** liittää uuden istuimen. Moottori sitoo sen vain kontekstissa `JOIN` (`enter`, peliohjaimella `start`). Pelin peruskontekstissa peli sitoo sen itse jokaiseen osaan, josta liittyminen kesken pelin on mahdollista, ja lisäosa ilman `join`-sidontaa saa varoituksen. `leave_seat` poistaa istuimen, ja se kuuluu pelin taukovalikkoon.
+- **Konteksti `JOIN`** on uuden pelin liittymisruutu. Liittämättömältä laitteelta `enter` on `join`, liitetyltä `confirm`, ja `back` poistaa laitteen istuimen. Ladatussa pelissä `skip` ohittaa tallennetun istuimen.
+- `keyboard N` yhden istuimen pelissä saa varoituksen.
 
 **Konteksti `DIRECTION`** on moottorin konteksti parametrin lähteelle `ask` (RogueScript, luku [7.1](../roguescript/07-komennot-ja-tekoaly.md#71-komennot)). Se käyttää kontekstin `AIM` suuntasidontoja, ja `back` peruu komennon.
 
