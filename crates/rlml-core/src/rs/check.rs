@@ -742,8 +742,10 @@ impl Body<'_> {
         if CONTEXT.contains(&w) || VALUES.contains(&w) {
             return Ty::Unknown;
         }
-        // an engine component's name, as in `remove(e, seat)` (M 9.5)
-        if ENGINE_COMPONENTS.contains(&w) {
+        // an engine component's name, as in `remove(e, seat)` (M 9.5); an
+        // engine function of the same name (`label`, `light`) still needs
+        // its call
+        if ENGINE_COMPONENTS.contains(&w) && engine_function(w).is_none() {
             return Ty::Name;
         }
         if DIRS.contains(&w) {

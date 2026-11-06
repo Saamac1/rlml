@@ -224,8 +224,8 @@ impl Model {
                 let (w, h) = (cells(w), cells(h));
                 // the terminal draws a border only on an area of 2x2 or more
                 let inset = if border && w.is_none_or(|n| n >= 2) && h.is_none_or(|n| n >= 2) { 2 } else { 0 };
-                // at least one cell, so logic never divides by or loops to 0
-                return (w.map(|n| (n - inset).max(1)), h.map(|n| (n - inset).max(1)));
+                // as on the screen, a border may leave no cells (D 11.1)
+                return (w.map(|n| n - inset), h.map(|n| n - inset));
             }
         }
         (None, None)

@@ -1090,8 +1090,11 @@ fn control_stays_on_the_seat_a_member_leaves() {
     r.run(0).unwrap();
     assert!(r.input(1, &cmd("TO_SEAT_2")).unwrap());
     assert_eq!((r.w.s.active(1), r.w.s.active(2)), (Some(c), Some(b)), "seat 1's next member takes control");
-    assert_eq!(r.w.s.player, Some(c), "`player` follows the seat, not the moved member");
     assert_eq!(r.w.s.seat_of(a), Some(2));
+    // the scheduler sets `player`: whoever waits for input is controlled
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    let n = r.awaiting().unwrap();
+    assert_eq!(r.w.s.player, r.w.s.active(n), "`player` is the awaited seat's controlled member");
 }
 
 #[test]
@@ -1130,7 +1133,7 @@ fn a_dead_controlled_member_does_not_hold_a_seat() {
 
 #[test]
 fn the_view_and_the_screen_read_the_border_alike() {
-    for (size, border, want) in [("10x6", "single", (8, 4)), ("10x6", "thick", (10, 6)), ("10x6", "none", (10, 6)), ("2x1", "single", (2, 1)), ("2x2", "single", (1, 1))] {
+    for (size, border, want) in [("10x6", "single", (8, 4)), ("10x6", "thick", (10, 6)), ("10x6", "none", (10, 6)), ("2x1", "single", (2, 1)), ("2x2", "single", (0, 0))] {
         let layout = format!("\nlayout L\n\n```\nm\n```\n\nlegend:\n- m map size {size}\n\npanels\n- map border {border}\n");
         let f = files(&[("game.rlml", &format!("{SEATS}{layout}"))]);
         let (m, _) = rlml_core::check_game(&f, "game.rlml");
@@ -1148,13 +1151,13 @@ fn a_controlled_member_leaving_hands_control_on() {
     let a = r.w.s.active(1).unwrap();
     r.w.s.player = Some(a);
     r.w.s.set_seat(a, None);
-    assert_eq!((r.w.s.active(1), r.w.s.player), (Some(c), Some(c)), "one rule for leaving and moving (M 6.1.10)");
-    // the last member moving to a controlled seat stays `player` there
+    assert_eq!(r.w.s.active(1), Some(c), "one rule for leaving and moving (M 6.1.10)");
+    assert_eq!(r.w.s.player, Some(a), "`set_seat` leaves `player` to the scheduler");
+    // moving to a seat with a controlled member: not controlled there
     let mut r = seats_game(&m, 2, |_| {});
     let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
-    r.w.s.player = Some(a);
     r.w.s.set_seat(a, Some(2));
-    assert_eq!((r.w.s.active(2), r.w.s.player), (Some(b), Some(a)), "nobody is left on seat 1");
+    assert_eq!((r.w.s.active(1), r.w.s.active(2)), (None, Some(b)), "nobody is left on seat 1");
 }
 
 #[test]
@@ -1167,4 +1170,35 @@ fn removing_the_players_seat_ends_its_turns() {
     assert!(r.player(&cmd("UNSEAT")).unwrap());
     assert_eq!(r.w.s.wake_of(a), None, "no `seat` and no `ai`: no longer an actor (M 6.1.10)");
     assert_eq!(r.run(1).unwrap(), Status::NoPlayer { rounds: 1 });
+}
+
+#[test]
+fn only_the_awaited_seat_gives_input() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 2, |_| {});
+    let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
+    r.run(0).unwrap();
+    assert!(r.input(1, &cmd("TO_SEAT_2")).unwrap(), "a free command moves `a` to seat 2");
+    assert!(r.input(2, &cmd("STD.WAIT")).is_err(), "no input before `run` chooses the turn");
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.awaiting(), r.w.s.player), (Some(2), Some(b)), "seat 2's controlled member, not `a`");
+    assert!(r.w.s.seat_of(a) == Some(2) && r.w.s.active(2) == Some(b));
+}
+
+#[test]
+fn a_swapped_out_body_gets_no_wake() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 1, |_| {});
+    let a = r.w.s.active(1).unwrap();
+    let at = r.w.s.maps[0].label("P3")[0];
+    let golem = r.w.spawn("HERO", &[], Place::Map(Pos { map: 0, x: at.0, y: at.1 })).unwrap();
+    r.w.control(golem, None);
+    assert_eq!((r.w.s.seat_of(a), r.w.s.active(1), r.w.s.player), (None, Some(golem), Some(golem)), "a body swap (RS 10.1)");
+    r.w.s.schedule(golem, 0);
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert!(r.input(1, &cmd("STD.WAIT")).unwrap());
+    r.run(0).unwrap();
+    assert_eq!(wakes(&r.w, a), 0, "the old body is no actor: no `wake` (M 6.1.10)");
 }

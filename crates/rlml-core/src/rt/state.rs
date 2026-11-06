@@ -400,9 +400,9 @@ impl State {
     /// the engine component `seat` (D 5.3), or with `None` leaves its seat
     /// and loses the component. A seat that is not joined changes nothing.
     /// A controlled member that moves to a seat without a living controlled
-    /// member stays controlled there. Its old seat's next living member
-    /// takes control in any case, and `player` with it when `e` is no
-    /// longer controlled.
+    /// member stays controlled there, and its old seat's next living member
+    /// takes control. `player` is not touched here: the scheduler sets it
+    /// when a member waits for input, and `control` on a body swap.
     pub fn set_seat(&mut self, e: EntityId, n: Option<SeatId>) {
         // a seat that is not joined changes nothing; callers report it
         if n.is_some_and(|n| self.seat(n).is_none()) || (n.is_some() && self.seat_of(e) == n) {
@@ -412,29 +412,22 @@ impl State {
         let was_active = old.is_some_and(|o| self.seat(o).is_some_and(|s| s.active == Some(e)));
         let free = n.is_some_and(|n| self.active(n).is_none());
         self.remove_member(e);
-        let mut controlled = false;
         if let Some(n) = n
             && let Some(s) = self.seat_mut(n)
         {
             s.members.push(e);
             if was_active && free {
                 s.active = Some(e);
-                controlled = true;
             }
             self.get_mut(e).set(ComponentValue { name: "seat".into(), fields: vec![("n".into(), Value::Number(n as i64))] });
         }
-        // one rule (M 6.1.10): a controlled member that leaves its seat, for
-        // whatever reason, hands control to the old seat's next living
-        // member; `player` follows unless `e` stays controlled elsewhere.
-        // With nobody left `player` stays on `e`, like a dead player.
+        // a controlled member that leaves its seat, for whatever reason,
+        // hands control to the seat's next living member (M 6.1.10)
         if was_active
             && let Some(o) = old
             && let Some(next) = self.seat_members(o).first().copied()
         {
             self.set_active(o, next);
-            if self.player == Some(e) && !controlled {
-                self.player = Some(next);
-            }
         }
     }
 

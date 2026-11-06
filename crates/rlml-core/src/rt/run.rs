@@ -205,6 +205,12 @@ impl<'m> Runner<'m> {
             self.waiting.remove(&e);
             return Ok(());
         }
+        // an instance that stopped acting (a body swap, a lost `seat` or
+        // `ai`) gets no `wake` (M 6.1.10)
+        if !self.w.s.is_actor(e) {
+            self.waiting.remove(&e);
+            return Ok(());
+        }
         self.wake_event(e)?;
         self.choose(e)
     }
@@ -249,9 +255,9 @@ impl<'m> Runner<'m> {
             return Ok(true);
         }
         // the command ended its actor's acting (`remove(actor, seat)`): no
-        // next wake (M 6.1.10)
+        // next wake, and its turn is over even if it failed (M 6.1.10)
         if !self.w.s.is_actor(e) {
-            return Ok(!matches!(outcome, Outcome::Failed { .. }));
+            return Ok(true);
         }
         let now = self.clock(at.map);
         let speed = self.w.speed(e);
@@ -300,7 +306,9 @@ impl<'m> Runner<'m> {
     /// (M 6.1.5). Input from a seat that is not awaited is an error; the
     /// front end drops such presses (M 8.2).
     pub fn input(&mut self, n: SeatId, cmd: &CommandValue) -> RtResult<bool> {
-        if self.awaiting.is_some_and(|a| a != n) {
+        // only the seat `run` returned `Input` for: the member it waits for
+        // was the controlled one when the turn was chosen (M 6.1.10)
+        if self.awaiting != Some(n) {
             return Err(format!("seat {n} has no turn now"));
         }
         let p = self.w.s.player.ok_or("no player")?;
