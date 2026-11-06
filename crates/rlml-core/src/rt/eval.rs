@@ -361,9 +361,10 @@ impl World<'_> {
             Subscript(a, i) => {
                 let (av, iv) = (self.eval(a, env)?, self.eval(i, env)?);
                 match av {
-                    Value::List(l) => {
+                    // a collection reads by place too, read-only (RS 2.6)
+                    Value::List(l) | Value::Collection(l) => {
                         let k = self.number(iv, env, i.pos)?;
-                        l.get(k as usize).cloned().unwrap_or(Value::None)
+                        usize::try_from(k).ok().and_then(|k| l.get(k).cloned()).unwrap_or(Value::None)
                     }
                     Value::Dict(d) => d.into_iter().find(|(k, _)| *k == iv).map(|(_, v)| v).unwrap_or(Value::None),
                     v => return Err(self.rt_err(env, e.pos, format!("`[…]` reads a list or dictionary, not a {}", v.type_name()))),

@@ -662,7 +662,18 @@ fn a_whole_run_is_reproducible() {
 /// Plays keys from seed 7 and compares the transcript with
 /// `tests/golden/NAME.txt`; `RLML_UPDATE_GOLDEN=1` writes it instead.
 fn golden(name: &str, keys: &str) {
-    let f = mini();
+    golden_of(mini(), name, keys)
+}
+
+/// The group example (esimerkit/ryhma) with the standard library.
+fn ryhma() -> MemFiles {
+    let mut f = files(&[]);
+    let game = repo().join("esimerkit/ryhma");
+    read_tree(&game, &game, &mut f.game);
+    f
+}
+
+fn golden_of(f: MemFiles, name: &str, keys: &str) {
     let m = model(&f);
     let keys: Vec<&str> = keys.split_whitespace().collect();
     let got = rlml_core::rt::play::transcript(&m, 7, &keys).unwrap();
@@ -1201,4 +1212,31 @@ fn a_swapped_out_body_gets_no_wake() {
     assert!(r.input(1, &cmd("STD.WAIT")).unwrap());
     r.run(0).unwrap();
     assert_eq!(wakes(&r.w, a), 0, "the old body is no actor: no `wake` (M 6.1.10)");
+}
+
+
+#[test]
+fn the_group_example() {
+    let f = ryhma();
+    let m = model(&f);
+    let mut r = Runner::new(started(&m));
+    let robin = kinds(&r.w, "ROBIN")[0];
+    let heroes = kinds(&r.w, "HERO");
+    assert_eq!(r.w.s.seats.len(), 2, "`seats 2..2`");
+    assert_eq!(r.w.s.seat_members(1), [robin, heroes[0]], "Robin is a data member of seat 1 (D 5.3)");
+    assert_eq!(r.w.s.seat_members(2), [heroes[1]]);
+    assert_eq!(r.w.view_dims(), (20, 8), "`- m map size 20x8`");
+    assert!(r.w.s.leash);
+    // seat 1 switches to Robin: free, and seat 2 plays next
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(r.awaiting(), Some(1));
+    assert!(r.player(&cmd("STD.SWITCH")).unwrap());
+    assert_eq!(r.w.s.active(1), Some(robin));
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(r.awaiting(), Some(2));
+}
+
+#[test]
+fn golden_the_group_example() {
+    golden_of(ryhma(), "ryhma", "l l tab l s s s s");
 }

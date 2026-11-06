@@ -1,0 +1,20 @@
+# ASCII-tyyli
+
+colors
+- STONE 7a7a8e
+- DARK 1a1a22
+- FUR a07040
+- LEAF 60c060
+
+tiles.glyphs ascii
+- default ? fg ff00ff
+- WALL # fg STONE bg DARK
+- FLOOR . fg 4a4a5a
+- GLYPH.HERO @ fg ffffff
+- GLYPH.ROBIN R fg LEAF
+- GLYPH.RAT r fg FUR
+
+layers
+- GROUND map
+- THINGS entities where it has render
+- FOG fog

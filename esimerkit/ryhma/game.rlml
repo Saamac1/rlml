@@ -1,0 +1,49 @@
+# Ryhmä
+
+> Paikallisen moninpelin esimerkki (RLML-moninpeli, M 6.1.10). Kaksi
+> istuinta pelaa vuorotellen samalla näppäimistöllä. Istuimella 1 on
+> lisäksi seuralainen Robin, jota pelaaja voi ohjata vaihtamalla
+> (`tab`). Kartta-alueella on kirjoitettu koko, joten vakiokirjaston
+> talutushihna pitää ryhmän kartta-alueen sisällä. Pelissä ei ole yhtään
+> RogueScript-riviä.
+
+game RYHMA
+- start CAVE
+- at SPAWN
+- keys GAME
+- PLAYER HERO
+- seats 2..2
+- party switch
+- leash on
+
+include lib/std.rlml
+include maps/*
+include ui/*
+include style/*
+include text/*
+
+settings
+- style ascii
+- language fi
+- round 250ms
+
+tiles
+- WALL blocks move sight sound
+- default blocks none lit
+
+entity HERO extends STD.DEFAULT.PLAYER
+- render GLYPH.HERO
+
+entity ROBIN extends HERO
+- seat 1
+- render GLYPH.ROBIN
+
+entity RAT
+- HP now 3
+- MELEE 1d2
+- blocks move
+- ALIGNMENT -100
+- sight radius 6
+- hearing
+- ai behavior HUNTER
+- render GLYPH.RAT

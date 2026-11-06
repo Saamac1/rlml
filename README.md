@@ -82,6 +82,7 @@ RLML on roguelike-pelien kuvauskieli: pelin data kirjoitetaan tekstitiedostoina 
 ## Esimerkit
 
 - [Minipeli](esimerkit/mini/) (`esimerkit/mini/`): vakiokirjaston valmiustestin peli kokonaisena, kaksi luolaa, rotat ja portaat ilman RogueScriptiä ([STD 12](vakiokirjasto/12-minipeli-std-lla.md)).
+- [Ryhmä](esimerkit/ryhma/) (`esimerkit/ryhma/`): paikallisen moninpelin esimerkki ([RLML-moninpeli](RLML-moninpeli.md), [M 6.1.10](moottori/06-ajo.md#6110-istuimet-ja-ryhmä)). Kaksi istuinta pelaa vuorotellen samalla näppäimistöllä. Istuimella 1 on seuralainen Robin, jota pelaaja voi ohjata (`tab` ja `shift+tab`), ja talutushihna pitää ryhmän 20×8 solun kartta-alueen sisällä.
 
 ## Lataaja
 
@@ -117,6 +118,8 @@ Minipelin näppäimet tulevat sen tiedostosta [`ui/main.rlml`](esimerkit/mini/ui
 Valikossa `j` `k` ja nuolet liikuttavat kursoria, `enter` ja `space` valitsevat ja `esc` tai `backspace` palaa. Pelin aika pysähtyy valikon ajaksi. Taukovalikon Lopeta-kohta päättää pelikerran ja avaa moottorin valikon, josta voi aloittaa uuden pelin uudella siemenellä tai poistua. Jos pelissä on `title`-valikko ([D 3.3](dataformaatit/03-tiedostot-ja-include.md#33-aloitus)), peli alkaa siitä ja Lopeta palaa siihen.
 
 Kun pelaaja kuolee, maailma jatkaa kierros kerrallaan pelin `round`-tahdissa. Asetus `idle` antaa vuoron komennolle tai pelaajan tekoälylle, jos näppäintä ei paineta ([D 3.2](dataformaatit/03-tiedostot-ja-include.md#32-pelaajan-oma-data)). Ajon virhe lopettaa pelin, ja se tulostetaan päätteen palauttamisen jälkeen tiedoston, rivin ja sarakkeen kanssa.
+
+**Moninpeli.** Ryhmäesimerkissä (`cargo run -p rlml -- play esimerkit/ryhma`) näppäimet ohjaavat sitä istuinta, jonka vuoro on: ensin istuin 1, sitten istuin 2. Kumpikin istuin käyttää samoja näppäimiä, `tab` vaihtaa istuimen 1 ohjattavaa Robinin ja sankarin välillä, ja `shift+tab` vaihtaa takaisin. Näppäimistöosat, peliohjaimet, liittymisruutu ja kesken pelin liittyminen puuttuvat vielä.
 
 Puuttuu vielä: listavalikot, paneelien kentät, kohtaukset ja dialogit, kohdistus, tallennus, äänet ja hiiri.
 

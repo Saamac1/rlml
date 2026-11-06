@@ -1,0 +1,38 @@
+# Käyttöliittymä
+
+> Kartta-alue on 20×8 solua, ja talutushihna käyttää sen kokoa
+> (`view_width`, `view_height`). Alla kolmen rivin loki.
+
+layout MAIN
+
+```
+m
+l
+```
+
+legend:
+- m map size 20x8
+- l LOG size.height 3
+
+log LOG history 50
+- STD.MESSAGE.COMBAT
+- STD.MESSAGE.SENSE
+
+menu PAUSE
+- RESUME
+- QUIT
+
+## Näppäimet
+
+keys ALWAYS
+- open PAUSE esc
+
+keys GAME
+- MOVE.NORTH k up
+- MOVE.SOUTH j down
+- MOVE.WEST h left
+- MOVE.EAST l right
+- WAIT s
+- SWITCH tab
+- SWITCH.PREV shift+tab
+- pass z
