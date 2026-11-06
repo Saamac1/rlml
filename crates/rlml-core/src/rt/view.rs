@@ -173,7 +173,12 @@ impl World<'_> {
                             }
                         }
                         let under = grid[p.y as usize][p.x as usize].bg;
-                        let mut look = self.look(&tile);
+                        // a seat's member looks for `TILE.SEATn` first, so a
+                        // style can tell the seats apart (D 9.2, M 7.2)
+                        let mut look = match self.s.seat_of(e) {
+                            Some(n) => self.look(&format!("{tile}.SEAT{n}")),
+                            None => self.look(&tile),
+                        };
                         look.bg = look.bg.or(under);
                         grid[p.y as usize][p.x as usize] = look;
                         drawn[p.y as usize][p.x as usize] = true;

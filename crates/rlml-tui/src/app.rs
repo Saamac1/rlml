@@ -87,7 +87,16 @@ pub struct App<'m> {
     pub frames: Vec<Frame>,
     /// The last in-between frame, to keep only changed moments.
     last_frame: Option<Frame>,
+    /// The time of the last `tick`, and the member whose turn started
+    /// when, for the turn marker's blink (M 7.1).
+    clock: Duration,
+    turn_start: Option<(rlml_core::rt::value::EntityId, Duration)>,
 }
+
+/// The turn marker flashes on for this long when a turn starts, then
+/// blinks with this period, half on and half off.
+const MARK_FLASH: Duration = Duration::from_millis(600);
+const MARK_BLINK: Duration = Duration::from_millis(800);
 
 impl<'m> App<'m> {
     /// A new game with `seed`, or the game's `title` menu when it has one.
@@ -125,6 +134,8 @@ impl<'m> App<'m> {
             last_key: Duration::ZERO,
             frames: vec![],
             last_frame: None,
+            clock: Duration::ZERO,
+            turn_start: None,
         };
         match app.title() {
             Some(title) => {
@@ -192,7 +203,29 @@ impl<'m> App<'m> {
     }
 
     /// The frame for the window now.
+    /// The member to mark now: with more than one member, the one whose
+    /// input is awaited, flashing when its turn starts and then blinking
+    /// (M 7.1).
+    fn turn_marker(&mut self) -> Option<rlml_core::rt::value::EntityId> {
+        let p = self.r.w.s.player.filter(|_| self.players_turn() && self.r.w.s.players().len() > 1);
+        let Some(p) = p else {
+            self.turn_start = None;
+            return None;
+        };
+        let start = match self.turn_start {
+            Some((e, t)) if e == p => t,
+            _ => {
+                self.turn_start = Some((p, self.clock));
+                self.clock
+            }
+        };
+        let since = self.clock.saturating_sub(start);
+        let on = since < MARK_FLASH || (since - MARK_FLASH).as_millis() % MARK_BLINK.as_millis() < MARK_BLINK.as_millis() / 2;
+        on.then_some(p)
+    }
+
     pub fn draw(&mut self) -> Frame {
+        self.view.marked = self.turn_marker();
         let (w, h) = self.size;
         let mut f = if self.playing { self.view.draw(&mut self.r.w, &self.lang, w, h) } else { Frame::new(w, h) };
         if let Some(layer) = self.menus.layers.last() {
@@ -234,6 +267,7 @@ impl<'m> App<'m> {
     /// A key at time `now` (M 8).
     pub fn key(&mut self, b: Binding, now: Duration) -> RtResult<()> {
         self.last_key = now;
+        self.clock = now;
         self.note = None;
         // ctrl+c always leaves, as in every terminal program
         if b == Binding::key(KeyCode::Char('c'), Mods { ctrl: true, ..Mods::default() }) {
@@ -333,6 +367,7 @@ impl<'m> App<'m> {
 
     /// The clock at `now`: rounds without the player's turn and `idle`.
     pub fn tick(&mut self, now: Duration) -> RtResult<()> {
+        self.clock = now;
         // the game's time stops while a menu is open (M 8)
         if !self.playing || self.menus.is_open() {
             self.last_round = now;
@@ -378,6 +413,8 @@ impl<'m> App<'m> {
             return Duration::from_millis(500);
         }
         let step = if self.players_turn() { self.idle.as_ref().map(|i| i.after) } else { self.round };
+        // the turn marker blinks, so a group's turn redraws often enough
+        let step = if self.players_turn() && self.r.w.s.players().len() > 1 { Some(step.map_or(MARK_BLINK / 4, |s| s.min(MARK_BLINK / 4))) } else { step };
         step.map_or(Duration::from_millis(500), |s| s.min(Duration::from_millis(100)))
     }
 

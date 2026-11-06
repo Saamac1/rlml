@@ -36,6 +36,9 @@ pub struct View {
     /// The camera's top-left cell on each map (M 7.1: it stays when its
     /// target is gone).
     pub camera: BTreeMap<MapId, (i32, i32)>,
+    /// The member whose turn marker shows now (M 7.1); the app sets it
+    /// and blinks it.
+    pub marked: Option<rlml_core::rt::value::EntityId>,
 }
 
 fn rgb(c: Rgb) -> Color {
@@ -245,6 +248,18 @@ impl View {
                 let (mx, my) = (x0 + sx as i32, y0 + sy as i32);
                 if let Some(look) = (my >= 0 && mx >= 0).then(|| cells.get(my as usize).and_then(|row| row.get(mx as usize))).flatten() {
                     put_look(frame, r.x + sx, r.y + sy, look);
+                }
+            }
+        }
+        // the turn marker: the member's cell in reverse colors (M 7.1)
+        if let Some(p) = self.marked.and_then(|e| world.s.at(e)).filter(|p| p.map == map) {
+            let (sx, sy) = (p.x - x0, p.y - y0);
+            if sx >= 0 && sy >= 0 && (sx as usize) < r.w && (sy as usize) < r.h {
+                let (x, y) = (r.x + sx as usize, r.y + sy as usize);
+                if let Some(look) = cells.get(p.y as usize).and_then(|row| row.get(p.x as usize)) {
+                    let fg = look.fg.unwrap_or([255, 255, 255]);
+                    let bg = look.bg.unwrap_or([0, 0, 0]);
+                    put_look(frame, x, y, &Look { ch: look.ch, fg: Some(bg), bg: Some(fg) });
                 }
             }
         }

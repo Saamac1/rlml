@@ -3,7 +3,8 @@
 > Paikallisen moninpelin esimerkki (RLML-moninpeli, M 6.1.10). Kaksi
 > istuinta pelaa vuorotellen samalla näppäimistöllä. Istuimella 1 on
 > lisäksi seuralainen Robin, jota pelaaja voi ohjata vaihtamalla
-> (`tab`). Kartta-alueella on kirjoitettu koko, joten vakiokirjaston
+> (`tab`). Kun Robin ei ole ohjattava, se seuraa lähintä sankaria
+> (`FOLLOWER`). Kartta-alueella on kirjoitettu koko, joten vakiokirjaston
 > talutushihna pitää ryhmän kartta-alueen sisällä. Pelissä ei ole yhtään
 > RogueScript-riviä.
 
@@ -36,6 +37,7 @@ entity HERO extends STD.DEFAULT.PLAYER
 
 entity ROBIN extends HERO
 - seat 1
+- ai behavior FOLLOWER
 - render GLYPH.ROBIN
 
 entity RAT

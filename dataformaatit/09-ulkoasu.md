@@ -73,6 +73,8 @@ tiles.glyphs spritesheet "tiles16.png" 16x16
 - **Väli** on suljettu. Avoin väli sarjarivinä on latausvirhe, koska sarjalla on oltava pituus.
 - **Haku.** Sarjarivi on välirivi (luku [7.1](07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#71-tilen-nimi-muunnelma-ja-indeksi)), joten yksittäisen indeksin oma rivi voittaa sen. Merkkijonon merkit noudattavat yllä olevia merkkisääntöjä, ja välilyönti merkkijonossa on tyhjä merkki.
 
+**Istuimet.** Moninpelissä istuimen jäsen haetaan ensin tilellä `TILE.SEATn`, joten `- GLYPH.HERO.SEAT2 @ fg 60a0ff` antaa istuimen 2 sankarille oman värin. Ilman riviä haku päätyy perusnimeen `GLYPH.HERO` (moottoridokumentti, luku [7.2](../moottori/07-esitys.md#72-kartan-piirtäminen)).
+
 ## 9.3 Paneelit, lokit ja esitys
 
 - `panels` antaa asettelun alueille (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)) reunat ja värit.

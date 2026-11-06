@@ -1240,3 +1240,32 @@ fn the_group_example() {
 fn golden_the_group_example() {
     golden_of(ryhma(), "ryhma", "l l tab l s s s s");
 }
+
+#[test]
+fn friends_swap_places_when_they_bump() {
+    let m = model(&ryhma());
+    let mut r = Runner::new(started(&m));
+    let robin = kinds(&r.w, "ROBIN")[0];
+    r.run(0).unwrap();
+    let p = r.w.s.player.unwrap();
+    let (px, py) = at(&r.w, p);
+    // Robin stands east of the player
+    r.w.s.get_mut(robin).place = Place::Map(Pos { map: 0, x: px + 1, y: py });
+    assert!(r.player(&cmd("STD.MOVE.EAST")).unwrap(), "the bump swaps places (STD 5)");
+    assert_eq!((at(&r.w, p), at(&r.w, robin)), ((px + 1, py), (px, py)), "the mover's own cell does not block the friend");
+}
+
+#[test]
+fn seats_have_their_own_colors() {
+    let m = model(&ryhma());
+    let mut w = started(&m);
+    let heroes = kinds(&w, "HERO");
+    let looks: Vec<_> = heroes.iter().map(|&e| {
+        let (x, y) = at(&w, e);
+        w.render_cells(0)[y as usize][x as usize].fg
+    }).collect();
+    assert_eq!(looks, [Some([0xf0, 0xd0, 0x40]), Some([0x60, 0xa0, 0xff])], "`GLYPH.HERO.SEAT1` and `.SEAT2` (M 7.2)");
+    let robin = kinds(&w, "ROBIN")[0];
+    let (x, y) = at(&w, robin);
+    assert_eq!(w.render_cells(0)[y as usize][x as usize].fg, Some([0x60, 0xc0, 0x60]), "no seat row: the tile's own color");
+}

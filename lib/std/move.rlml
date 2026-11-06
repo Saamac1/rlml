@@ -69,7 +69,7 @@ command STEP(to: pos) cost 120:
         emit BUMP(actor, other)
         if other has HP and MAY_ATTACK(actor, other):
             return ATTACK(other)
-        if FRIENDS(actor, other) and (other has ai or seat_of(other) != none) and not blocks(actor.at, move, for: other):
+        if FRIENDS(actor, other) and (other has ai or seat_of(other) != none) and not blocks(actor.at, move, for: other, except: actor):
             move(other, to: actor.at)
             DO_STEP(actor, to)
             return

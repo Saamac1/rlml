@@ -136,7 +136,7 @@ receiver reset(d: deck) -> deck
 query copy(d: deck) -> deck
 
 # Esto, maasto, linja ja lento
-query blocks(p: area, what: ?, [for: entity], [tiles: bool]) -> bool
+query blocks(p: area, what: ?, [for: entity], [tiles: bool], [except: entity]) -> bool
 query tile_of(p: pos, [layer: name]) -> name
 query adjacent(e: entity) -> area
 query ray(a: pos, b: pos, [for: entity], [range: number], [mode: name]) -> area

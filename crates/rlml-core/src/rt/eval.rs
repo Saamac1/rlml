@@ -1467,7 +1467,12 @@ impl World<'_> {
                 };
                 let who = self.arg(&args, 2, "for").and_then(Value::as_entity);
                 let tiles = !matches!(self.arg(&args, 3, "tiles"), Some(Value::Bool(false)));
-                Value::Bool(a.cells().iter().any(|p| self.blocks(*p, &what, who, tiles)))
+                // `except` leaves one more entity out: a swap's own mover (M 9.3)
+                let except = self.arg(&args, 4, "except").and_then(Value::as_entity);
+                Value::Bool(a.cells().iter().any(|p| match except {
+                    None => self.blocks(*p, &what, who, tiles),
+                    Some(x) => (tiles && self.blocks_tiles(*p, &what, who)) || self.s.entities_at(*p).into_iter().any(|e| e != x && Some(e) != who && self.entity_blocks(e, &what)),
+                }))
             }
             "tile_of" => {
                 let Value::Pos(p) = a0 else { return Err(self.rt_err(env, pos, "`tile_of` takes a pos")) };
@@ -1760,9 +1765,12 @@ impl World<'_> {
 
     /// The entities' part of `blocks`: their own `blocks` component.
     pub fn blocks_entities(&self, p: Cell, what: &str, who: Option<EntityId>) -> bool {
-        self.s.entities_at(p).into_iter().any(|e| {
-            Some(e) != who && matches!(self.s.get(e).get("blocks").and_then(|c| c.get("values")), Some(Value::List(vs)) if vs.iter().any(|v| *v == Value::Name(what.to_string())))
-        })
+        self.s.entities_at(p).into_iter().any(|e| Some(e) != who && self.entity_blocks(e, what))
+    }
+
+    /// Does an entity's own `blocks` component hold `what`?
+    pub fn entity_blocks(&self, e: EntityId, what: &str) -> bool {
+        matches!(self.s.get(e).get("blocks").and_then(|c| c.get("values")), Some(Value::List(vs)) if vs.iter().any(|v| *v == Value::Name(what.to_string())))
     }
 
     /// A tile property's values down the ladder: the exact name, index

@@ -233,3 +233,43 @@ fn items_hide_disable_and_open_menus() {
     assert!(!app.playing && app.menus.layers[0].menu.full == "OPENING");
 }
 
+
+fn ryhma() -> MemFiles {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = MemFiles::default();
+    let game = repo.join("esimerkit/ryhma");
+    read_tree(&game, &game, &mut files.game);
+    read_tree(&repo, &repo.join("lib"), &mut files.engine);
+    files
+}
+
+#[test]
+fn the_turn_marker_flashes_and_blinks() {
+    let f = ryhma();
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    assert!(app.players_turn());
+    let p = app.r.w.s.player.unwrap();
+    let reversed = |app: &mut App| {
+        let frame = app.draw();
+        frame.cells.iter().any(|c| c.style.as_ref().is_some_and(|s| s.bg == Some(termplate_core::style::Color::Rgb(0xf0, 0xd0, 0x40))))
+    };
+    app.tick(ms(10)).unwrap();
+    assert!(reversed(&mut app), "the turn starts with a flash (M 7.1)");
+    // a 600 ms flash, then 400 ms on and 400 ms off from 610 ms
+    app.tick(ms(1200)).unwrap();
+    assert!(!reversed(&mut app), "then it blinks off");
+    app.tick(ms(1500)).unwrap();
+    assert!(reversed(&mut app), "and on again");
+    assert_eq!(app.r.w.s.player, Some(p));
+}
+
+#[test]
+fn one_member_has_no_turn_marker() {
+    let f = mini_with(|_| {});
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    app.tick(ms(10)).unwrap();
+    app.draw();
+    assert_eq!(app.view.marked, None);
+}

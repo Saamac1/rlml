@@ -1,5 +1,9 @@
 # ASCII-tyyli
 
+> Istuimen jäsen haetaan ensin tilellä `TILE.SEATn` (M 7.2), joten
+> istuimen 1 sankari on keltainen ja istuimen 2 sininen. Robinin tilellä
+> ei ole istuinriviä, joten se käyttää omaa vihreäänsä.
+
 colors
 - STONE 7a7a8e
 - DARK 1a1a22
@@ -11,6 +15,8 @@ tiles.glyphs ascii
 - WALL # fg STONE bg DARK
 - FLOOR . fg 4a4a5a
 - GLYPH.HERO @ fg ffffff
+- GLYPH.HERO.SEAT1 @ fg f0d040
+- GLYPH.HERO.SEAT2 @ fg 60a0ff
 - GLYPH.ROBIN R fg LEAF
 - GLYPH.RAT r fg FUR
 

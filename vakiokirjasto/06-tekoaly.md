@@ -70,7 +70,7 @@ component FOLLOW(target: entity = none, distance: number = 1)
 query LEADER_OF(e: entity) -> entity:
     if e has FOLLOW and e.FOLLOW.target != none:
         return e.FOLLOW.target
-    return nearest(players, e)
+    return nearest(players where it != e, e)
 
 ai FOLLOWER:
     leader = LEADER_OF(self)
@@ -87,7 +87,7 @@ ai FOLLOWER:
     return APPROACH(leader)
 ```
 
-- **Lähin jäsen.** Ilman `FOLLOW.target`-kenttää johtaja on lähin istuimen jäsen (`players`, moottoridokumentti luku [6.1.10](../moottori/06-ajo.md#6110-istuimet-ja-ryhmä)). Yksinpelissä se on pelaaja. Moninpelissä `player` vaihtuisi joka vuoro.
+- **Lähin jäsen.** Ilman `FOLLOW.target`-kenttää johtaja on lähin muu istuimen jäsen (`players`, moottoridokumentti luku [6.1.10](../moottori/06-ajo.md#6110-istuimet-ja-ryhmä)), joten ryhmän jäsen seuraa toista jäsentä eikä itseään. Yksinpelissä se on pelaaja. Moninpelissä `player` vaihtuisi joka vuoro.
 - **Poistuva istuin.** `PART_PLAYER` tekee poistuvan istuimen jäsenistä seuraajia, joten hahmot jäävät ryhmään:
 
 ```roguescript

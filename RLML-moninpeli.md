@@ -30,7 +30,7 @@ Toteuttamatta ovat:
 - useampi aktiivinen kartta (ryhmä jakaa `player`-hahmon kartan)
 - kesken pelin liittyminen ja poistuminen sekä tapahtumat `join` ja `part` ajossa. Kun `part` kytketään, käsittelijät ajetaan ennen kuin `State::part_seat` irrottaa jäsenet istuimelta. Muuten `PART_PLAYER` saisi tyhjän `members(seat)`-joukon. Samalla poistuvien jäsenten herätykset, `player` ja odotettu istuin on päivitettävä.
 - laitteet, liittymisruutu ja reititys
-- kameran ryhmäseuranta ja vuoron merkki
+- kameran ryhmäseuranta (vuoron merkki on päätteessä käänteisinä väreinä)
 - vaiheet 3–8
 
 Viittaukset: D = RLML-dataformaatit, RS = RogueScript, M = RLML-moottorin vastuut, STD = RLML-vakiokirjasto.
