@@ -154,7 +154,7 @@ Pakan `.count` on kenttä, ei kutsu. Esto ja maasto (kyselyjä): blocks(p: alue,
 | `seat_of(e: entity)` | `number` tai `none` | jäsenen istuin |
 | `members(n: number)` | `collection` | istuimen elävät jäsenet jäseneksi tulon järjestyksessä |
 | `active(n: number)` | `entity` tai `none` | istuimen ohjattava |
-| `view_width()`, `view_height()` | `number` | kartta-alueen koko ruutuina (luku [7.1](07-esitys.md#71-asettelu)) |
+| `view_width()`, `view_height()` | `number` | kartta-alueen kirjoitettu koko soluina, ilman sitä kartan koko; ei riipu ruudun koosta (luku [7.1](07-esitys.md#71-asettelu)) |
 | `text_of(key: name, …)` | `text` | kielen mukainen teksti paikkamerkit täytettyinä; vain kyselyssä, esityksessä, paneelissa, listavalikossa ja `naming`-kyselyssä (luku [7.3](07-esitys.md#73-tekstit)) |
 
 **Generointi** (pelin virta; `footprint` on kysely, muut muuttavat; `external` vain generaattorissa)

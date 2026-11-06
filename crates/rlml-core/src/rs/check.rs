@@ -1266,6 +1266,10 @@ impl Body<'_> {
             return;
         }
         let base_ty = self.expr(base);
+        if base_ty == Ty::Component(Some("seat".into())) {
+            self.error(pos, format!("`{target}` is read-only: a seat changes with `control` or `add(e, seat(n: …))` (M 6.1.10)"));
+            return;
+        }
         if sigs::field(&base_ty, last).is_some() {
             self.error(pos, format!("`{target}` is kept by the engine and read-only for logic (M 3.4)"));
             return;

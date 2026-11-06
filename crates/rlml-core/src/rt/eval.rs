@@ -1295,14 +1295,14 @@ impl World<'_> {
                     // `e` replaces the player, who leaves the seat (body swap)
                     let n = self.s.player.and_then(|p| self.s.seat_of(p)).or_else(|| self.s.seats.first().map(|s| s.n)).unwrap_or(1);
                     if let Some(old) = self.s.player.filter(|&p| self.s.seat_of(p) == Some(n)) {
-                        self.s.remove_member(old);
+                        self.s.set_seat(old, None);
                     }
                     n
                 }
             },
         };
         self.s.join_seat(n);
-        self.s.add_member(e, n);
+        self.s.set_seat(e, Some(n));
         self.s.set_active(n, e);
         self.s.player = Some(e);
     }
@@ -1505,9 +1505,9 @@ impl World<'_> {
                 let name = full.name.clone();
                 if name == "seat" {
                     // membership goes through the seat table (M 6.1.10)
-                    let n = full.get("n").and_then(Value::as_number).and_then(|n| SeatId::try_from(n).ok()).filter(|&n| self.s.seat(n).is_some());
+                    let n = full.get("n").and_then(crate::rt::state::State::seat_number).filter(|&n| self.s.seat(n).is_some());
                     let n = n.ok_or_else(|| self.rt_err(env, pos, "`add`: the seat is not joined (M 6.1.10)"))?;
-                    self.s.add_member(e, n);
+                    self.s.set_seat(e, Some(n));
                 } else {
                     self.s.get_mut(e).set(full);
                 }
@@ -1527,7 +1527,7 @@ impl World<'_> {
                     _ => return Err(self.rt_err(env, pos, "`remove` takes a component name")),
                 };
                 if comp == "seat" {
-                    self.s.remove_member(e);
+                    self.s.set_seat(e, None);
                 } else {
                     self.s.get_mut(e).remove(&comp);
                 }
@@ -1613,7 +1613,7 @@ impl World<'_> {
                 }
             }
             "view_width" | "view_height" => {
-                let size = self.view_size.or_else(|| self.s.active_map().map(|m| (self.s.maps[m].width, self.s.maps[m].height))).unwrap_or((0, 0));
+                let size = self.view_dims();
                 Value::Number(if f == "view_width" { size.0 } else { size.1 } as i64)
             }
             "heard" => {

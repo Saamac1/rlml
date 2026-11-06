@@ -746,6 +746,9 @@ component WAKES(n: number = 0):
 command NOPE() cost 60:
     return false
 
+command TO_SEAT_2() cost 0:
+    add(actor, seat(n: 2))
+
 command ADOPT() cost 0:
     add(spawn(HERO, at: label(P3)), seat(n: 1))
 
@@ -962,9 +965,11 @@ fn a_kept_turn_sends_no_second_wake() {
 
 #[test]
 fn the_leash_refuses_only_a_widening_step() {
-    let f = files(&[("game.rlml", &SEATS.replace("- seats 1..2", "- seats 1..2\n- leash on"))]);
+    let layout = "\nlayout L\n\n```\nm\n```\n\nlegend:\n- m map size 6x3\n";
+    let f = files(&[("game.rlml", &format!("{}{layout}", SEATS.replace("- seats 1..2", "- seats 1..2\n- leash on")))]);
     let m = model(&f);
-    let mut r = seats_game(&m, 2, |w| w.view_size = Some((6, 3)));
+    let mut r = seats_game(&m, 2, |_| {});
+    assert_eq!(r.w.view_dims(), (6, 3), "the map area's size from the layout (M 7.1)");
     let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
     // spread wider than the limit 4: stepping toward the group is allowed
     let a_x = at(&r.w, a).0;
@@ -1012,5 +1017,56 @@ fn reversed_seats_without_the_checker_still_start() {
     let (m, r) = rlml_core::check_game(&f, "game.rlml");
     assert!(r.has_errors(), "the checker refuses `seats 3..1`");
     let w = World::new_game_seats(&m, 7, None).unwrap();
-    assert!(!w.s.seats.is_empty(), "no panic, and a seat to play");
+    assert_eq!(w.s.seat_range, (1, 3), "the bounds in order");
+    assert_eq!(w.s.seats.len(), 1, "the lower bound joins");
+}
+
+#[test]
+fn a_new_wake_entry_gets_its_wake() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 2, |_| {});
+    let a = r.w.s.active(1).unwrap();
+    r.run(0).unwrap();
+    assert!(!r.input(1, &cmd("NOPE")).unwrap(), "a kept turn");
+    // the kept turn is taken away and a new one scheduled, as a move into a
+    // collection and back would do
+    r.w.s.unschedule(a);
+    r.w.s.schedule(a, 0);
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert!(r.input(2, &cmd("STD.WAIT")).unwrap());
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(r.awaiting(), Some(1));
+    assert_eq!(wakes(&r.w, a), 2, "the new entry is a new turn with its own `wake`");
+}
+
+#[test]
+fn a_seat_field_is_read_only() {
+    let f = files(&[("game.rlml", &SEATS.replace("command ADOPT() cost 0:", "command BAD() cost 0:\n    actor.seat.n = 2\n\ncommand ADOPT() cost 0:"))]);
+    let (_, r) = rlml_core::check_game(&f, "game.rlml");
+    assert!(r.errors().any(|d| d.to_string().contains("`actor.seat.n` is read-only")), "{:#?}", r.errors().map(|d| d.to_string()).collect::<Vec<_>>());
+}
+
+#[test]
+fn moving_the_controlled_member_to_another_seat() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 2, |_| {});
+    let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
+    r.run(0).unwrap();
+    assert!(r.input(1, &cmd("TO_SEAT_2")).unwrap());
+    assert_eq!((r.w.s.seat_of(a), r.w.s.active(1), r.w.s.active(2)), (Some(2), None, Some(b)));
+    assert_eq!(r.w.s.players(), [b, a], "seat 2 in joining order");
+    // the game goes on: seat 2's members take their turns
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(r.awaiting(), Some(2));
+}
+
+#[test]
+fn without_a_written_size_the_view_is_the_map() {
+    let f = mini();
+    let m = model(&f);
+    let w = started(&m);
+    let map = w.s.active_map().unwrap();
+    assert_eq!(w.view_dims(), (w.s.maps[map].width, w.s.maps[map].height), "the minigame's map area has no cell size (M 7.1)");
 }

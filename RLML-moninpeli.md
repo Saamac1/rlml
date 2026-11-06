@@ -208,7 +208,7 @@ Ennallaan: yksi muisti kartaa kohti (M 7.2). Kaikki pelaajat näkevät, mitä ku
 - **Oletuskohde on ryhmä.** Kamera seuraa kartta-alueen kartan jäsenten rajaavaa suorakulmiota legendin tavalla (`follow center` tai `follow margin N`). Jos suorakulmio ei mahdu kartta-alueeseen, kamera seuraa `player`-hahmoa, ja kun suorakulmio taas mahtuu, kamera palaa ryhmään. Yhdellä jäsenellä tulos on sama kuin nyt. Kiertävällä kartalla (M 6.9) suorakulmio lasketaan lyhimmän välin mukaan.
 - **`follow(camera)`** ilman kohdetta palauttaa oletuksen. Se korvaa M 7.1:n säännön, jonka mukaan `follow(camera, player)` palauttaa oletuksen. `follow(camera, e)` seuraa yhtä kahvaa kuten ennen, myös silloin, kun `e` on `player`. Kahva ei vaihdu vuoron mukana.
 - Kun jäseniä ei ole, kamera jää paikalleen kuten nyt.
-- **Uudet kyselyt** `view_width()` ja `view_height()` palauttavat kartta-alueen koon ruutuina. STD:n hihna käyttää niitä.
+- **Uudet kyselyt** `view_width()` ja `view_height()` palauttavat kartta-alueen koon ruutuina sellaisena kuin asettelun legendi sen kirjoittaa (`size.width N`, `size.height N` tai `size LxK` soluina). Koko tulee datasta eikä ruudun koosta, joten peli kulkee samoin kaikilla ikkunakoilla ja ilman päätettä (luku [4](04-satunnaisuus-ja-toistettavuus.md)). Akselilla, jolle kokoa ei ole kirjoitettu, tulos on aktiivisen kartan koko. STD:n hihna käyttää niitä, joten hihna rajoittaa vain, kun peli antaa kartta-alueelle koon.
 
 ### 6.4 Vuoron merkki
 

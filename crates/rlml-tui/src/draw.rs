@@ -255,8 +255,6 @@ impl View {
     }
 
     fn draw_map(&mut self, frame: &mut Frame, world: &mut World, r: Rect, follow: Follow) {
-        // the map area's size for `view_width()` and `view_height()` (M 7.1)
-        world.view_size = Some((r.w as i32, r.h as i32));
         let Some(map) = world.s.active_map() else { return };
         let cells = world.render_cells(map);
         let (x0, y0) = self.camera(world, map, r.w as i32, r.h as i32, follow);

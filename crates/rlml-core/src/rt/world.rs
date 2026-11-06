@@ -55,9 +55,7 @@ pub struct World<'m> {
     pub heard: std::collections::BTreeMap<EntityId, Vec<super::value::Sound>>,
     /// The player's last view, for a dead player's `sees` (M 7.2).
     pub last_view: Option<(MapId, std::collections::BTreeSet<(i32, i32)>)>,
-    /// The map area's size in cells, set by the front end for
-    /// `view_width()` and `view_height()` (M 7.1); `None` is the map's size.
-    pub view_size: Option<(i32, i32)>,
+
 }
 
 /// A `log` call: the message key and its text arguments.
@@ -99,7 +97,7 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, view_size: None }
+        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {
@@ -462,13 +460,10 @@ impl<'m> World<'m> {
         // 7. `created`
         self.created.push(e);
         // a data member `- seat N` joins its seat if that seat is joined (D 5.3)
-        if let Some(n) = self.s.get(e).get("seat").and_then(|c| c.get("n")).and_then(Value::as_number) {
-            let n = n.clamp(0, u8::MAX as i64) as u8;
+        if let Some(v) = self.s.get(e).get("seat").and_then(|c| c.get("n")).cloned() {
             // a seat that is not joined leaves no stray component
             self.s.get_mut(e).remove("seat");
-            if self.s.seat(n).is_some() {
-                self.s.add_member(e, n);
-            }
+            self.s.set_seat(e, crate::rt::state::State::seat_number(&v));
         }
         // 8. the wake queue for an actor on a map
         if let Place::Map(p) = place
@@ -671,9 +666,8 @@ impl<'m> World<'m> {
         let mut w = World::new(m, seed);
         let (lo, hi) = field("seats").as_deref().and_then(seat_range).unwrap_or((1, 1));
         // the checker keeps 1 <= lo <= hi <= 8 (D 3.3); a model that skipped
-        // it still gets at least seat 1
-        let lo = lo.max(1);
-        let hi = hi.max(lo);
+        // it gets its bounds in order, starting from seat 1 at least
+        let (lo, hi) = (lo.min(hi).max(1), lo.max(hi).max(1));
         for n in 1..=seats.unwrap_or(lo).clamp(lo, hi) {
             w.s.join_seat(n);
         }
@@ -777,6 +771,53 @@ impl<'m> World<'m> {
             }
         }
         Ok(Area::new(cells))
+    }
+}
+
+impl World<'_> {
+    /// `view_width()` and `view_height()` (M 7.1): the map area's size in
+    /// cells as the layout's legend writes it (`size.width N`,
+    /// `size.height N`, `size WxH`). It comes from data, not from the
+    /// screen, so a game runs the same at any window size (M 4). An axis
+    /// without a written cell count is the active map's own size.
+    pub fn view_dims(&self) -> (i32, i32) {
+        let map = self.s.active_map().map(|m| (self.s.maps[m].width, self.s.maps[m].height)).unwrap_or((0, 0));
+        let (w, h) = self.layout_map_size();
+        (w.unwrap_or(map.0), h.unwrap_or(map.1))
+    }
+
+    fn layout_map_size(&self) -> (Option<i32>, Option<i32>) {
+        let game = self.m.named_game();
+        let named = game.and_then(|g| g.items.iter().find(|i| i.key() == "layout")).and_then(|i| i.word(1).map(String::from));
+        let def = match named {
+            Some(n) => self.m.resolve_kind(game.and_then(|g| g.namespace.as_deref()), &n, &[Kind::Layout]).ok(),
+            None => self.m.defs.values().find(|d| d.kind == Kind::Layout),
+        };
+        let Some(b) = def.and_then(|d| d.block()) else { return (None, None) };
+        let cells = |s: &str| s.parse::<i32>().ok().filter(|&n| n > 0);
+        for item in b.sub("legend") {
+            let Ok((_, rest)) = crate::model::glyph_char(item) else { continue };
+            let words: Vec<&str> = rest.tokens.iter().map(|t| t.text.as_str()).collect();
+            if words.first() != Some(&"map") {
+                continue;
+            }
+            let mut size = (None, None);
+            for (i, w) in words.iter().enumerate() {
+                let next = words.get(i + 1).copied().unwrap_or("");
+                match *w {
+                    "size.width" => size.0 = cells(next),
+                    "size.height" => size.1 = cells(next),
+                    "size" => {
+                        if let Some((a, b)) = next.split_once('x') {
+                            size = (cells(a), cells(b));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            return size;
+        }
+        (None, None)
     }
 }
 
