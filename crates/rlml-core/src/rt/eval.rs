@@ -1531,8 +1531,9 @@ impl World<'_> {
                 } else {
                     self.s.get_mut(e).remove(&comp);
                 }
-                // an instance that stops being an actor leaves the queue (M 9.5)
-                if (comp == "ai" || comp == "seat") && !self.s.is_actor(e) && self.s.player != Some(e) {
+                // an instance that stops being an actor leaves the queue (M 9.5,
+                // M 6.1.10); a player is a member, so it stays an actor
+                if (comp == "ai" || comp == "seat") && !self.s.is_actor(e) {
                     self.s.unschedule(e);
                 }
                 Value::Entity(e)

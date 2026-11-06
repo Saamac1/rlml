@@ -34,7 +34,9 @@ pub struct Runner<'m> {
     /// failure or a free action keeps the turn with a new entry recorded
     /// here, so it gets no second `wake`; any other new entry (after an
     /// unschedule, a move into a collection, a new seat) differs and gets
-    /// its `wake` (M 6.1.5).
+    /// its `wake` (M 6.1.5). This rests on wake sequence numbers never
+    /// repeating in a session: loading a save must keep `next_seq`, or
+    /// clear this map.
     woke: BTreeMap<EntityId, Wake>,
     /// The seat whose input the scheduler waits for (M 8.2).
     awaiting: Option<SeatId>,
@@ -245,6 +247,11 @@ impl<'m> Runner<'m> {
         let Some(at) = self.w.s.at(e) else { return Ok(true) };
         if !self.w.s.get(e).alive {
             return Ok(true);
+        }
+        // the command ended its actor's acting (`remove(actor, seat)`): no
+        // next wake (M 6.1.10)
+        if !self.w.s.is_actor(e) {
+            return Ok(!matches!(outcome, Outcome::Failed { .. }));
         }
         let now = self.clock(at.map);
         let speed = self.w.speed(e);

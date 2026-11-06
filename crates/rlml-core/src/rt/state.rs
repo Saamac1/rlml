@@ -400,8 +400,9 @@ impl State {
     /// the engine component `seat` (D 5.3), or with `None` leaves its seat
     /// and loses the component. A seat that is not joined changes nothing.
     /// A controlled member that moves to a seat without a living controlled
-    /// member stays controlled there; otherwise its old seat's next member
-    /// takes control, and `player` with it.
+    /// member stays controlled there. Its old seat's next living member
+    /// takes control in any case, and `player` with it when `e` is no
+    /// longer controlled.
     pub fn set_seat(&mut self, e: EntityId, n: Option<SeatId>) {
         // a seat that is not joined changes nothing; callers report it
         if n.is_some_and(|n| self.seat(n).is_none()) || (n.is_some() && self.seat_of(e) == n) {
@@ -422,18 +423,16 @@ impl State {
             }
             self.get_mut(e).set(ComponentValue { name: "seat".into(), fields: vec![("n".into(), Value::Number(n as i64))] });
         }
-        // the old seat's control goes to its next living member, and
-        // `player` follows when it was the moved one (M 6.1.10)
-        // only a move to another seat hands control over; leaving a seat
-        // (`remove(e, seat)`, a body swap) keeps `player` for the caller
+        // one rule (M 6.1.10): a controlled member that leaves its seat, for
+        // whatever reason, hands control to the old seat's next living
+        // member; `player` follows unless `e` stays controlled elsewhere.
+        // With nobody left `player` stays on `e`, like a dead player.
         if was_active
-            && !controlled
-            && n.is_some()
             && let Some(o) = old
             && let Some(next) = self.seat_members(o).first().copied()
         {
             self.set_active(o, next);
-            if self.player == Some(e) {
+            if self.player == Some(e) && !controlled {
                 self.player = Some(next);
             }
         }

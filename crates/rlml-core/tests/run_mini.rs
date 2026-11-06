@@ -1130,10 +1130,41 @@ fn a_dead_controlled_member_does_not_hold_a_seat() {
 
 #[test]
 fn the_view_and_the_screen_read_the_border_alike() {
-    for (size, border, want) in [("10x6", "single", (8, 4)), ("10x6", "thick", (10, 6)), ("10x6", "none", (10, 6)), ("2x1", "single", (2, 1))] {
+    for (size, border, want) in [("10x6", "single", (8, 4)), ("10x6", "thick", (10, 6)), ("10x6", "none", (10, 6)), ("2x1", "single", (2, 1)), ("2x2", "single", (1, 1))] {
         let layout = format!("\nlayout L\n\n```\nm\n```\n\nlegend:\n- m map size {size}\n\npanels\n- map border {border}\n");
         let f = files(&[("game.rlml", &format!("{SEATS}{layout}"))]);
         let (m, _) = rlml_core::check_game(&f, "game.rlml");
         assert_eq!(World::new(&m, 7).view_dims(), want, "size {size}, border {border}: an unknown style or a tiny area draws no border");
     }
+}
+
+#[test]
+fn a_controlled_member_leaving_hands_control_on() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    // leaving: seat 1's next member takes control and `player`
+    let mut c = 0;
+    let mut r = seats_game(&m, 1, |w| c = second_member(w));
+    let a = r.w.s.active(1).unwrap();
+    r.w.s.player = Some(a);
+    r.w.s.set_seat(a, None);
+    assert_eq!((r.w.s.active(1), r.w.s.player), (Some(c), Some(c)), "one rule for leaving and moving (M 6.1.10)");
+    // the last member moving to a controlled seat stays `player` there
+    let mut r = seats_game(&m, 2, |_| {});
+    let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
+    r.w.s.player = Some(a);
+    r.w.s.set_seat(a, Some(2));
+    assert_eq!((r.w.s.active(2), r.w.s.player), (Some(b), Some(a)), "nobody is left on seat 1");
+}
+
+#[test]
+fn removing_the_players_seat_ends_its_turns() {
+    let f = files(&[("game.rlml", &SEATS.replace("command ADOPT() cost 0:", "command UNSEAT() cost 0:\n    remove(actor, seat)\n\ncommand ADOPT() cost 0:"))]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 1, |_| {});
+    let a = r.w.s.active(1).unwrap();
+    r.run(0).unwrap();
+    assert!(r.player(&cmd("UNSEAT")).unwrap());
+    assert_eq!(r.w.s.wake_of(a), None, "no `seat` and no `ai`: no longer an actor (M 6.1.10)");
+    assert_eq!(r.run(1).unwrap(), Status::NoPlayer { rounds: 1 });
 }
