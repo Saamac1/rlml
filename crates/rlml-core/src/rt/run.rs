@@ -5,12 +5,14 @@
 //! scheduler jumps to the next moment that has something, a wake or a
 //! round boundary (M 6.1.1). At a moment the phases run in a fixed order:
 //! the round (only on a boundary, not at 0), then the wakes by moment and
-//! sequence number (M 6.1.4). Timers and background scenes are not
-//! supported yet.
+//! sequence number (M 6.1.4). Members of seats wait for their seat's input
+//! or act as the group's other members (M 6.1.10). Timers, background
+//! scenes and several active maps are not supported yet.
 
 use std::collections::BTreeMap;
 
 use super::eval::{BodyKind, Env, Outcome, Scope, Suspended};
+use super::state::SeatId;
 use super::value::{CommandValue, EntityId, MapId, Value};
 use super::world::{DEFAULT_COST, RtResult, World, delay};
 
@@ -28,8 +30,10 @@ pub struct Runner<'m> {
     pub w: World<'m>,
     /// Commands waiting at `wait`, by actor (M 6.1.6).
     pub waiting: BTreeMap<EntityId, Suspended>,
-    /// The player's `wake` has been sent for this turn.
-    woke: bool,
+    /// The member whose `wake` has been sent for the turn it is on.
+    woke: Option<EntityId>,
+    /// The seat whose input the scheduler waits for (M 8.2).
+    awaiting: Option<SeatId>,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -38,7 +42,29 @@ fn engine_env(name: &str) -> Env {
 
 impl<'m> Runner<'m> {
     pub fn new(w: World<'m>) -> Runner<'m> {
-        Runner { w, waiting: BTreeMap::new(), woke: false }
+        Runner { w, waiting: BTreeMap::new(), woke: None, awaiting: None }
+    }
+
+    /// The seat whose input is awaited, after `run` returned `Input`.
+    pub fn awaiting(&self) -> Option<SeatId> {
+        self.awaiting
+    }
+
+    /// Does member `e` of seat `n` wait for its seat's input now (M 6.1.10)?
+    /// The controlled member does, and with `party each` every member. With
+    /// `party switch` control moves to `e` when the controlled member has
+    /// no wake.
+    fn takes_input(&mut self, e: EntityId, n: SeatId) -> bool {
+        let s = &self.w.s;
+        let active = s.active(n);
+        if active == Some(e) {
+            return true;
+        }
+        if s.party_each || active.is_none_or(|a| s.wake_of(a).is_none() || s.at(a).is_none()) {
+            self.w.s.set_active(n, e);
+            return true;
+        }
+        false
     }
 
     /// The moment on a map's clock now.
@@ -63,17 +89,31 @@ impl<'m> Runner<'m> {
             if let Some(wake) = self.w.s.next_wake(map)
                 && wake.at <= now
             {
-                if Some(wake.entity) == self.w.s.player && !self.waiting.contains_key(&wake.entity) {
-                    if !self.woke {
-                        self.woke = true;
-                        self.wake_event(wake.entity)?;
-                        // `wake` may end the turn: the player died or stopped acting
-                        if self.w.s.wake_of(wake.entity) != Some(wake) {
-                            self.woke = false;
+                let e = wake.entity;
+                if let Some(n) = self.w.s.seat_of(e).filter(|_| self.w.s.get(e).alive && !self.waiting.contains_key(&e)) {
+                    // a member: `wake` first, then the choice (M 6.1.10)
+                    if self.woke != Some(e) {
+                        self.woke = Some(e);
+                        self.wake_event(e)?;
+                        // `wake` may end the turn: the member died or stopped acting
+                        if self.w.s.wake_of(e) != Some(wake) {
+                            self.woke = None;
                             continue;
                         }
                     }
-                    return Ok(Status::Input);
+                    if self.w.s.seat_of(e) == Some(n) && self.takes_input(e, n) {
+                        self.w.s.player = Some(e);
+                        if let Some(p) = self.w.s.at(e) {
+                            self.w.s.last_player_map = Some(p.map);
+                        }
+                        self.awaiting = Some(n);
+                        return Ok(Status::Input);
+                    }
+                    // another member: its ai, or a rest
+                    self.woke = None;
+                    self.after_wake(e)?;
+                    seen(&mut self.w);
+                    continue;
                 }
                 self.turn(wake.entity)?;
                 seen(&mut self.w);
@@ -85,7 +125,8 @@ impl<'m> Runner<'m> {
                 continue;
             }
             let played = self.w.s.game.turn() - start_turn;
-            let has_player = self.w.s.player.is_some_and(|p| self.w.s.get(p).alive && self.w.s.wake_of(p).is_some());
+            // rounds without a turn: no member has a wake (M 6.1.10)
+            let has_player = self.w.s.players().into_iter().any(|p| self.w.s.wake_of(p).is_some());
             if !has_player && played >= rounds {
                 return Ok(Status::NoPlayer { rounds: played });
             }
@@ -145,9 +186,19 @@ impl<'m> Runner<'m> {
             return Ok(());
         }
         self.wake_event(e)?;
+        self.choose(e)
+    }
+
+    /// A member's turn after its `wake` when it does not take input.
+    fn after_wake(&mut self, e: EntityId) -> RtResult<()> {
+        self.w.s.unschedule(e);
+        self.choose(e)
+    }
+
+    /// The choice after `wake` (M 6.1.5 step 2), the run and the next wake.
+    fn choose(&mut self, e: EntityId) -> RtResult<()> {
         // the actor may have died or stopped acting in `wake`
-        let is_player = self.w.s.player == Some(e);
-        if !self.w.s.get(e).alive || (!is_player && !self.w.s.get(e).has("ai")) || self.w.s.at(e).is_none() {
+        if !self.w.s.get(e).alive || !self.w.s.is_actor(e) || self.w.s.at(e).is_none() {
             self.waiting.remove(&e);
             return self.end_action();
         }
@@ -166,7 +217,7 @@ impl<'m> Runner<'m> {
                 }
             }
         };
-        self.finish(e, outcome, is_player)?;
+        self.finish(e, outcome, false)?;
         self.end_action()
     }
 
@@ -184,7 +235,7 @@ impl<'m> Runner<'m> {
                 if player && cost == 0 {
                     // a free action: the player acts again now, without a new wake
                     self.w.s.schedule(e, now);
-                    self.woke = true;
+                    self.woke = Some(e);
                     return Ok(true);
                 }
                 if let Some(d) = delay(cost, speed) {
@@ -196,7 +247,7 @@ impl<'m> Runner<'m> {
                 // the player's failure costs nothing; time already waited
                 // stays spent (M 6.1.5)
                 self.w.s.schedule(e, now);
-                self.woke = true;
+                self.woke = Some(e);
                 false
             }
             Outcome::Failed { .. } => {
@@ -213,17 +264,32 @@ impl<'m> Runner<'m> {
         })
     }
 
-    /// The player's command on its turn. Returns whether it succeeded; a
-    /// failure takes no time, and the player is asked again (M 6.1.5).
+    /// The player's command on its turn: the awaited seat's input.
     pub fn player(&mut self, cmd: &CommandValue) -> RtResult<bool> {
+        let n = self.awaiting.or_else(|| self.w.s.player.and_then(|p| self.w.s.seat_of(p))).unwrap_or(1);
+        self.input(n, cmd)
+    }
+
+    /// Seat `n`'s command for the member whose turn it is. Returns whether
+    /// it succeeded; a failure takes no time, and the seat is asked again
+    /// (M 6.1.5). Input from a seat that is not awaited is an error; the
+    /// front end drops such presses (M 8.2).
+    pub fn input(&mut self, n: SeatId, cmd: &CommandValue) -> RtResult<bool> {
+        if self.awaiting.is_some_and(|a| a != n) {
+            return Err(format!("seat {n} has no turn now"));
+        }
         let p = self.w.s.player.ok_or("no player")?;
+        if self.w.s.seat_of(p) != Some(n) {
+            return Err(format!("seat {n} has no turn now"));
+        }
         let Some(wake) = self.w.s.wake_of(p) else { return Err("the player has no turn now".into()) };
         let map = self.w.s.at(p).ok_or("the player is not on a map")?.map;
         if wake.at > self.clock(map) {
             return Err("it is not the player's turn".into());
         }
         self.w.s.unschedule(p);
-        self.woke = false;
+        self.woke = None;
+        self.awaiting = None;
         let outcome = self.w.start_command(p, cmd)?;
         let ok = self.finish(p, outcome, true)?;
         self.end_action()?;

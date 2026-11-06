@@ -328,3 +328,29 @@ fn local_types_stick() {
     edit_std(&mut f, "lib/std/gen.rlml", "    rooms = []\n", "    rooms = [1, \"a\"]\n");
     expect_error(&run(&f), "a list holds one type");
 }
+
+#[test]
+fn seats_party_and_leash() {
+    let mut f = mini();
+    edit(&mut f, "game.rlml", "- PLAYER HERO", "- PLAYER HERO\n- seats 1..4\n- party each\n- leash on");
+    let r = run(&f);
+    assert!(errors(&r).is_empty(), "{:#?}", errors(&r));
+    for (row, part) in [("- seats 0..2", "`seats` is a range"), ("- seats 3..2", "`seats` is a range"), ("- seats 1..9", "`seats` is a range"), ("- party all", "`party` is"), ("- leash yes", "`leash` is")] {
+        let mut f = mini();
+        edit(&mut f, "game.rlml", "- PLAYER HERO", &format!("- PLAYER HERO\n{row}"));
+        expect_error(&run(&f), part);
+    }
+    let mut f = mini();
+    edit(&mut f, "game.rlml", "- PLAYER HERO", "- PLAYER HERO\n- leash on");
+    let r = run(&f);
+    assert!(r.0.iter().any(|d| d.to_string().contains("`leash on` in a one-seat game")), "a warning (D 3.3)");
+}
+
+#[test]
+fn a_seat_number_above_the_upper_bound() {
+    let mut f = mini();
+    edit(&mut f, "game.rlml", "- render GLYPH.RAT", "- render GLYPH.RAT\n- seat 2");
+    expect_error(&run(&f), "`seat` is a seat number from 1 to the game's `seats` upper bound 1");
+    edit(&mut f, "game.rlml", "- PLAYER HERO", "- PLAYER HERO\n- seats 1..2");
+    assert!(errors(&run(&f)).is_empty());
+}

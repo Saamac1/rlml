@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use super::rng::Rng;
-use super::state::Place;
+use super::state::{Place, SeatId};
 use super::value::{Area, Card, CommandValue, ComponentValue, Dir, EntityId, MapId, Pos as Cell, Side, Value};
 use super::world::{DEFAULT_COST, LogEntry, Noise, RtResult, Travel, World, delay, number_value};
 use crate::model::{Def, Kind, Source as DefSource};
@@ -473,7 +473,7 @@ impl World<'_> {
             "holder" => ent(env.holder),
             "actor" => ent(env.actor),
             "player" => ent(self.s.player),
-            "players" => Value::Collection(self.s.player.filter(|&e| self.s.get(e).alive).map(Value::Entity).into_iter().collect()),
+            "players" => Value::Collection(self.s.players().into_iter().map(Value::Entity).collect()),
             "map" => env.map.map(|m| Value::Name(self.s.maps[m].name.clone())).unwrap_or(Value::None),
             _ if CONTEXT.contains(&w) => Value::None,
             _ => {
@@ -1235,6 +1235,14 @@ impl World<'_> {
         for (order, d) in self.m.code.iter().enumerate() {
             match &d.item.kind {
                 ItemKind::Handler(h) if h.phase == phase && self.event_name(&h.event, d.namespace.as_deref()) == event => {
+                    // a named handler runs only as the definition that won:
+                    // `override on … as NAME` replaces it (RS 4, D 4.5)
+                    if !d.name.is_empty()
+                        && let Some(def) = self.m.defs.get(&names::qualify(d.namespace.as_deref(), &d.name))
+                        && (def.file != d.file || def.line != d.line)
+                    {
+                        continue;
+                    }
                     out.push((h.priority, order, 0, HandlerRef { handler: Arc::new(h.clone()), component: None, name: d.name.clone(), ns: d.namespace.clone(), file: d.file.clone() }));
                 }
                 ItemKind::Component { handlers, .. } => {
@@ -1272,20 +1280,44 @@ impl World<'_> {
         Ok(())
     }
 
+    /// `control(e, seat:)` (M 6.1.10): a member becomes its seat's
+    /// controlled member; another instance takes the player's place, or
+    /// joins seat `n`, with the old controlled member staying a member.
+    pub fn control(&mut self, e: EntityId, n: Option<SeatId>) {
+        let n = match n {
+            Some(n) => n,
+            None => match self.s.seat_of(e) {
+                Some(n) => n,
+                None => {
+                    // `e` replaces the player, who leaves the seat (body swap)
+                    let n = self.s.player.and_then(|p| self.s.seat_of(p)).or_else(|| self.s.seats.first().map(|s| s.n)).unwrap_or(1);
+                    if let Some(old) = self.s.player.filter(|&p| self.s.seat_of(p) == Some(n)) {
+                        self.s.remove_member(old);
+                    }
+                    n
+                }
+            },
+        };
+        self.s.join_seat(n);
+        self.s.add_member(e, n);
+        self.s.set_active(n, e);
+        self.s.player = Some(e);
+    }
+
     /// `begin` after the new game is computed (M 5.1 step 8).
     pub fn begin(&mut self) -> RtResult<()> {
         let env = Env::new(BodyKind::Handler, "begin", None, "<engine>");
         self.flush_created(&env)?;
         self.emit("begin", vec![], &env)?;
         self.flush_created(&env)?;
-        // the player made by `begin` acts at 0 (M 5.1), also when it is an
-        // actor that got its spawn wake first (an open question, M 11)
-        if let Some(p) = self.s.player
-            && let Some(at) = self.s.at(p)
-        {
-            let now = self.s.maps[at.map].clock(self.s.game.time);
-            if self.s.wake_of(p).is_some_and(|w| w.at > now) {
-                self.s.schedule(p, now);
+        // the members made by `begin` act at 0 (M 5.1), also when they are
+        // actors that got their spawn wake first (an open question, M 11)
+        for p in self.s.players() {
+            if let Some(at) = self.s.at(p) {
+                let now = self.s.maps[at.map].clock(self.s.game.time);
+                if self.s.wake_of(p).is_some_and(|w| w.at > now) {
+                    self.s.schedule(p, now);
+                }
             }
         }
         Ok(())
@@ -1484,15 +1516,28 @@ impl World<'_> {
                     Some(Value::Name(n)) => n.clone(),
                     _ => return Err(self.rt_err(env, pos, "`remove` takes a component name")),
                 };
-                self.s.get_mut(e).remove(&comp);
-                if comp == "ai" && self.s.player != Some(e) {
+                if comp == "seat" {
+                    self.s.remove_member(e);
+                } else {
+                    self.s.get_mut(e).remove(&comp);
+                }
+                // an instance that stops being an actor leaves the queue (M 9.5)
+                if (comp == "ai" || comp == "seat") && !self.s.is_actor(e) && self.s.player != Some(e) {
                     self.s.unschedule(e);
                 }
                 Value::Entity(e)
             }
             "control" => {
                 let e = self.entity_arg(Some(&a0), f, env, pos)?;
-                self.s.player = Some(e);
+                let n = match self.arg(&args, 1, "seat") {
+                    Some(Value::Number(n)) => {
+                        let n = u8::try_from(*n).ok().filter(|&n| self.s.seat(n).is_some());
+                        Some(n.ok_or_else(|| self.rt_err(env, pos, "`control`: the seat is not joined (M 6.1.10)"))?)
+                    }
+                    Some(Value::None) | None => None,
+                    Some(_) => return Err(self.rt_err(env, pos, "`control` takes a seat number")),
+                };
+                self.control(e, n);
                 if let Some(p) = self.s.at(e) {
                     self.s.last_player_map = Some(p.map);
                     if self.s.wake_of(e).is_none() {
@@ -1532,9 +1577,34 @@ impl World<'_> {
             // presentation without a screen does nothing (M 9.3)
             "fly" | "play" | "pan" | "shake" | "fade" | "reveal" => Value::None,
             "sees" => {
-                let a = self.entity_arg(Some(&a0), f, env, pos)?;
                 let b = self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?;
-                Value::Bool(self.sees(a, b.cells()))
+                // a collection sees when one of its members does (M 9.3)
+                let who: Vec<EntityId> = match &a0 {
+                    Value::Collection(v) => v.iter().filter_map(Value::as_entity).collect(),
+                    _ => vec![self.entity_arg(Some(&a0), f, env, pos)?],
+                };
+                Value::Bool(who.into_iter().any(|a| self.sees(a, b.cells())))
+            }
+            "in_view" => {
+                let b = self.area(&a0, env, pos)?;
+                Value::Bool(self.in_view(b.cells()))
+            }
+            "seats" => Value::List(self.s.seats.iter().map(|s| Value::Number(s.n as i64)).collect()),
+            "seat_of" => {
+                let e = a0.as_entity();
+                e.and_then(|e| self.s.seat_of(e)).map(|n| Value::Number(n as i64)).unwrap_or(Value::None)
+            }
+            "members" | "active" => {
+                let n = a0.as_number().and_then(|n| SeatId::try_from(n).ok());
+                match (f, n) {
+                    ("members", Some(n)) => Value::Collection(self.s.seat_members(n).into_iter().map(Value::Entity).collect()),
+                    ("members", None) => Value::Collection(vec![]),
+                    (_, n) => n.and_then(|n| self.s.active(n)).map(Value::Entity).unwrap_or(Value::None),
+                }
+            }
+            "view_width" | "view_height" => {
+                let size = self.view_size.or_else(|| self.s.active_map().map(|m| (self.s.maps[m].width, self.s.maps[m].height))).unwrap_or((0, 0));
+                Value::Number(if f == "view_width" { size.0 } else { size.1 } as i64)
             }
             "heard" => {
                 let a = self.entity_arg(Some(&a0), f, env, pos)?;
@@ -1745,7 +1815,7 @@ impl World<'_> {
                 self.emit("enter", vec![Value::Entity(e), Value::Pos(p), Value::Pos(q)], env)?;
             }
             _ => {
-                if self.s.get(e).has("ai") {
+                if self.s.is_actor(e) {
                     self.wake_new(e, p.map);
                 }
                 let name = self.s.maps[p.map].name.clone();

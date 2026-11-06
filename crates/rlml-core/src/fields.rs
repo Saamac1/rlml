@@ -65,6 +65,7 @@ pub fn engine_component(name: &str) -> Option<Vec<Field>> {
         "hearing" => vec![f("acuity", "number", Some("0"))],
         "name" => vec![f("text", "text", None)],
         "revealed" => vec![],
+        "seat" => vec![f("n", "number", None)],
         // a source of a continuous sound: `- sound SOUND.MUSIC_BOX` (D 12.3)
         "sound" => vec![f("kind", "name", None)],
         "blocks" | "timer" => vec![],

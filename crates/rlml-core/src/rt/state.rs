@@ -203,6 +203,18 @@ pub struct DeckState {
     pub discard: Vec<Card>,
 }
 
+/// A seat's number, 1…8 (M 6.1.10).
+pub type SeatId = u8;
+
+/// A joined seat: its members in the order they joined and the one it
+/// controls (M 6.1.10). Devices are not state.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Seat {
+    pub n: SeatId,
+    pub members: Vec<EntityId>,
+    pub active: Option<EntityId>,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct State {
     pub entities: Vec<Instance>,
@@ -211,8 +223,13 @@ pub struct State {
     pub wakes: Vec<Wake>,
     pub next_seq: u64,
     pub decks: Vec<(String, DeckState)>,
-    /// The last `control` target (RS 10.1).
+    /// The member whose turn is on, or who had the last one (M 6.1.10);
+    /// in a one-seat game the last `control` target (RS 10.1).
     pub player: Option<EntityId>,
+    /// The joined seats by number (M 6.1.10).
+    pub seats: Vec<Seat>,
+    /// `party each`: every member waits for its seat's input (D 3.3).
+    pub party_each: bool,
     /// The map the player was last on; the active map without a player
     /// (M 6.1.8).
     pub last_player_map: Option<MapId>,
@@ -320,10 +337,110 @@ impl State {
         self.decks.iter_mut().find(|(n, _)| n == name).map(|(_, d)| d)
     }
 
-    /// The active map: the player's, or where the player last was, or the
-    /// start map (M 6.1.8).
+    /// The active map: the player's, or a living member's, or where the
+    /// player last was, or the start map (M 6.1.8). Several active maps
+    /// (M 6.1.10) are not supported yet: the group shares the player's.
     pub fn active_map(&self) -> Option<MapId> {
-        self.player.and_then(|p| self.at(p)).map(|p| p.map).or(self.last_player_map).or_else(|| self.game.start.as_deref().and_then(|s| self.map_id(s)))
+        self.player
+            .filter(|&p| self.get(p).alive)
+            .and_then(|p| self.at(p))
+            .or_else(|| self.players().into_iter().find_map(|e| self.at(e)))
+            .map(|p| p.map)
+            .or(self.last_player_map)
+            .or_else(|| self.game.start.as_deref().and_then(|s| self.map_id(s)))
+    }
+
+    // ---- seats (M 6.1.10) ----
+
+    pub fn seat(&self, n: SeatId) -> Option<&Seat> {
+        self.seats.iter().find(|s| s.n == n)
+    }
+
+    fn seat_mut(&mut self, n: SeatId) -> Option<&mut Seat> {
+        self.seats.iter_mut().find(|s| s.n == n)
+    }
+
+    /// Joins seat `n`; the seats stay in number order. Joining a joined
+    /// seat does nothing.
+    pub fn join_seat(&mut self, n: SeatId) {
+        if self.seat(n).is_none() {
+            let i = self.seats.iter().position(|s| s.n > n).unwrap_or(self.seats.len());
+            self.seats.insert(i, Seat { n, members: vec![], active: None });
+        }
+    }
+
+    /// The lowest free seat number.
+    pub fn free_seat(&self) -> SeatId {
+        (1..=u8::MAX).find(|&n| self.seat(n).is_none()).unwrap_or(u8::MAX)
+    }
+
+    /// Frees seat `n`: its members lose `seat` (M 8.2).
+    pub fn part_seat(&mut self, n: SeatId) {
+        if let Some(i) = self.seats.iter().position(|s| s.n == n) {
+            for e in self.seats.remove(i).members {
+                self.get_mut(e).remove("seat");
+            }
+        }
+    }
+
+    /// The seat `e` is a member of.
+    pub fn seat_of(&self, e: EntityId) -> Option<SeatId> {
+        self.seats.iter().find(|s| s.members.contains(&e)).map(|s| s.n)
+    }
+
+    pub fn is_member(&self, e: EntityId) -> bool {
+        self.seat_of(e).is_some()
+    }
+
+    /// Makes `e` a member of joined seat `n`, leaving its old seat, with the
+    /// engine component `seat` (D 5.3).
+    pub fn add_member(&mut self, e: EntityId, n: SeatId) {
+        if self.seat_of(e) == Some(n) {
+            return;
+        }
+        self.remove_member(e);
+        if let Some(s) = self.seat_mut(n) {
+            s.members.push(e);
+            self.get_mut(e).set(ComponentValue { name: "seat".into(), fields: vec![("n".into(), Value::Number(n as i64))] });
+        }
+    }
+
+    /// `e` leaves its seat and loses `seat`.
+    pub fn remove_member(&mut self, e: EntityId) {
+        for s in &mut self.seats {
+            s.members.retain(|&m| m != e);
+            if s.active == Some(e) {
+                s.active = None;
+            }
+        }
+        self.get_mut(e).remove("seat");
+    }
+
+    pub fn set_active(&mut self, n: SeatId, e: EntityId) {
+        if let Some(s) = self.seat_mut(n) {
+            s.active = Some(e);
+        }
+    }
+
+    /// A seat's living members in joining order.
+    pub fn seat_members(&self, n: SeatId) -> Vec<EntityId> {
+        self.seat(n).map(|s| s.members.iter().copied().filter(|&e| self.get(e).alive).collect()).unwrap_or_default()
+    }
+
+    /// `players`: every seat's living members, by seat and then joining
+    /// order (M 6.1.10).
+    pub fn players(&self) -> Vec<EntityId> {
+        self.seats.iter().flat_map(|s| s.members.iter().copied()).filter(|&e| self.get(e).alive).collect()
+    }
+
+    /// A seat's living controlled member.
+    pub fn active(&self, n: SeatId) -> Option<EntityId> {
+        self.seat(n).and_then(|s| s.active).filter(|&e| self.get(e).alive)
+    }
+
+    /// An actor: a member, or an instance with `ai` (M 6.1.10).
+    pub fn is_actor(&self, e: EntityId) -> bool {
+        self.is_member(e) || self.get(e).has("ai")
     }
 }
 

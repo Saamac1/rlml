@@ -103,20 +103,17 @@ impl World<'_> {
         self.look(tile).ch
     }
 
-    /// The player's view on a map now, or the whole map without `sight`.
+    /// The shared view on a map now (M 7.2), the last shared view without
+    /// members, or the whole map.
     pub fn player_view(&mut self, map: MapId) -> BTreeSet<(i32, i32)> {
+        if let Some(v) = self.shared_view(map) {
+            self.last_view = Some((map, v.clone()));
+            return v;
+        }
         let m = &self.s.maps[map];
-        let all = || (0..m.height).flat_map(|y| (0..m.width).map(move |x| (x, y))).collect();
-        match self.s.player {
-            Some(p) if self.s.get(p).alive && self.s.at(p).is_some_and(|a| a.map == map) => {
-                let v = self.field_of_view(p).unwrap_or_else(all);
-                self.last_view = Some((map, v.clone()));
-                v
-            }
-            _ => match &self.last_view {
-                Some((lm, v)) if *lm == map => v.clone(),
-                _ => all(),
-            },
+        match &self.last_view {
+            Some((lm, v)) if *lm == map => v.clone(),
+            _ => (0..m.height).flat_map(|y| (0..m.width).map(move |x| (x, y))).collect(),
         }
     }
 

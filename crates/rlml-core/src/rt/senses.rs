@@ -175,27 +175,64 @@ impl World<'_> {
         )
     }
 
-    /// `sees(a, b)`: some cell of `b` is in `a`'s view. A player without
-    /// `sight` sees the whole active map; a dead player keeps its last view
+    /// The shared view on `map` (M 7.2): the union of the living members'
+    /// views there; a member without `sight` sees the whole map. `None`
+    /// when no member is on the map.
+    pub fn shared_view(&self, map: MapId) -> Option<BTreeSet<(i32, i32)>> {
+        let on_map: Vec<EntityId> = self.s.players().into_iter().filter(|&e| self.s.at(e).is_some_and(|p| p.map == map)).collect();
+        if on_map.is_empty() {
+            return None;
+        }
+        let m = &self.s.maps[map];
+        let mut view = BTreeSet::new();
+        for e in on_map {
+            match self.field_of_view(e) {
+                Some(v) => view.extend(v),
+                None => return Some((0..m.height).flat_map(|y| (0..m.width).map(move |x| (x, y))).collect()),
+            }
+        }
+        Some(view)
+    }
+
+    /// The shared view on the active map, kept as the last shared view for
+    /// when no member is left (M 7.2).
+    pub fn current_view(&mut self) -> Option<(MapId, BTreeSet<(i32, i32)>)> {
+        if let Some(map) = self.s.active_map()
+            && let Some(v) = self.shared_view(map)
+        {
+            self.last_view = Some((map, v));
+        }
+        self.last_view.clone()
+    }
+
+    /// `in_view(x)`: some cell of `x` is in the shared view, or in the last
+    /// shared view without members (M 7.2).
+    pub fn in_view(&mut self, cells: &[Pos]) -> bool {
+        match self.current_view() {
+            Some((map, view)) => cells.iter().any(|p| p.map == map && view.contains(&(p.x, p.y))),
+            None => false,
+        }
+    }
+
+    /// `sees(a, b)`: some cell of `b` is in `a`'s view. A member without
+    /// `sight` sees its whole map; a dead member sees the last shared view
     /// (M 7.2).
     pub fn sees(&mut self, a: EntityId, cells: &[Pos]) -> bool {
-        let is_player = self.s.player == Some(a);
-        if is_player && !self.s.get(a).alive {
+        let member = self.s.is_member(a) || self.s.player == Some(a);
+        if member && !self.s.get(a).alive {
             return match &self.last_view {
                 Some((map, view)) => cells.iter().any(|p| p.map == *map && view.contains(&(p.x, p.y))),
                 None => false,
             };
         }
         let Some(at) = self.s.at(a) else { return false };
+        if member {
+            // keep the last shared view for when the group is gone
+            self.current_view();
+        }
         match self.field_of_view(a) {
-            Some(view) => {
-                let hit = cells.iter().any(|p| p.map == at.map && view.contains(&(p.x, p.y)));
-                if is_player {
-                    self.last_view = Some((at.map, view));
-                }
-                hit
-            }
-            None => is_player && cells.iter().any(|p| p.map == at.map),
+            Some(view) => cells.iter().any(|p| p.map == at.map && view.contains(&(p.x, p.y))),
+            None => member && cells.iter().any(|p| p.map == at.map),
         }
     }
 
@@ -280,7 +317,7 @@ impl World<'_> {
 
     /// Is `who` an actor that a route may pass at a cost of four steps?
     fn is_actor(&self, e: EntityId) -> bool {
-        self.s.player == Some(e) || self.s.get(e).has("ai")
+        self.s.player == Some(e) || self.s.is_actor(e)
     }
 
     /// `path(a, b, for)`: an A* route from `a` to the nearest cell of `b`,

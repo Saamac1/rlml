@@ -697,3 +697,210 @@ fn golden_the_player_kills_a_rat() {
 fn golden_stairs_down_and_back() {
     golden("stairs_down_and_back", "s s s j h j j j l l l l l l l k k l l > s <");
 }
+
+// ---- seats (M 6.1.10) ----
+
+const SEATS: &str = r#"game T
+- start ROOM
+- seats 1..2
+
+include lib/std.rlml
+
+settings
+- style ascii
+- language fi
+
+entity HERO
+- blocks move
+- sight radius 2
+
+map ROOM
+
+```
+#A.C........B#
+```
+
+legend:
+- # WALL
+- A FLOOR as START
+- B FLOOR as P2
+- C FLOOR as P3
+- . FLOOR
+
+```roguescript
+override on begin() as STD.SPAWN_PLAYER:
+    for n in seats():
+        if n == 1:
+            control(spawn(HERO, at: label(START)), seat: 1)
+        else:
+            control(spawn(HERO, at: label(P2)), seat: n)
+
+command TO_FRIEND() cost 0:
+    for e in members(seat_of(actor)) where it != actor:
+        control(e)
+```
+"#;
+
+fn seats_game<'m>(m: &'m Model, seats: u8, setup: impl FnOnce(&mut World)) -> Runner<'m> {
+    let mut w = World::new_game_seats(m, 7, Some(seats)).unwrap();
+    w.begin().unwrap();
+    setup(&mut w);
+    Runner::new(w)
+}
+
+/// A second member for seat 1 at `P3`, without `ai`; seat 1's first
+/// member stays the controlled one.
+fn second_member(w: &mut World) -> usize {
+    let first = w.s.active(1).unwrap();
+    let at = w.s.maps[0].label("P3")[0];
+    let c = w.spawn("HERO", &[], Place::Map(Pos { map: 0, x: at.0, y: at.1 })).unwrap();
+    w.control(c, Some(1));
+    w.control(first, None);
+    let now = w.s.game.time;
+    w.s.schedule(c, now);
+    c
+}
+
+#[test]
+fn two_seats_take_turns() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 2, |_| {});
+    let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
+    assert_eq!(r.w.s.players(), [a, b], "`players` by seat (M 6.1.10)");
+    assert_eq!((r.w.s.seat_of(a), r.w.s.seat_of(b)), (Some(1), Some(2)));
+    assert!(r.w.s.get(b).has("seat"), "the engine component `seat` (D 5.3)");
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.awaiting(), r.w.s.player, r.w.s.game.time), (Some(1), Some(a), 0));
+    assert!(r.input(2, &cmd("STD.WAIT")).is_err(), "seat 2 has no turn now");
+    assert!(r.input(1, &cmd("STD.WAIT")).unwrap());
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.awaiting(), r.w.s.player, r.w.s.game.time), (Some(2), Some(b), 0), "both members act at 0 (M 5.1)");
+    assert!(r.input(2, &cmd("STD.WAIT")).unwrap());
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.awaiting(), r.w.s.game.time), (Some(1), 120));
+}
+
+#[test]
+fn one_seat_is_the_old_game() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 1, |_| {});
+    assert_eq!(r.w.s.seats.len(), 1, "the lower bound joins");
+    r.run(0).unwrap();
+    assert!(r.player(&cmd("STD.WAIT")).unwrap());
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.awaiting(), r.w.s.game.time), (Some(1), 120));
+}
+
+#[test]
+fn the_other_member_rests_with_party_switch() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut c = 0;
+    let mut r = seats_game(&m, 1, |w| c = second_member(w));
+    let a = r.w.s.active(1).unwrap();
+    assert_eq!(r.w.s.seat_members(1), [a, c]);
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(r.w.s.player, Some(a));
+    assert!(r.player(&cmd("STD.WAIT")).unwrap());
+    // `c` has no `ai`: it rests for the default cost and stays in the queue
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.w.s.player, r.w.s.game.time), (Some(a), 120));
+    assert_eq!(r.w.s.wake_of(c).unwrap().at, 120, "a member without `ai` rests (M 6.1.10)");
+}
+
+#[test]
+fn switching_gives_no_free_turns() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut c = 0;
+    let mut r = seats_game(&m, 1, |w| c = second_member(w));
+    let a = r.w.s.active(1).unwrap();
+    r.run(0).unwrap();
+    assert!(r.player(&cmd("TO_FRIEND")).unwrap(), "a free switch");
+    assert_eq!(r.w.s.active(1), Some(c));
+    // `c` acts on its own wake at 0; `a` goes on as another member, resting
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.w.s.player, r.w.s.game.time), (Some(c), 0));
+    assert!(r.player(&cmd("STD.WAIT")).unwrap());
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.w.s.player, r.w.s.game.time), (Some(c), 120), "one turn each in a round");
+    assert_eq!(r.w.s.wake_of(a).unwrap().at, 120, "the switch cost `a` its turn, no more and no less");
+}
+
+#[test]
+fn every_member_takes_input_with_party_each() {
+    let f = files(&[("game.rlml", &SEATS.replace("- seats 1..2", "- seats 1..2\n- party each"))]);
+    let m = model(&f);
+    let mut c = 0;
+    let mut r = seats_game(&m, 1, |w| c = second_member(w));
+    let a = r.w.s.active(1).unwrap();
+    r.run(0).unwrap();
+    assert!(r.player(&cmd("STD.WAIT")).unwrap());
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.w.s.player, r.w.s.active(1), r.w.s.game.time), (Some(c), Some(c), 0));
+    assert!(r.player(&cmd("STD.WAIT")).unwrap());
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.w.s.player, r.w.s.game.time), (Some(a), 120));
+}
+
+#[test]
+fn control_moves_when_the_controlled_member_has_no_wake() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut c = 0;
+    let mut r = seats_game(&m, 1, |w| c = second_member(w));
+    let a = r.w.s.active(1).unwrap();
+    r.w.s.unschedule(a);
+    assert_eq!(r.run(0).unwrap(), Status::Input, "a paralysed member does not stall the game");
+    assert_eq!((r.w.s.player, r.w.s.active(1)), (Some(c), Some(c)));
+}
+
+#[test]
+fn the_world_goes_on_when_every_seat_is_empty() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 2, |_| {});
+    r.run(0).unwrap();
+    let env = rlml_core::rt::eval::Env::new(rlml_core::rt::eval::BodyKind::Handler, "test", None, "test");
+    let a = r.w.s.active(1).unwrap();
+    r.w.destroy(a, &env).unwrap();
+    assert_eq!(r.run(0).unwrap(), Status::Input, "seat 2 still plays");
+    assert_eq!(r.awaiting(), Some(2));
+    let b = r.w.s.active(2).unwrap();
+    r.w.destroy(b, &env).unwrap();
+    assert_eq!(r.run(2).unwrap(), Status::NoPlayer { rounds: 2 });
+    assert_eq!(r.w.s.seat_of(a), Some(1), "a dead member keeps its seat for `seat_of`");
+    assert!(r.w.s.players().is_empty());
+}
+
+#[test]
+fn the_shared_view_is_the_union() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 2, |_| {});
+    let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
+    let va = r.w.field_of_view(a).unwrap();
+    let vb = r.w.field_of_view(b).unwrap();
+    let shared = r.w.player_view(0);
+    assert!(va.is_subset(&shared) && vb.is_subset(&shared), "every member's view (M 7.2)");
+    assert_eq!(shared.len(), va.union(&vb).count());
+    let (bx, by) = at(&r.w, b);
+    assert!(!va.contains(&(bx, by)));
+    assert!(r.w.in_view(&[Pos { map: 0, x: bx, y: by }]), "`in_view` sees what any member sees");
+    assert!(!r.w.sees(a, &[Pos { map: 0, x: bx, y: by }]), "`sees` stays one member's");
+    let env = rlml_core::rt::eval::Env::new(rlml_core::rt::eval::BodyKind::Handler, "test", None, "test");
+    r.w.destroy(a, &env).unwrap();
+    r.w.destroy(b, &env).unwrap();
+    assert!(r.w.in_view(&[Pos { map: 0, x: bx, y: by }]), "the last shared view stays");
+}
+
+#[test]
+fn control_needs_a_joined_seat() {
+    let f = files(&[("game.rlml", &SEATS.replace("seat: n)", "seat: 2)").replace("control(spawn(HERO, at: label(START)), seat: 1)", "control(spawn(HERO, at: label(START)), seat: 2)"))]);
+    let m = model(&f);
+    let mut w = World::new_game_seats(&m, 7, Some(1)).unwrap();
+    let e = w.begin().unwrap_err();
+    assert!(e.contains("the seat is not joined"), "{e}");
+}

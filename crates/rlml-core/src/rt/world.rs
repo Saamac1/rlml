@@ -55,6 +55,9 @@ pub struct World<'m> {
     pub heard: std::collections::BTreeMap<EntityId, Vec<super::value::Sound>>,
     /// The player's last view, for a dead player's `sees` (M 7.2).
     pub last_view: Option<(MapId, std::collections::BTreeSet<(i32, i32)>)>,
+    /// The map area's size in cells, set by the front end for
+    /// `view_width()` and `view_height()` (M 7.1); `None` is the map's size.
+    pub view_size: Option<(i32, i32)>,
 }
 
 /// A `log` call: the message key and its text arguments.
@@ -96,7 +99,7 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None }
+        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, view_size: None }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {
@@ -458,9 +461,17 @@ impl<'m> World<'m> {
         self.s.get_mut(e).place = place.clone();
         // 7. `created`
         self.created.push(e);
+        // a data member `- seat N` joins its seat if that seat is joined (D 5.3)
+        if let Some(n) = self.s.get(e).get("seat").and_then(|c| c.get("n")).and_then(Value::as_number) {
+            let n = n.clamp(0, u8::MAX as i64) as u8;
+            if self.s.seat(n).is_some() {
+                self.s.get_mut(e).remove("seat");
+                self.s.add_member(e, n);
+            }
+        }
         // 8. the wake queue for an actor on a map
         if let Place::Map(p) = place
-            && self.s.get(e).has("ai")
+            && self.s.is_actor(e)
         {
             self.wake_new(e, p.map);
         }
@@ -645,11 +656,23 @@ impl<'m> World<'m> {
     /// Computes a new game up to `begin` (M 5.1 steps 1–7). `seed` is used
     /// when the `game` block has none.
     pub fn new_game(m: &'m Model, seed: u64) -> RtResult<World<'m>> {
+        Self::new_game_seats(m, seed, None)
+    }
+
+    /// `new_game` with `seats` joined seats from the join screen (M 8.2);
+    /// `None` joins the game's lower bound. The count is clamped to the
+    /// game's `seats a..b`.
+    pub fn new_game_seats(m: &'m Model, seed: u64, seats: Option<u8>) -> RtResult<World<'m>> {
         let g = m.named_game().ok_or("no named `game` block")?.clone();
         let field = |name: &str| g.items.iter().find(|i| i.key() == name).map(|i| i.rest(1).to_string());
         // 1. the seed
         let seed = field("seed").and_then(|s| s.parse::<i64>().ok()).map(|s| s as u64).unwrap_or(seed);
         let mut w = World::new(m, seed);
+        let (lo, hi) = field("seats").as_deref().and_then(seat_range).unwrap_or((1, 1));
+        for n in 1..=seats.unwrap_or(lo).clamp(lo, hi) {
+            w.s.join_seat(n);
+        }
+        w.s.party_each = field("party").as_deref() == Some("each");
         w.s.game.call_depth = field("call_depth").and_then(|s| s.parse().ok()).unwrap_or(256);
         w.s.game.loop_steps = field("loop_steps").and_then(|s| s.parse().ok()).unwrap_or(1_000_000);
         // 2. the profile is not supported yet
@@ -748,6 +771,12 @@ impl<'m> World<'m> {
         }
         Ok(Area::new(cells))
     }
+}
+
+/// `seats a..b` (D 3.3), or a single number for `a..a`.
+pub fn seat_range(s: &str) -> Option<(u8, u8)> {
+    let (a, b) = s.split_once("..").unwrap_or((s, s));
+    Some((a.trim().parse().ok()?, b.trim().parse().ok()?))
 }
 
 /// A number, dice or range value as written (`3`, `1d6+2`, `-1..3`, `50%`).

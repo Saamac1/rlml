@@ -16,14 +16,14 @@ use crate::token::Token;
 /// Engine actions a key, menu item or `{^…}` may name (M 9.1).
 pub const ENGINE_ACTIONS: &[&str] = &[
     "save", "quit", "pass", "repeat", "help", "confirm", "back", "close", "resume", "skip", "restart", "rewind", "new_game", "load_game",
-    "exit", "next", "prev", "toggle", "travel_to", "look",
+    "exit", "next", "prev", "toggle", "travel_to", "look", "join", "leave_seat",
 ];
 
 /// Engine events (M 9.1, M 9.6).
-pub const ENGINE_EVENTS: &[&str] = &["begin", "turn", "wake", "created", "removed", "enter", "leave", "arrive", "depart", "hear"];
+pub const ENGINE_EVENTS: &[&str] = &["begin", "turn", "wake", "created", "removed", "enter", "leave", "arrive", "depart", "hear", "join", "part"];
 
 const GAME_FIELDS: &[&str] =
-    &["start", "at", "seed", "call_depth", "loop_steps", "keys", "title", "layout", "naming", "walk", "walk_stop", "masking"];
+    &["start", "at", "seed", "call_depth", "loop_steps", "keys", "title", "layout", "naming", "walk", "walk_stop", "masking", "seats", "party", "leash"];
 
 const SETTINGS: &[&str] = &["language", "style", "round", "idle", "external", "external_timeout", "mouse", "targeting"];
 
@@ -523,6 +523,34 @@ impl Checker<'_> {
             let layouts: Vec<&str> = defs_of(self.m, Kind::Layout).map(|d| d.full.as_str()).collect();
             if layouts.len() > 1 {
                 self.r.push(g.err(format!("several layouts ({}) and no `layout` field to choose one (D 11.1)", layouts.join(", "))));
+            }
+        }
+        // seats, party and leash (D 3.3)
+        let mut upper = 1;
+        if let Some(item) = fields.get("seats") {
+            match one(item).as_deref().and_then(crate::rt::world::seat_range) {
+                Some((a, b)) if (1..=8).contains(&a) && (1..=8).contains(&b) && a <= b => upper = b,
+                _ => self.r.push(item.err("`seats` is a range `a..b` from 1 to 8 with `a` at most `b` (D 3.3)")),
+            }
+        }
+        for (field, values) in [("party", ["switch", "each"]), ("leash", ["on", "off"])] {
+            if let Some(item) = fields.get(field)
+                && !one(item).is_some_and(|v| values.contains(&v.as_str()))
+            {
+                self.r.push(item.err(format!("`{field}` is `{}` or `{}` (D 3.3)", values[0], values[1])));
+            }
+        }
+        if upper == 1
+            && let Some(item) = fields.get("leash").filter(|i| one(i).as_deref() == Some("on"))
+        {
+            self.r.push(item.warn("`leash on` in a one-seat game does nothing (D 3.3)"));
+        }
+        for def in defs_of(self.m, Kind::Entity) {
+            let Some(b) = def.block() else { continue };
+            for item in b.items.iter().filter(|i| i.key() == "seat") {
+                if !one(item).and_then(|v| v.parse::<u8>().ok()).is_some_and(|n| (1..=upper).contains(&n)) {
+                    self.r.push(item.err(format!("`seat` is a seat number from 1 to the game's `seats` upper bound {upper} (D 5.3)")));
+                }
             }
         }
         for (field, lo, hi) in [("call_depth", 32, 4096), ("loop_steps", 10_000, i64::MAX), ("seed", i64::MIN, i64::MAX), ("masking", i64::MIN, i64::MAX)] {
