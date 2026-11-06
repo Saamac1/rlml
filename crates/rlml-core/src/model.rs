@@ -181,6 +181,51 @@ impl Model {
         self.games.iter().find(|g| !g.name.is_empty())
     }
 
+    /// The layout in use: `game.layout` or the only one (D 11.1).
+    pub fn layout(&self) -> Option<&RawBlock> {
+        let game = self.named_game();
+        let named = game.and_then(|g| g.items.iter().find(|i| i.key() == "layout")).and_then(|i| i.word(1).map(String::from));
+        let def = match named {
+            Some(n) => self.resolve_kind(game.and_then(|g| g.namespace.as_deref()), &n, &[Kind::Layout]).ok(),
+            None => self.defs.values().find(|d| d.kind == Kind::Layout),
+        };
+        def.and_then(|d| d.block())
+    }
+
+    /// Does a `panels` row give area `name` a border (D 9.3)? A border takes
+    /// one cell on every side.
+    pub fn area_border(&self, name: &str) -> bool {
+        let mut border = false;
+        for (_, item) in self.section_rows("panels") {
+            let (_, row) = item.marker();
+            if names::qualify(row.namespace.as_deref(), row.key()) != name && row.key() != name {
+                continue;
+            }
+            let words: Vec<&str> = row.tokens.iter().map(|t| t.text.as_str()).collect();
+            if let Some(b) = words.iter().position(|w| *w == "border").and_then(|i| words.get(i + 1)) {
+                border = *b != "none";
+            }
+        }
+        border
+    }
+
+    /// The map area's cells inside its border as the layout's legend writes
+    /// them, per axis (D 11.1); `None` where the size is not a cell count.
+    pub fn map_area_cells(&self) -> (Option<i32>, Option<i32>) {
+        let Some(b) = self.layout() else { return (None, None) };
+        let cells = |s: Option<&str>| s.and_then(|s| s.parse::<i32>().ok()).filter(|&n| n > 0);
+        let inset = if self.area_border("map") { 2 } else { 0 };
+        for item in b.sub("legend") {
+            let Ok((_, rest)) = glyph_char(item) else { continue };
+            let words: Vec<&str> = rest.tokens.iter().map(|t| t.text.as_str()).collect();
+            if words.first() == Some(&"map") {
+                let (w, h) = legend_size(&words);
+                return (cells(w).map(|n| (n - inset).max(1)), cells(h).map(|n| (n - inset).max(1)));
+            }
+        }
+        (None, None)
+    }
+
     /// Text keys of one language, merged row by row (D 10).
     pub fn texts(&self, language: &str) -> BTreeMap<String, &RawItem> {
         let mut out = BTreeMap::new();
@@ -451,6 +496,26 @@ pub fn row_tiles(rest: &RawItem) -> Vec<String> {
 }
 
 /// The drawing character that starts a legend or `tiles.glyphs` row and the
+/// The written width and height of a layout legend row's words (D 11.1):
+/// `size WxH`, `size.width W` and `size.height H`, later words winning.
+pub fn legend_size<'a>(words: &[&'a str]) -> (Option<&'a str>, Option<&'a str>) {
+    let mut size = (None, None);
+    for (i, w) in words.iter().enumerate() {
+        let next = words.get(i + 1).copied();
+        match *w {
+            "size" => {
+                if let Some((a, b)) = next.and_then(|n| n.split_once('x')) {
+                    size = (Some(a), Some(b));
+                }
+            }
+            "size.width" => size.0 = next,
+            "size.height" => size.1 = next,
+            _ => {}
+        }
+    }
+    size
+}
+
 /// rest of the row. A space is written `' '` (D 8.1, D 9.2).
 pub fn glyph_char(item: &RawItem) -> Result<(char, RawItem), String> {
     if item.text.starts_with("' '") {

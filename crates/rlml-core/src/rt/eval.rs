@@ -1540,8 +1540,8 @@ impl World<'_> {
             "control" => {
                 let e = self.entity_arg(Some(&a0), f, env, pos)?;
                 let n = match self.arg(&args, 1, "seat") {
-                    Some(Value::Number(n)) => {
-                        let n = u8::try_from(*n).ok().filter(|&n| self.s.seat(n).is_some());
+                    Some(v @ Value::Number(_)) => {
+                        let n = crate::rt::state::State::seat_number(v).filter(|&n| self.s.seat(n).is_some());
                         Some(n.ok_or_else(|| self.rt_err(env, pos, "`control`: the seat is not joined (M 6.1.10)"))?)
                     }
                     Some(Value::None) | None => None,

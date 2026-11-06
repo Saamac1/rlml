@@ -104,6 +104,10 @@ impl<'m> Runner<'m> {
                 if let Some(n) = self.w.s.seat_of(e).filter(|_| self.w.s.get(e).alive && !self.waiting.contains_key(&e)) {
                     // a member: `wake` first, then the choice (M 6.1.10)
                     if self.woke.get(&e) != Some(&wake) {
+                        // entries of turns that ended elsewhere (death, a
+                        // collection, another seat) go
+                        let s = &self.w.s;
+                        self.woke.retain(|&m, w| s.wake_of(m) == Some(*w));
                         self.woke.insert(e, wake);
                         self.wake_event(e)?;
                         // `wake` may end the turn: the member died or stopped acting

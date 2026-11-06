@@ -55,7 +55,8 @@ pub struct World<'m> {
     pub heard: std::collections::BTreeMap<EntityId, Vec<super::value::Sound>>,
     /// The player's last view, for a dead player's `sees` (M 7.2).
     pub last_view: Option<(MapId, std::collections::BTreeSet<(i32, i32)>)>,
-
+    /// The map area's written cells, read once (M 7.1).
+    map_area: (Option<i32>, Option<i32>),
 }
 
 /// A `log` call: the message key and its text arguments.
@@ -97,7 +98,7 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None }
+        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area_cells() }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {
@@ -779,45 +780,12 @@ impl World<'_> {
     /// cells as the layout's legend writes it (`size.width N`,
     /// `size.height N`, `size WxH`). It comes from data, not from the
     /// screen, so a game runs the same at any window size (M 4). An axis
-    /// without a written cell count is the active map's own size.
+    /// without a written cell count is the active map's own size. A border on the map area
+    /// takes its cells, as on the screen.
     pub fn view_dims(&self) -> (i32, i32) {
         let map = self.s.active_map().map(|m| (self.s.maps[m].width, self.s.maps[m].height)).unwrap_or((0, 0));
-        let (w, h) = self.layout_map_size();
+        let (w, h) = self.map_area;
         (w.unwrap_or(map.0), h.unwrap_or(map.1))
-    }
-
-    fn layout_map_size(&self) -> (Option<i32>, Option<i32>) {
-        let game = self.m.named_game();
-        let named = game.and_then(|g| g.items.iter().find(|i| i.key() == "layout")).and_then(|i| i.word(1).map(String::from));
-        let def = match named {
-            Some(n) => self.m.resolve_kind(game.and_then(|g| g.namespace.as_deref()), &n, &[Kind::Layout]).ok(),
-            None => self.m.defs.values().find(|d| d.kind == Kind::Layout),
-        };
-        let Some(b) = def.and_then(|d| d.block()) else { return (None, None) };
-        let cells = |s: &str| s.parse::<i32>().ok().filter(|&n| n > 0);
-        for item in b.sub("legend") {
-            let Ok((_, rest)) = crate::model::glyph_char(item) else { continue };
-            let words: Vec<&str> = rest.tokens.iter().map(|t| t.text.as_str()).collect();
-            if words.first() != Some(&"map") {
-                continue;
-            }
-            let mut size = (None, None);
-            for (i, w) in words.iter().enumerate() {
-                let next = words.get(i + 1).copied().unwrap_or("");
-                match *w {
-                    "size.width" => size.0 = cells(next),
-                    "size.height" => size.1 = cells(next),
-                    "size" => {
-                        if let Some((a, b)) = next.split_once('x') {
-                            size = (cells(a), cells(b));
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            return size;
-        }
-        (None, None)
     }
 }
 

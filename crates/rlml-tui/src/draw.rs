@@ -48,13 +48,7 @@ fn style_of(look: &Look) -> Style {
 
 /// The layout in use: `game.layout` or the only one (D 11.1).
 fn layout_block(w: &World) -> Option<rlml_core::syntax::RawBlock> {
-    let game = w.m.named_game();
-    let named = game.and_then(|g| g.items.iter().find(|i| i.key() == "layout")).and_then(|i| i.word(1).map(String::from));
-    let def = match named {
-        Some(n) => w.m.resolve_kind(game.and_then(|g| g.namespace.as_deref()), &n, &[Kind::Layout]).ok(),
-        None => w.m.defs.values().find(|d| d.kind == Kind::Layout),
-    };
-    def.and_then(|d| d.block()).cloned()
+    w.m.layout().cloned()
 }
 
 /// Areas and their written sizes from the layout's legend.
@@ -64,25 +58,13 @@ fn areas(rows: &[RawItem]) -> (Vec<Area>, Dims) {
     for item in rows {
         let Ok((ch, rest)) = glyph_char(item) else { continue };
         let words: Vec<&str> = rest.tokens.iter().map(|t| t.text.as_str()).collect();
-        let mut size: (Option<Dim>, Option<Dim>) = (None, None);
+        let (sw, sh) = rlml_core::model::legend_size(&words);
+        let dim = |v: Option<&str>| v.and_then(|s| Dim::parse(s).ok()).flatten();
+        let size: (Option<Dim>, Option<Dim>) = (dim(sw), dim(sh));
         let mut follow = Follow::Center;
         let mut i = 1;
         while i < words.len() {
             match words[i] {
-                "size" => {
-                    if let Some(Ok(pair)) = words.get(i + 1).map(|s| Dim::parse_pair(s)) {
-                        size = pair;
-                    }
-                    i += 2;
-                }
-                "size.width" => {
-                    size.0 = words.get(i + 1).and_then(|s| Dim::parse(s).ok()).flatten();
-                    i += 2;
-                }
-                "size.height" => {
-                    size.1 = words.get(i + 1).and_then(|s| Dim::parse(s).ok()).flatten();
-                    i += 2;
-                }
                 "follow" => {
                     follow = match (words.get(i + 1), words.get(i + 2).and_then(|n| n.parse().ok())) {
                         (Some(&"margin"), Some(n)) => Follow::Margin(n),

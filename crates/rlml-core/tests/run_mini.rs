@@ -1070,3 +1070,37 @@ fn without_a_written_size_the_view_is_the_map() {
     let map = w.s.active_map().unwrap();
     assert_eq!(w.view_dims(), (w.s.maps[map].width, w.s.maps[map].height), "the minigame's map area has no cell size (M 7.1)");
 }
+
+#[test]
+fn a_border_takes_cells_from_the_view() {
+    let layout = "\nlayout L\n\n```\nm\n```\n\nlegend:\n- m map size 10x6\n\npanels\n- map border single\n";
+    let f = files(&[("game.rlml", &format!("{SEATS}{layout}"))]);
+    let m = model(&f);
+    let w = started(&m);
+    assert_eq!(w.view_dims(), (8, 4), "inside the border, as on the screen (M 7.1)");
+}
+
+#[test]
+fn control_stays_on_the_seat_a_member_leaves() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut c = 0;
+    let mut r = seats_game(&m, 2, |w| c = second_member(w));
+    let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
+    r.run(0).unwrap();
+    assert!(r.input(1, &cmd("TO_SEAT_2")).unwrap());
+    assert_eq!((r.w.s.active(1), r.w.s.active(2)), (Some(c), Some(b)), "seat 1's next member takes control");
+    assert_eq!(r.w.s.player, Some(c), "`player` follows the seat, not the moved member");
+    assert_eq!(r.w.s.seat_of(a), Some(2));
+}
+
+#[test]
+fn an_unjoined_seat_changes_nothing() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 1, |_| {});
+    let a = r.w.s.active(1).unwrap();
+    r.w.s.set_seat(a, Some(2));
+    assert_eq!((r.w.s.seat_of(a), r.w.s.active(1)), (Some(1), Some(a)), "seat 2 is not joined");
+    assert!(r.w.s.get(a).has("seat"));
+}
