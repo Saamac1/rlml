@@ -283,3 +283,34 @@ fn colors_fit_the_256_color_palette() {
     assert_eq!(ansi256([0x60, 0xa0, 0xff]), 75, "and seat 2 blue");
     assert_eq!(ansi256([0x4a, 0x4a, 0x5a]), 239, "a grey takes the grey ramp");
 }
+
+#[test]
+fn the_camera_follows_the_group_and_falls_back_to_the_player() {
+    use rlml_core::rt::state::Place;
+    use rlml_core::rt::value::Pos;
+    let f = ryhma();
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (20, 12)).unwrap();
+    let members = app.r.w.s.players();
+    let player = app.r.w.s.player.unwrap();
+    let place = |app: &mut App, xs: &[i32]| {
+        for (&e, &x) in members.iter().zip(xs) {
+            app.r.w.s.get_mut(e).place = Place::Map(Pos { map: 0, x, y: 4 });
+        }
+    };
+    // a 20-wide window: the map area is 20 wide on a 40-wide cave
+    let xs: Vec<i32> = members.iter().map(|&e| if e == player { 20 } else { 10 }).collect();
+    place(&mut app, &xs);
+    app.draw();
+    assert_eq!(app.view.camera[&0].0, 5, "the group's box 10..20 in the middle (M 7.1)");
+    // spread wider than the area: the camera follows the player
+    let xs: Vec<i32> = members.iter().map(|&e| if e == player { 30 } else { 2 }).collect();
+    place(&mut app, &xs);
+    app.draw();
+    assert_eq!(app.view.camera[&0].0, 20, "the player at 30, clamped to the map's edge");
+    // together again: back to the group
+    let xs: Vec<i32> = members.iter().map(|&e| if e == player { 14 } else { 12 }).collect();
+    place(&mut app, &xs);
+    app.draw();
+    assert_eq!(app.view.camera[&0].0, 3);
+}

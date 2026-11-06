@@ -175,30 +175,45 @@ impl View {
     /// smaller than the area centred, the last place kept without a player.
     fn camera(&mut self, world: &World, map: MapId, w: i32, h: i32, follow: Follow) -> (i32, i32) {
         let (mw, mh) = (world.s.maps[map].width, world.s.maps[map].height);
-        let target = world.s.player.filter(|p| world.s.get(*p).alive).and_then(|p| world.s.at(p)).filter(|p| p.map == map);
+        let player = world.s.player.filter(|p| world.s.get(*p).alive).and_then(|p| world.s.at(p)).filter(|p| p.map == map);
+        let margin = |size: i32| match follow {
+            Follow::Margin(n) => n.min((size - 1) / 2),
+            Follow::Center => 0,
+        };
+        // the group's box on this map (M 7.1); with one member it is the
+        // player's cell, as before
+        let cells: Vec<(i32, i32)> = world.s.players().into_iter().filter_map(|e| world.s.at(e)).filter(|p| p.map == map).map(|p| (p.x, p.y)).collect();
+        let span = |pick: fn(&(i32, i32)) -> i32| cells.iter().map(pick).min().zip(cells.iter().map(pick).max());
+        let group = span(|c| c.0).zip(span(|c| c.1));
+        // a group that does not fit the area falls back to the player
+        let fits = |(lo, hi): (i32, i32), size: i32| hi - lo + 1 <= size - 2 * margin(size);
+        let target = match group {
+            Some((x, y)) if fits(x, w) && fits(y, h) => Some((x, y)),
+            _ => player.map(|p| ((p.x, p.x), (p.y, p.y))),
+        };
         let old = self.camera.get(&map).copied();
-        let axis = |len: i32, size: i32, at: Option<i32>, old: Option<i32>| -> i32 {
+        let axis = |len: i32, size: i32, at: Option<(i32, i32)>, old: Option<i32>| -> i32 {
             if len <= size {
                 // a smaller map is centred
                 return -((size - len) / 2);
             }
-            let Some(t) = at else { return old.unwrap_or(0) };
+            let Some((lo, hi)) = at else { return old.unwrap_or(0) };
             let wanted = match (follow, old) {
-                (Follow::Margin(n), Some(o)) => {
-                    let n = n.min((size - 1) / 2);
-                    if t < o + n {
-                        t - n
-                    } else if t > o + size - 1 - n {
-                        t - size + 1 + n
+                (Follow::Margin(_), Some(o)) => {
+                    let n = margin(size);
+                    if lo < o + n {
+                        lo - n
+                    } else if hi > o + size - 1 - n {
+                        hi - size + 1 + n
                     } else {
                         o
                     }
                 }
-                _ => t - size / 2,
+                _ => (lo + hi) / 2 - size / 2,
             };
             wanted.clamp(0, len - size)
         };
-        let cam = (axis(mw, w, target.map(|p| p.x), old.map(|o| o.0)), axis(mh, h, target.map(|p| p.y), old.map(|o| o.1)));
+        let cam = (axis(mw, w, target.map(|t| t.0), old.map(|o| o.0)), axis(mh, h, target.map(|t| t.1), old.map(|o| o.1)));
         self.camera.insert(map, cam);
         cam
     }
