@@ -9,7 +9,7 @@
 //! or act as the group's other members (M 6.1.10). Timers, background
 //! scenes and several active maps are not supported yet.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::eval::{BodyKind, Env, Outcome, Scope, Suspended};
 use super::state::SeatId;
@@ -30,8 +30,9 @@ pub struct Runner<'m> {
     pub w: World<'m>,
     /// Commands waiting at `wait`, by actor (M 6.1.6).
     pub waiting: BTreeMap<EntityId, Suspended>,
-    /// The member whose `wake` has been sent for the turn it is on.
-    woke: Option<EntityId>,
+    /// Members whose `wake` has been sent for the turn they are on; a
+    /// failure or a free action keeps the turn without a new `wake`.
+    woke: BTreeSet<EntityId>,
     /// The seat whose input the scheduler waits for (M 8.2).
     awaiting: Option<SeatId>,
 }
@@ -42,7 +43,7 @@ fn engine_env(name: &str) -> Env {
 
 impl<'m> Runner<'m> {
     pub fn new(w: World<'m>) -> Runner<'m> {
-        Runner { w, waiting: BTreeMap::new(), woke: None, awaiting: None }
+        Runner { w, waiting: BTreeMap::new(), woke: BTreeSet::new(), awaiting: None }
     }
 
     /// The seat whose input is awaited, after `run` returned `Input`.
@@ -92,12 +93,11 @@ impl<'m> Runner<'m> {
                 let e = wake.entity;
                 if let Some(n) = self.w.s.seat_of(e).filter(|_| self.w.s.get(e).alive && !self.waiting.contains_key(&e)) {
                     // a member: `wake` first, then the choice (M 6.1.10)
-                    if self.woke != Some(e) {
-                        self.woke = Some(e);
+                    if self.woke.insert(e) {
                         self.wake_event(e)?;
                         // `wake` may end the turn: the member died or stopped acting
                         if self.w.s.wake_of(e) != Some(wake) {
-                            self.woke = None;
+                            self.woke.remove(&e);
                             continue;
                         }
                     }
@@ -110,7 +110,7 @@ impl<'m> Runner<'m> {
                         return Ok(Status::Input);
                     }
                     // another member: its ai, or a rest
-                    self.woke = None;
+                    self.woke.remove(&e);
                     self.after_wake(e)?;
                     seen(&mut self.w);
                     continue;
@@ -235,7 +235,7 @@ impl<'m> Runner<'m> {
                 if player && cost == 0 {
                     // a free action: the player acts again now, without a new wake
                     self.w.s.schedule(e, now);
-                    self.woke = Some(e);
+                    self.woke.insert(e);
                     return Ok(true);
                 }
                 if let Some(d) = delay(cost, speed) {
@@ -247,7 +247,7 @@ impl<'m> Runner<'m> {
                 // the player's failure costs nothing; time already waited
                 // stays spent (M 6.1.5)
                 self.w.s.schedule(e, now);
-                self.woke = Some(e);
+                self.woke.insert(e);
                 false
             }
             Outcome::Failed { .. } => {
@@ -288,7 +288,7 @@ impl<'m> Runner<'m> {
             return Err("it is not the player's turn".into());
         }
         self.w.s.unschedule(p);
-        self.woke = None;
+        self.woke.remove(&p);
         self.awaiting = None;
         let outcome = self.w.start_command(p, cmd)?;
         let ok = self.finish(p, outcome, true)?;

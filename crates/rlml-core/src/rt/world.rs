@@ -464,8 +464,9 @@ impl<'m> World<'m> {
         // a data member `- seat N` joins its seat if that seat is joined (D 5.3)
         if let Some(n) = self.s.get(e).get("seat").and_then(|c| c.get("n")).and_then(Value::as_number) {
             let n = n.clamp(0, u8::MAX as i64) as u8;
+            // a seat that is not joined leaves no stray component
+            self.s.get_mut(e).remove("seat");
             if self.s.seat(n).is_some() {
-                self.s.get_mut(e).remove("seat");
                 self.s.add_member(e, n);
             }
         }
@@ -669,6 +670,10 @@ impl<'m> World<'m> {
         let seed = field("seed").and_then(|s| s.parse::<i64>().ok()).map(|s| s as u64).unwrap_or(seed);
         let mut w = World::new(m, seed);
         let (lo, hi) = field("seats").as_deref().and_then(seat_range).unwrap_or((1, 1));
+        // the checker keeps 1 <= lo <= hi <= 8 (D 3.3); a model that skipped
+        // it still gets at least seat 1
+        let lo = lo.max(1);
+        let hi = hi.max(lo);
         for n in 1..=seats.unwrap_or(lo).clamp(lo, hi) {
             w.s.join_seat(n);
         }

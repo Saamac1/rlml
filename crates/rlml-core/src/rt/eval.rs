@@ -1503,8 +1503,15 @@ impl World<'_> {
                 let Some(Value::Component(cv)) = self.arg(&args, 1, "k").cloned() else { return Err(self.rt_err(env, pos, "`add` takes a component value")) };
                 let full = self.complete(cv, env.ns.as_deref())?;
                 let name = full.name.clone();
-                self.s.get_mut(e).set(full);
-                if name == "ai"
+                if name == "seat" {
+                    // membership goes through the seat table (M 6.1.10)
+                    let n = full.get("n").and_then(Value::as_number).and_then(|n| SeatId::try_from(n).ok()).filter(|&n| self.s.seat(n).is_some());
+                    let n = n.ok_or_else(|| self.rt_err(env, pos, "`add`: the seat is not joined (M 6.1.10)"))?;
+                    self.s.add_member(e, n);
+                } else {
+                    self.s.get_mut(e).set(full);
+                }
+                if (name == "ai" || name == "seat")
                     && let Some(p) = self.s.at(e)
                     && self.s.wake_of(e).is_none()
                     && matches!(self.s.get(e).place, Place::Map(_))

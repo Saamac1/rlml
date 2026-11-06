@@ -28,7 +28,7 @@ Vaihe 0:n luettelo (luku 9) on täydennetty.
 Toteuttamatta ovat:
 
 - useampi aktiivinen kartta (ryhmä jakaa `player`-hahmon kartan)
-- kesken pelin liittyminen ja poistuminen sekä tapahtumat `join` ja `part` ajossa
+- kesken pelin liittyminen ja poistuminen sekä tapahtumat `join` ja `part` ajossa. Kun `part` kytketään, käsittelijät ajetaan ennen kuin `State::part_seat` irrottaa jäsenet istuimelta. Muuten `PART_PLAYER` saisi tyhjän `members(seat)`-joukon. Samalla poistuvien jäsenten herätykset, `player` ja odotettu istuin on päivitettävä.
 - laitteet, liittymisruutu ja reititys
 - kameran ryhmäseuranta ja vuoron merkki
 - vaiheet 3–8
@@ -287,6 +287,7 @@ Kun `leash` on päällä, `CAN_STEP` epää ohjattavan askeleen, jos saman karta
 
 - Epäonnistunut askel ei vie pelaajalta aikaa (M 6.1.5).
 - **Vain ohjattava.** Hihna koskee vain istuimen ohjattavaa (`active(seat_of(who)) == who`). Tekoälyn ohjaamat jäsenet, seuraajat ja hirviöt kulkevat vapaasti. Näin STD 5:n lupaus pitää: tekoäly ei suunnittele askelta, jota `STEP` ei hyväksy. Hihna ei vedä ketään, se vain estää loittonemisen.
+- **Vain levittävä askel.** Hihna epää vain askeleen, joka levittää suorakulmion rajan yli. Jo hajonnut ryhmä, esimerkiksi skriptin siirron jälkeen, voi aina palata yhteen.
 - Kiertävällä kartalla (M 6.9) suorakulmio lasketaan lyhimmän välin mukaan.
 - **Paikanvaihto.** `STEP` vaihtaa paikkaa ystävän kanssa, jolla on tekoäly tai joka on jäsen (`seat_of(other) != none`), eikä vain `player`-hahmon kanssa. Vaihto ei kasvata ryhmän suorakulmiota, koska `CAN_STEP` on jo tarkistanut askeltajan ruudun.
 

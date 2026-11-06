@@ -232,3 +232,13 @@ fn items_hide_disable_and_open_menus() {
     press(&mut app, "esc j enter");
     assert!(!app.playing && app.menus.layers[0].menu.full == "OPENING");
 }
+
+#[test]
+fn drawing_tells_the_core_the_map_area_size() {
+    let f = mini_with(|_| {});
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    app.draw();
+    let (w, h) = app.r.w.view_size.expect("set by drawing the map area");
+    assert!(w > 0 && w <= 40 && h > 0 && h <= 12, "{w}x{h}: `view_width` and `view_height` (M 7.1)");
+}

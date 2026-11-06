@@ -713,6 +713,10 @@ settings
 entity HERO
 - blocks move
 - sight radius 2
+- WAKES
+
+entity BUDDY extends HERO
+- seat 2
 
 map ROOM
 
@@ -734,6 +738,16 @@ override on begin() as STD.SPAWN_PLAYER:
             control(spawn(HERO, at: label(START)), seat: 1)
         else:
             control(spawn(HERO, at: label(P2)), seat: n)
+
+component WAKES(n: number = 0):
+    on wake():
+        self.WAKES.n += 1
+
+command NOPE() cost 60:
+    return false
+
+command ADOPT() cost 0:
+    add(spawn(HERO, at: label(P3)), seat(n: 1))
 
 command TO_FRIEND() cost 0:
     for e in members(seat_of(actor)) where it != actor:
@@ -923,4 +937,80 @@ fn std_spawns_a_member_per_seat() {
     }
     assert_eq!(r.run(0).unwrap(), Status::Input);
     assert_eq!((r.awaiting(), r.w.s.game.time), (Some(1), 360), "three rounds, both seats taking turns");
+}
+
+fn wakes(w: &World, e: usize) -> i64 {
+    field(w, e, "WAKES", "n").as_number().unwrap()
+}
+
+#[test]
+fn a_kept_turn_sends_no_second_wake() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 2, |_| {});
+    let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
+    r.run(0).unwrap();
+    assert!(!r.input(1, &cmd("NOPE")).unwrap(), "a failure keeps the turn");
+    // seat 2's older wake comes in between
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(r.awaiting(), Some(2));
+    assert!(r.input(2, &cmd("STD.WAIT")).unwrap());
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.awaiting(), r.w.s.game.time), (Some(1), 0));
+    assert_eq!((wakes(&r.w, a), wakes(&r.w, b)), (1, 1), "one `wake` per turn (M 6.1.5)");
+}
+
+#[test]
+fn the_leash_refuses_only_a_widening_step() {
+    let f = files(&[("game.rlml", &SEATS.replace("- seats 1..2", "- seats 1..2\n- leash on"))]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 2, |w| w.view_size = Some((6, 3)));
+    let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
+    // spread wider than the limit 4: stepping toward the group is allowed
+    let a_x = at(&r.w, a).0;
+    r.run(0).unwrap();
+    assert!(r.input(1, &cmd("STD.MOVE.EAST")).unwrap());
+    assert_eq!(at(&r.w, a).0, a_x + 1, "a spread group can close up");
+    // close together: a step that widens the box past the limit is refused
+    r.w.s.get_mut(b).place = Place::Map(Pos { map: 0, x: 2, y: 0 });
+    r.w.s.get_mut(a).place = Place::Map(Pos { map: 0, x: 5, y: 0 });
+    r.run(0).unwrap();
+    assert!(r.input(2, &cmd("STD.WAIT")).unwrap());
+    r.run(0).unwrap();
+    assert_eq!(r.awaiting(), Some(1));
+    assert!(!r.input(1, &cmd("STD.MOVE.EAST")).unwrap(), "`LEASHED` (STD 5)");
+    assert_eq!(at(&r.w, a).0, 5);
+}
+
+#[test]
+fn adding_seat_makes_a_member() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = seats_game(&m, 1, |_| {});
+    r.run(0).unwrap();
+    assert!(r.player(&cmd("ADOPT")).unwrap());
+    let c = kinds(&r.w, "HERO").into_iter().find(|&e| Some(e) != r.w.s.active(1)).unwrap();
+    assert_eq!(r.w.s.seat_of(c), Some(1), "`add(e, seat(n: 1))` goes through the seat table");
+    assert_eq!(r.w.s.players().len(), 2);
+}
+
+#[test]
+fn a_data_member_of_a_seat_not_joined_is_no_member() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    for (seats, member) in [(1, None), (2, Some(2))] {
+        let mut w = World::new_game_seats(&m, 7, Some(seats)).unwrap();
+        let e = w.spawn("BUDDY", &[], Place::Map(Pos { map: 0, x: 3, y: 0 })).unwrap();
+        assert_eq!(w.s.seat_of(e), member);
+        assert_eq!(w.s.get(e).has("seat"), member.is_some(), "`has seat` agrees with `seat_of`");
+    }
+}
+
+#[test]
+fn reversed_seats_without_the_checker_still_start() {
+    let f = files(&[("game.rlml", &SEATS.replace("- seats 1..2", "- seats 3..1"))]);
+    let (m, r) = rlml_core::check_game(&f, "game.rlml");
+    assert!(r.has_errors(), "the checker refuses `seats 3..1`");
+    let w = World::new_game_seats(&m, 7, None).unwrap();
+    assert!(!w.s.seats.is_empty(), "no panic, and a seat to play");
 }

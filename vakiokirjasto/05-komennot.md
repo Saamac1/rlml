@@ -49,16 +49,22 @@ query LEASHED(who: entity, to: pos) -> bool:
     group = players where it != who and it.map == who.map
     if group.count == 0:
         return false
-    left = to.x
-    right = to.x
-    top = to.y
-    bottom = to.y
+    left = group.first.at.x
+    right = left
+    top = group.first.at.y
+    bottom = top
     for e in group:
         left = min(left, e.at.x)
         right = max(right, e.at.x)
         top = min(top, e.at.y)
         bottom = max(bottom, e.at.y)
-    return right - left + 1 > view_width() - 2 or bottom - top + 1 > view_height() - 2
+    // the box with the step and without it: only a step that widens a box
+    // past the limit is refused, so a spread group can close up
+    wide = max(right, to.x) - min(left, to.x) + 1
+    high = max(bottom, to.y) - min(top, to.y) + 1
+    was_wide = max(right, who.at.x) - min(left, who.at.x) + 1
+    was_high = max(bottom, who.at.y) - min(top, who.at.y) + 1
+    return (wide > view_width() - 2 and wide > was_wide) or (high > view_height() - 2 and high > was_high)
 
 query BLOCKER(who: entity, to: pos) -> entity:
     return (entities(in: to) where it != who and blocks(it, move, tiles: false)).first
@@ -213,7 +219,7 @@ command DROP(item: entity from actor.PACK.items) cost 120:
 - **Ääni.** Askel pitää ääntä `SOUND.STEP` ja lyönti `SOUND.FIGHT`, joten paikallaan oleva ei kuulu (luku [9](09-aanet-viestit-ja-tekstit.md)). Äänet ovat ytimissä, joten pelin oma juoksu kuuluu samoin kuin askel.
 - **Suunnat.** `CAN_STEP` hyväksyy vain ruudut, jotka moottorin `adjacent(who)` antaa. Oletus on kahdeksan suuntaa ilman seinän kulman ohitusta: vinoaskel on kielletty, jos jompikumpi sen sivuruuduista estää liikkeen, jotta vinot seinät eivät vuoda. Neljä suuntaa saa rivillä `- movement dirs 4` ja kulman ohituksen rivillä `- movement corners true` (moottoridokumentti, luku [3.4](../moottori/03-pelin-tila.md#34-moottorin-komponentit)). Reitinhaku noudattaa samoja kenttiä, joten tekoäly ei suunnittele askelta, jota `STEP` ei hyväksy.
 - **Hiipiminen** maksaa lisäodotuksen `STEP`-komennossa eikä ytimessä. Pelin oma silmukka, joka kutsuu `DO_STEP`-funktiota, päättää hiipijän tahdin itse.
-- **Talutushihna.** Kun `game`-lohkon `leash` on päällä (oletus, kun istuimia voi olla useampi, dataformaatit luku [3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)), `CAN_STEP` epää ohjattavan askeleen, joka hajottaisi ryhmän kartta-alueen ulkopuolelle. Epäonnistunut askel ei vie aikaa. Hihna koskee vain istuimen ohjattavaa: tekoälyn ohjaamat jäsenet, seuraajat ja hirviöt kulkevat vapaasti, joten tekoäly ei suunnittele askelta, jota `STEP` ei hyväksy. Kiertävää karttaa hihna ei vielä huomioi.
+- **Talutushihna.** Kun `game`-lohkon `leash` on päällä (oletus, kun istuimia voi olla useampi, dataformaatit luku [3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)), `CAN_STEP` epää ohjattavan askeleen, joka hajottaisi ryhmän kartta-alueen ulkopuolelle. Hihna epää vain askeleen, joka levittää suorakulmion rajan yli, joten jo hajonnut ryhmä voi aina palata yhteen. Epäonnistunut askel ei vie aikaa. Hihna koskee vain istuimen ohjattavaa: tekoälyn ohjaamat jäsenet, seuraajat ja hirviöt kulkevat vapaasti, joten tekoäly ei suunnittele askelta, jota `STEP` ei hyväksy. Kiertävää karttaa hihna ei vielä huomioi.
 - **Paikanvaihto jäsenen kanssa.** `STEP` vaihtaa paikkaa ystävän kanssa, jolla on tekoäly tai joka on istuimen jäsen (`seat_of(other) != none`), eikä vain `player`-hahmon kanssa.
 - **Ryhmä uloskäynnillä.** Kun saman kartan jäsenet ovat uloskäynnin ruudussa tai sen vieressä, `TAKE_EXIT` siirtää koko ryhmän ja jäsenten seuraajat, jotka ovat uloskäynnin vieressä. Muuten komento epäonnistuu ilman ajan kulumista ja käynnistää dialogin `EXIT.LEAVE_OTHERS`, jonka `YES` siirtää ryhmän. Vahvistettu siirto ei maksa komennon hintaa, koska dialogi alkaa vasta toiminnon lopussa. `GROUP_ARRIVAL` siirtää kohdekartalla saapujan vapaaseen ruutuun, jos saapumisruudussa on jo estävä entiteetti.
 - **Ryhmän vaihto.** `SWITCH` ja `SWITCH.PREV` (hinta 0) tekevät istuimen seuraavasta tai edellisestä elävästä jäsenestä ohjattavan, ja ne epäonnistuvat, jos muita jäseniä ei ole. Vaihto ei anna ylimääräisiä vuoroja (moottoridokumentti, luku [6.1.10](../moottori/06-ajo.md#6110-istuimet-ja-ryhmä)). STD ei sido näppäimiä, joten peli sitoo komennot omaan peruskontekstiinsa (esimerkiksi `- SWITCH tab` ja `- SWITCH.PREV shift+tab`).

@@ -35,7 +35,7 @@ const CONTEXT: &[&str] = &["self", "holder", "actor", "it", "player", "players",
 /// Engine component names usable as values in calls (`ai(behavior: …)`).
 const ENGINE_COMPONENTS: &[&str] = &[
     "render", "movement", "ai", "sight", "light", "facing", "timer", "interior", "shape", "label", "wire", "blocks", "hearing", "sound",
-    "name", "revealed",
+    "name", "revealed", "seat",
 ];
 
 /// Vocabulary values: `blocks(it, move, …)`, `via: line`, `delete_save(all)`.
