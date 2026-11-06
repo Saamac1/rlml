@@ -11,6 +11,10 @@
       "Bash(cargo build)",
       "Bash(cargo build -q -p rlml-core)",
       "Bash(cargo build -q -p rlml-tui)",
+      "Bash(cargo build -q -p rlml)",
+      "Bash(cargo check)",
+      "Bash(cargo check -q)",
+      "Bash(cargo fmt --check)",
       "Bash(cargo clippy -q --all-targets -- -D warnings)"
     ]
   }
