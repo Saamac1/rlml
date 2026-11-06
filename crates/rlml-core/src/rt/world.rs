@@ -673,6 +673,8 @@ impl<'m> World<'m> {
             w.s.join_seat(n);
         }
         w.s.party_each = field("party").as_deref() == Some("each");
+        w.s.leash = field("leash").map_or(hi > 1, |l| l == "on");
+        w.s.seat_range = (lo, hi);
         w.s.game.call_depth = field("call_depth").and_then(|s| s.parse().ok()).unwrap_or(256);
         w.s.game.loop_steps = field("loop_steps").and_then(|s| s.parse().ok()).unwrap_or(1_000_000);
         // 2. the profile is not supported yet

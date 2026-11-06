@@ -13,6 +13,8 @@ component ITEM
 messages
 - MESSAGE.LOOT.PICKUP ITEM
 - MESSAGE.LOOT.DROP ITEM
+- MESSAGE.LOOT.ALLY_PICKUP WHO ITEM
+- MESSAGE.LOOT.ALLY_DROP WHO ITEM
 
 ```roguescript
 event PICKED_UP(who: entity, item: entity)
@@ -39,9 +41,15 @@ command DROP(item: entity from actor.PACK.items) cost 120:
     move(item, to: actor.at)
     emit DROPPED(actor, item)
 
-after PICKED_UP(who, item) as PICKUP_MESSAGE priority -10 when who == player:
-    log(MESSAGE.LOOT.PICKUP, ITEM: item)
+after PICKED_UP(who, item) as PICKUP_MESSAGE priority -10 when seat_of(who) != none:
+    if who == player and SOLO():
+        log(MESSAGE.LOOT.PICKUP, ITEM: item)
+    else:
+        log(MESSAGE.LOOT.ALLY_PICKUP, WHO: who, ITEM: item)
 
-after DROPPED(who, item) as DROP_MESSAGE priority -10 when who == player:
-    log(MESSAGE.LOOT.DROP, ITEM: item)
+after DROPPED(who, item) as DROP_MESSAGE priority -10 when seat_of(who) != none:
+    if who == player and SOLO():
+        log(MESSAGE.LOOT.DROP, ITEM: item)
+    else:
+        log(MESSAGE.LOOT.ALLY_DROP, WHO: who, ITEM: item)
 ```

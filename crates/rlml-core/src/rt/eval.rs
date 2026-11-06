@@ -656,6 +656,9 @@ impl World<'_> {
                             "turn" => Value::Number(g.turn()),
                             "call_depth" => Value::Number(g.call_depth as i64),
                             "loop_steps" => Value::Number(g.loop_steps as i64),
+                            "party" => Value::Name(if self.s.party_each { "each" } else { "switch" }.into()),
+                            "leash" => Value::Bool(self.s.leash),
+                            "seats" => Value::Range(self.s.seat_range.0 as i64, Some(self.s.seat_range.1 as i64)),
                             _ => Value::None,
                         };
                         return self.fields_of(v, &parts[1..], env, e.pos);

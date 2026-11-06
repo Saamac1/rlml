@@ -22,11 +22,54 @@ entity DEFAULT.PLAYER
 
 ```roguescript
 query WITNESSED(e: entity) -> bool:
-    return player != none and (e == player or sees(player, e))
+    return seat_of(e) != none or in_view(e)
+
+query SOLO() -> bool:
+    return seats().count < 2 and members(seats().first).count < 2
+
+query OPEN(a: area, who: entity) -> area:
+    return a where entities(in: it).count == 0 and not blocks(it, move, for: who)
+
+fn SPAWN_MEMBER(n: number, at: area) -> entity:
+    if game has PLAYER:
+        e = spawn(game.PLAYER.class, at: at).first
+    else:
+        e = spawn(DEFAULT.PLAYER, at: at)
+    if e != none:
+        control(e, seat: n)
+    return e
 
 on begin() as SPAWN_PLAYER:
-    if game has PLAYER:
-        control(spawn(game.PLAYER.class, at: game.at).first)
-    else:
-        control(spawn(DEFAULT.PLAYER, at: game.at))
+    for n in seats():
+        if n == seats().first:
+            SPAWN_MEMBER(n, game.at)
+        else:
+            SPAWN_MEMBER(n, OPEN(near(game.at, 0..2), none))
+
+on join(seat) as JOIN_PLAYER:
+    if player == none or player.at == none:
+        return
+    SPAWN_MEMBER(seat, OPEN(near(player, 1..2), none))
+
+fn SWITCH_BY(step: number) -> bool:
+    n = seat_of(actor)
+    if n == none:
+        return false
+    group = members(n)
+    if group.count < 2:
+        return false
+    i = 0
+    here = 0
+    for e in group:
+        if e == actor:
+            here = i
+        i = i + 1
+    control(group[(here + step) % group.count])
+    return true
+
+command SWITCH() cost 0:
+    return SWITCH_BY(1)
+
+command SWITCH.PREV() cost 0:
+    return SWITCH_BY(-1)
 ```

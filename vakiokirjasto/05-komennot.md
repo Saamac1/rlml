@@ -21,7 +21,8 @@
 
 | Ydin | Laji | Tekee |
 | --- | --- | --- |
-| `CAN_STEP(who: entity, to: pos) -> bool` | `query` | `to` on askeleen päässä (`adjacent`, suunnat ja kulmasääntö) |
+| `CAN_STEP(who: entity, to: pos) -> bool` | `query` | `to` on askeleen päässä (`adjacent`, suunnat ja kulmasääntö), eikä talutushihna estä sitä |
+| `LEASHED(who: entity, to: pos) -> bool` | `query` | hihna estää ohjattavan askeleen, jos saman kartan jäsenten rajaava suorakulmio kasvaisi kartta-aluetta kahta ruutua pienempää suuremmaksi |
 | `BLOCKER(who: entity, to: pos) -> entity` | `query` | ensimmäinen entiteetti, jonka oma `blocks` estää liikkeen ruudussa `to`, tai `none` |
 | `DO_STEP(who: entity, to: pos)` | `fn` | siirtää `who`:n ja pitää askeleen äänen; ei tarkista estoa |
 | `STRIKE(attacker: entity, target: entity) -> bool` | `fn` | lyö viereistä kohdetta ja pitää taistelun äänen; `false`, jos lyönti ei ole mahdollinen |
@@ -37,7 +38,27 @@ query STEP_SOUND(e: entity) -> name:
     return SOUND.STEP
 
 query CAN_STEP(who: entity, to: pos) -> bool:
-    return to in adjacent(who)
+    return to in adjacent(who) and not LEASHED(who, to)
+
+query LEASHED(who: entity, to: pos) -> bool:
+    if not game.leash:
+        return false
+    n = seat_of(who)
+    if n == none or active(n) != who:
+        return false
+    group = players where it != who and it.map == who.map
+    if group.count == 0:
+        return false
+    left = to.x
+    right = to.x
+    top = to.y
+    bottom = to.y
+    for e in group:
+        left = min(left, e.at.x)
+        right = max(right, e.at.x)
+        top = min(top, e.at.y)
+        bottom = max(bottom, e.at.y)
+    return right - left + 1 > view_width() - 2 or bottom - top + 1 > view_height() - 2
 
 query BLOCKER(who: entity, to: pos) -> entity:
     return (entities(in: to) where it != who and blocks(it, move, tiles: false)).first
@@ -63,7 +84,7 @@ command STEP(to: pos) cost 120:
         emit BUMP(actor, other)
         if other has HP and MAY_ATTACK(actor, other):
             return ATTACK(other)
-        if FRIENDS(actor, other) and (other has ai or other == player) and not blocks(actor.at, move, for: other):
+        if FRIENDS(actor, other) and (other has ai or seat_of(other) != none) and not blocks(actor.at, move, for: other):
             move(other, to: actor.at)
             DO_STEP(actor, to)
             return
@@ -110,11 +131,63 @@ command FEED(item: entity from actor.PACK.items where it has FOOD, target: pos a
 command ATTACK(target: entity) cost 120:
     return STRIKE(actor, target)
 
+fn TRAVEL_GROUP(who: entity, door: entity):
+    group = players where it.map == who.map
+    tag = entities(in: near(door.at, 1)) where it has FOLLOW and seat_of(it) == none and LEADER_OF(it) in group
+    for e in group:
+        travel(e, door.EXIT.to, at: door.EXIT.at)
+    for e in tag:
+        travel(e, door.EXIT.to, at: door.EXIT.at)
+
+scene EXIT.LEAVE_OTHERS(who: entity, door: entity):
+    say(EXIT.LEAVE_OTHERS.ASK)
+    choice:
+        YES:
+            TRAVEL_GROUP(who, door)
+        NO:
+            return
+
 command TAKE_EXIT() cost 120:
     exit = (entities(in: actor.at) where it has EXIT).first
     if exit == none:
         return false
-    travel(actor, exit.EXIT.to, at: exit.EXIT.at)
+    if seat_of(actor) == none:
+        travel(actor, exit.EXIT.to, at: exit.EXIT.at)
+        return
+    away = players where it.map == actor.map and distance(it, exit) > 1
+    if away.count > 0:
+        start(EXIT.LEAVE_OTHERS(actor, exit))
+        return false
+    TRAVEL_GROUP(actor, exit)
+
+on arrive(who, map, p) as GROUP_ARRIVAL when seat_of(who) != none or who has FOLLOW:
+    if (entities(in: p) where it != who and blocks(it, move, for: who, tiles: false)).count == 0:
+        return
+    spot = OPEN(near(p, 1..2), who)
+    if spot.count > 0:
+        move(who, to: spot)
+
+fn SWITCH_BY(step: number) -> bool:
+    n = seat_of(actor)
+    if n == none:
+        return false
+    group = members(n)
+    if group.count < 2:
+        return false
+    i = 0
+    here = 0
+    for e in group:
+        if e == actor:
+            here = i
+        i = i + 1
+    control(group[(here + step) % group.count])
+    return true
+
+command SWITCH() cost 0:
+    return SWITCH_BY(1)
+
+command SWITCH.PREV() cost 0:
+    return SWITCH_BY(-1)
 
 command PICK_UP(item: entity from entities(in: actor.at) where it has ITEM) cost 120:
     if actor has no PACK:
@@ -140,6 +213,10 @@ command DROP(item: entity from actor.PACK.items) cost 120:
 - **Ääni.** Askel pitää ääntä `SOUND.STEP` ja lyönti `SOUND.FIGHT`, joten paikallaan oleva ei kuulu (luku [9](09-aanet-viestit-ja-tekstit.md)). Äänet ovat ytimissä, joten pelin oma juoksu kuuluu samoin kuin askel.
 - **Suunnat.** `CAN_STEP` hyväksyy vain ruudut, jotka moottorin `adjacent(who)` antaa. Oletus on kahdeksan suuntaa ilman seinän kulman ohitusta: vinoaskel on kielletty, jos jompikumpi sen sivuruuduista estää liikkeen, jotta vinot seinät eivät vuoda. Neljä suuntaa saa rivillä `- movement dirs 4` ja kulman ohituksen rivillä `- movement corners true` (moottoridokumentti, luku [3.4](../moottori/03-pelin-tila.md#34-moottorin-komponentit)). Reitinhaku noudattaa samoja kenttiä, joten tekoäly ei suunnittele askelta, jota `STEP` ei hyväksy.
 - **Hiipiminen** maksaa lisäodotuksen `STEP`-komennossa eikä ytimessä. Pelin oma silmukka, joka kutsuu `DO_STEP`-funktiota, päättää hiipijän tahdin itse.
+- **Talutushihna.** Kun `game`-lohkon `leash` on päällä (oletus, kun istuimia voi olla useampi, dataformaatit luku [3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)), `CAN_STEP` epää ohjattavan askeleen, joka hajottaisi ryhmän kartta-alueen ulkopuolelle. Epäonnistunut askel ei vie aikaa. Hihna koskee vain istuimen ohjattavaa: tekoälyn ohjaamat jäsenet, seuraajat ja hirviöt kulkevat vapaasti, joten tekoäly ei suunnittele askelta, jota `STEP` ei hyväksy. Kiertävää karttaa hihna ei vielä huomioi.
+- **Paikanvaihto jäsenen kanssa.** `STEP` vaihtaa paikkaa ystävän kanssa, jolla on tekoäly tai joka on istuimen jäsen (`seat_of(other) != none`), eikä vain `player`-hahmon kanssa.
+- **Ryhmä uloskäynnillä.** Kun saman kartan jäsenet ovat uloskäynnin ruudussa tai sen vieressä, `TAKE_EXIT` siirtää koko ryhmän ja jäsenten seuraajat, jotka ovat uloskäynnin vieressä. Muuten komento epäonnistuu ilman ajan kulumista ja käynnistää dialogin `EXIT.LEAVE_OTHERS`, jonka `YES` siirtää ryhmän. Vahvistettu siirto ei maksa komennon hintaa, koska dialogi alkaa vasta toiminnon lopussa. `GROUP_ARRIVAL` siirtää kohdekartalla saapujan vapaaseen ruutuun, jos saapumisruudussa on jo estävä entiteetti.
+- **Ryhmän vaihto.** `SWITCH` ja `SWITCH.PREV` (hinta 0) tekevät istuimen seuraavasta tai edellisestä elävästä jäsenestä ohjattavan, ja ne epäonnistuvat, jos muita jäseniä ei ole. Vaihto ei anna ylimääräisiä vuoroja (moottoridokumentti, luku [6.1.10](../moottori/06-ajo.md#6110-istuimet-ja-ryhmä)). STD ei sido näppäimiä, joten peli sitoo komennot omaan peruskontekstiinsa (esimerkiksi `- SWITCH tab` ja `- SWITCH.PREV shift+tab`).
 - **`TAKE_EXIT`** käyttää ruudun ensimmäistä uloskäyntiä. Siirto tehdään toiminnon lopussa, ja saapumisruudussa ei lähetetä `enter`-tapahtumaa (moottoridokumentti, luku [6.7](../moottori/06-ajo.md#67-siirtyminen-kartalta-toiselle)).
 - **`PICK_UP`** siirtää esineen kokoelmaan kutsulla `move(item, to: kokoelma)` (moottoridokumentti, luku [9.3](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).
 

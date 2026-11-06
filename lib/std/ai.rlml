@@ -56,7 +56,7 @@ component FOLLOW(target: entity = none, distance: number = 1)
 query LEADER_OF(e: entity) -> entity:
     if e has FOLLOW and e.FOLLOW.target != none:
         return e.FOLLOW.target
-    return player
+    return nearest(players, e)
 
 ai FOLLOWER:
     leader = LEADER_OF(self)
@@ -71,4 +71,9 @@ ai FOLLOWER:
     if distance(self, leader) <= stop:
         return WAIT()
     return APPROACH(leader)
+on part(seat) as PART_PLAYER:
+    for e in members(seat):
+        add(e, ai(behavior: FOLLOWER))
+        if e has no FOLLOW:
+            add(e, FOLLOW())
 ```

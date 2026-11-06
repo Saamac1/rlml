@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 6.11.2026 (moninpeli):** `SPAWN_PLAYER` luo hahmon jokaiselle istuimelle, `JOIN_PLAYER` liittyvälle ja `PART_PLAYER` tekee poistuvan istuimen jäsenistä seuraajia (luvut [6.1](06-tekoaly.md#61-seuraaja) ja [8](08-kasittelijat.md)). `LEADER_OF` palauttaa ilman kohdetta lähimmän jäsenen (luku [6.1](06-tekoaly.md#61-seuraaja)). Talutushihna `LEASHED`, paikanvaihto jäsenen kanssa, ryhmän `TAKE_EXIT` ja `GROUP_ARRIVAL` sekä `SWITCH` ja `SWITCH.PREV` ovat uusia (luku [5](05-komennot.md)). Jäsenet eivät suutu toisiinsa (`PROVOKE`, luku [7](07-suhteet-ja-vihamielisyys.md)). `WITNESSED` käyttää yhteistä näkökenttää, viestit nimeävät jäsenen, kun pelaajia on useampi (`SOLO`, `ALLY_PICKUP`, `ALLY_DROP`), ja kuuloviesti kirjataan kerran ajanhetkessä ryhmälle (luvut [8](08-kasittelijat.md) ja [9](09-aanet-viestit-ja-tekstit.md)). Moduulit ja prioriteetit ovat luvuissa [1.3](01-rajaus-periaatteet-ja-lataus.md#13-lataus-ja-moduulit) ja [2](02-prioriteettivyohykkeet.md), avoimet kysymykset luvussa [14](14-avoimet-kysymykset.md).
+
 **Muutokset 31.10.2026 (ajon ensimmäinen versio):** viestien järjestys kuolemassa on avoin kysymys (luku [14](14-avoimet-kysymykset.md)). Minipelin luolat ovat valaistuja (`default … lit`, luku [12](12-minipeli-std-lla.md)).
 
 **Muutokset 31.10.2026 (tyyppitarkistus):** `SPAWN_PLAYER` ottaa hallintaan kortista syntyneen kokoelman ensimmäisen jäsenen (`spawn(…).first`), koska kortin `spawn` palauttaa kokoelman ja `control` ottaa entiteetin (luku [8](08-kasittelijat.md); moottoridokumentti, luku [9.3](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).

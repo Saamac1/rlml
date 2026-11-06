@@ -18,6 +18,21 @@ Dokumentti kuvaa paikallisen moninpelin: 1–N pelaajaa samalla koneella, yhteis
 
 Vaihe 0:n luettelo (luku 9) on täydennetty.
 
+**Tila 7.11.2026.** Vaihe 0 on tehty: speksi on viety päädokumentteihin (D, RS, M 6.1.10 ja 8.2, STD) ja `lib/std`:hen. Vaiheet 1 ja 2 ovat ytimessä:
+
+- istuintaulu, vuoron valinta, ohjauksen siirto ja `control(e, seat:)`
+- kyselyt ja yhteinen näkö
+- syöte istuimittain (`Runner::input`, `awaiting`)
+- latauksen tarkistukset
+
+Toteuttamatta ovat:
+
+- useampi aktiivinen kartta (ryhmä jakaa `player`-hahmon kartan)
+- kesken pelin liittyminen ja poistuminen sekä tapahtumat `join` ja `part` ajossa
+- laitteet, liittymisruutu ja reititys
+- kameran ryhmäseuranta ja vuoron merkki
+- vaiheet 3–8
+
 Viittaukset: D = RLML-dataformaatit, RS = RogueScript, M = RLML-moottorin vastuut, STD = RLML-vakiokirjasto.
 
 ## 1. Tavoite ja rajaus

@@ -13,7 +13,7 @@
 | `EXIT` | `to: name`, `at: label = START` | uloskäynti, jonka `TAKE_EXIT` käyttää |
 | `FOOD` | `points: number = 30`, `group: bool = false` | ruoka, jonka `FEED` antaa; `group` muuttaa koko lajin suhdetta |
 | `SNEAKING` | – (merkki) | hiipiminen, jonka `SNEAK` kytkee |
-| `LISTENER` | `last: number = -1` | pelaajan kuuloviestin tahti (luku [8](08-kasittelijat.md)) |
+| `LISTENER` | `last: number = -1` | `game`-lohkossa: ryhmän kuuloviestin tahti (luku [8](08-kasittelijat.md)) |
 | `ALIGNMENT` | `value: number = 0` | arvoasteikko −100…100 (luku [7](07-suhteet-ja-vihamielisyys.md)) |
 | `FACTION` | `group: name` | ryhmäentiteetin nimi, esimerkiksi `GROUP.RAT` (luku [7](07-suhteet-ja-vihamielisyys.md)) |
 | `BONDS` | `toward: dict entity number` | yksilön omat suhteet muihin (luku [7](07-suhteet-ja-vihamielisyys.md)) |
@@ -41,7 +41,7 @@ Nimiavaruudessa `STD` tilen nimi on `STD.GLYPH.PLAYER`, ja STD toimittaa sille A
 
 STD ei kirjoita tyyleihin omaa `default`-riviä, joten pelin oma `default` ei kilpaile sen kanssa.
 
-**Oletuspelaajan tekoäly.** Rivi `- ai behavior HUNTER` ei ohjaa pelaajaa, kun pelaaja on hallinnassa. Moottori kysyy tekoälyä vain joutokäynnissä (`idle`, RogueScript, luku [7.2](../roguescript/07-komennot-ja-tekoaly.md#72-tekoäly)), ja silloin pelaaja noudattaa samoja vihamielisyyssääntöjä kuin muut (luku [7.1](07-suhteet-ja-vihamielisyys.md#71-viholliset-ja-ystävät)).
+**Oletuspelaajan tekoäly.** Rivi `- ai behavior HUNTER` ei ohjaa pelaajaa, kun pelaaja on hallinnassa. Moottori kysyy tekoälyä vain joutokäynnissä (`idle`, RogueScript, luku [7.2](../roguescript/07-komennot-ja-tekoaly.md#72-tekoäly)), ja silloin pelaaja noudattaa samoja vihamielisyyssääntöjä kuin muut (luku [7.1](07-suhteet-ja-vihamielisyys.md#71-viholliset-ja-ystävät)). Ryhmässä (`party switch`) muut kuin ohjattava jäsen toimivat tällä tekoälyllä, joten oletuspelaajan ryhmätoverit metsästävät (moottoridokumentti, luku [6.1.10](../moottori/06-ajo.md#6110-istuimet-ja-ryhmä)). Kaikki oletuspelaajat ovat ryhmässä `GROUP.PLAYER`, mutta pelin omat hahmoluokat tarvitsevat rivin `- FACTION GROUP.PLAYER` itse.
 
 ---
 

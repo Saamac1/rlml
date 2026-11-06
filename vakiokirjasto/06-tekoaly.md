@@ -60,7 +60,7 @@ Seuraaja kulkee johtajansa perässä ja puolustautuu viereiseltä viholliselta. 
 
 | Komponentti | Kentät | Merkitys |
 | --- | --- | --- |
-| `FOLLOW` | `target: entity = none`, `distance: number = 1` | johtaja ja etäisyys, jolla seuraaja pysähtyy; ilman komponenttia johtaja on pelaaja |
+| `FOLLOW` | `target: entity = none`, `distance: number = 1` | johtaja ja etäisyys, jolla seuraaja pysähtyy; ilman johtajaa johtaja on lähin istuimen jäsen |
 
 ```roguescript
 namespace STD
@@ -70,7 +70,7 @@ component FOLLOW(target: entity = none, distance: number = 1)
 query LEADER_OF(e: entity) -> entity:
     if e has FOLLOW and e.FOLLOW.target != none:
         return e.FOLLOW.target
-    return player
+    return nearest(players, e)
 
 ai FOLLOWER:
     leader = LEADER_OF(self)
@@ -87,7 +87,18 @@ ai FOLLOWER:
     return APPROACH(leader)
 ```
 
-- **Johtaja poissa.** Kuollut johtaja tai johtaja toisella kartalla jättää seuraajan vaeltamaan. Kartalta toiselle seuraaja siirtyy vain logiikan `travel`-kutsulla.
+- **Lähin jäsen.** Ilman `FOLLOW.target`-kenttää johtaja on lähin istuimen jäsen (`players`, moottoridokumentti luku [6.1.10](../moottori/06-ajo.md#6110-istuimet-ja-ryhmä)). Yksinpelissä se on pelaaja. Moninpelissä `player` vaihtuisi joka vuoro.
+- **Poistuva istuin.** `PART_PLAYER` tekee poistuvan istuimen jäsenistä seuraajia, joten hahmot jäävät ryhmään:
+
+```roguescript
+on part(seat) as PART_PLAYER:
+    for e in members(seat):
+        add(e, ai(behavior: FOLLOWER))
+        if e has no FOLLOW:
+            add(e, FOLLOW())
+```
+
+- **Johtaja poissa.** Kuollut johtaja tai johtaja toisella kartalla jättää seuraajan vaeltamaan. Kartalta toiselle seuraaja siirtyy logiikan `travel`-kutsulla tai jäsenen mukana, kun jäsenet käyttävät uloskäyntiä ryhmänä (`TAKE_EXIT`, luku [5](05-komennot.md)).
 - **Paikanvaihto.** Pelaajan ja seuraajan suhde on tyypillisesti ystävällinen, joten `STEP` vaihtaa niiden paikkaa törmäyksessä (luku [5](05-komennot.md)).
 
 ---

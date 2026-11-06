@@ -230,6 +230,10 @@ pub struct State {
     pub seats: Vec<Seat>,
     /// `party each`: every member waits for its seat's input (D 3.3).
     pub party_each: bool,
+    /// `leash on`, by default when more than one seat may join (D 3.3).
+    pub leash: bool,
+    /// The game's `seats a..b` (D 3.3), locked for the session.
+    pub seat_range: (SeatId, SeatId),
     /// The map the player was last on; the active map without a player
     /// (M 6.1.8).
     pub last_player_map: Option<MapId>,

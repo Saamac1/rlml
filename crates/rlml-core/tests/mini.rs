@@ -209,9 +209,9 @@ fn argument_types() {
         ("lib/std/move.rlml", "    return STEP(actor.at + dir)", "    return STEP(actor.at, dir: north)", "`STD.STEP` has no parameter `dir`"),
         ("lib/std/combat.rlml", "        spawn(victim.DROPS.loot, at: victim)", "        spawn(victim.DROPS.loot)", "no version of `spawn` takes (table)"),
         ("lib/std/combat.rlml", "        spawn(victim.DROPS.loot, at: victim)", "        victim.DROPS.loot.shuffle()", "`shuffle`: `d` takes a `deck`, but `victim.DROPS.loot` is a `table`"),
-        ("lib/std/core.rlml", "        control(spawn(DEFAULT.PLAYER, at: game.at))", "        control(spawn(DEFAULT.PLAYER(HPP: 3), at: game.at).first)", "card `STD.DEFAULT.PLAYER`: `HPP` is not defined"),
-        ("lib/std/core.rlml", "        control(spawn(DEFAULT.PLAYER, at: game.at))", "        control(spawn(DEFAULT.PLAYER(HP: 3), at: game.at).first)", "card `STD.DEFAULT.PLAYER`: `HP` takes a component value `STD.HP(…)`, not a `number`"),
-        ("lib/std/core.rlml", "        control(spawn(DEFAULT.PLAYER, at: game.at))", "        control(spawn(DEFAULT.PLAYER(HP: HP(now: 3)), at: game.at).first)", ""),
+        ("lib/std/core.rlml", "        e = spawn(DEFAULT.PLAYER, at: at)", "        e = spawn(DEFAULT.PLAYER(HPP: 3), at: at).first", "card `STD.DEFAULT.PLAYER`: `HPP` is not defined"),
+        ("lib/std/core.rlml", "        e = spawn(DEFAULT.PLAYER, at: at)", "        e = spawn(DEFAULT.PLAYER(HP: 3), at: at).first", "card `STD.DEFAULT.PLAYER`: `HP` takes a component value `STD.HP(…)`, not a `number`"),
+        ("lib/std/core.rlml", "        e = spawn(DEFAULT.PLAYER, at: at)", "        e = spawn(DEFAULT.PLAYER(HP: HP(now: 3)), at: at).first", ""),
     ];
     for (file, old, new, want) in cases {
         let mut f = mini();
@@ -228,7 +228,7 @@ fn argument_types() {
 #[test]
 fn returns_conditions_and_fields() {
     let cases: &[(&str, &str, &str, &str)] = &[
-        ("lib/std/move.rlml", "    return to in adjacent(who)", "    return to", "`return to` gives a `pos`; this returns `bool`"),
+        ("lib/std/move.rlml", "    return to in adjacent(who) and not LEASHED(who, to)", "    return to", "`return to` gives a `pos`; this returns `bool`"),
         ("lib/std/ai.rlml", "    return WANDER()\n\ncomponent", "    return 3\n\ncomponent", "`return 3` gives a `number`; this returns `command|none`"),
         ("lib/std/move.rlml", "    if actor has SNEAKING:\n        wait 120", "    if actor.HP:\n        wait 120", "a condition is a `bool`, not a `STD.HP`"),
         ("lib/std/move.rlml", "    move(who, to: to)", "    who.at = to", "`who.at` is kept by the engine and read-only"),

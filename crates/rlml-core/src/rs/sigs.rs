@@ -342,7 +342,8 @@ pub fn game_field(name: &str) -> Option<Ty> {
         "start" | "keys" | "title" | "layout" | "naming" | "walk" | "walk_stop" => Name,
         "at" => Area,
         "seed" | "turn" | "time" | "call_depth" | "loop_steps" | "masking" => Number,
-        "party" | "leash" => Name,
+        "party" => Name,
+        "leash" => Bool,
         "seats" => Range,
         _ => return Option::None,
     })

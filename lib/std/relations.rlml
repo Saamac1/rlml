@@ -101,6 +101,8 @@ fn GRUDGE(victim: entity, attacker: entity):
 fn PROVOKE(victim: entity, attacker: entity):
     if attacker == none or attacker == victim:
         return
+    if seat_of(victim) != none and seat_of(attacker) != none:
+        return
     GRUDGE(victim, attacker)
     if not NEUTRAL(victim) or victim has no FACTION:
         return

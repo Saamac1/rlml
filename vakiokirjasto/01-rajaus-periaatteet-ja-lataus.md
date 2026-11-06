@@ -21,13 +21,13 @@ Peli ottaa koko STD:n mukaan rivillä `include lib/std.rlml`. Rivin kannattaa ol
 
 | Moduuli | Sisältö | Tarvitsee |
 | --- | --- | --- |
-| `lib/std/core.rlml` | `PLAYER`, `DEFAULT.PLAYER`, `SPAWN_PLAYER` | – |
+| `lib/std/core.rlml` | `PLAYER`, `DEFAULT.PLAYER`, `SPAWN_PLAYER`, `SPAWN_MEMBER`, `JOIN_PLAYER`, `OPEN`, `SOLO`, `WITNESSED`, `SWITCH`, `SWITCH.PREV` | – |
 | `lib/std/combat.rlml` | `HP`, `MELEE`, `DROPS`, `HIT`, `DIED`, `HURT`, `STRIKE`, `ATTACK`, vahinko ja kuolema sekä kaukoaseet (`RANGED`, `MARKSMANSHIP`, `EVASION`, `THROWN`, `MISSED`, `SHOOT`, `THROW`) | core |
-| `lib/std/move.rlml` | `CAN_STEP`, `BLOCKER`, `DO_STEP`, `MOVE`, `STEP`, suuntakomennot, `WAIT`, `BUMP` | relations, combat, sound |
+| `lib/std/move.rlml` | `CAN_STEP`, `LEASHED`, `BLOCKER`, `DO_STEP`, `MOVE`, `STEP`, suuntakomennot, `WAIT`, `BUMP` | relations, combat, sound |
 | `lib/std/relations.rlml` | `ALIGNMENT`, `FACTION`, `BONDS`, `STANCE`, `FACTIONS`, `GROUP.PLAYER`, `ATTITUDE`, `BEFRIEND` | – |
-| `lib/std/ai.rlml` | `HUNTER`, `HOSTILES`, `APPROACH`, `FLEE`, `WANDER` | move, combat, relations |
+| `lib/std/ai.rlml` | `HUNTER`, `HOSTILES`, `APPROACH`, `FLEE`, `WANDER`, `FOLLOWER`, `FOLLOW`, `LEADER_OF`, `PART_PLAYER` | move, combat, relations |
 | `lib/std/items.rlml` | `PACK`, `ITEM`, `GIVE`, `PICK_UP`, `DROP` | – |
-| `lib/std/exits.rlml` | `EXIT`, `TAKE_EXIT` | – |
+| `lib/std/exits.rlml` | `EXIT`, `TAKE_EXIT`, `TRAVEL_GROUP`, `EXIT.LEAVE_OTHERS`, `GROUP_ARRIVAL` | core, ai |
 | `lib/std/adjacency.rlml` | `ADJACENT`, `APART` ja niiden käsittelijät | – |
 | `lib/std/sound.rlml` | äänilajit ja kuulemisen viestit | – |
 | `lib/std/gen.rlml` | generointialgoritmit (luku [10](10-generointi.md)) | – |

@@ -118,6 +118,8 @@ fn GRUDGE(victim: entity, attacker: entity):
 fn PROVOKE(victim: entity, attacker: entity):
     if attacker == none or attacker == victim:
         return
+    if seat_of(victim) != none and seat_of(attacker) != none:
+        return
     GRUDGE(victim, attacker)
     if not NEUTRAL(victim) or victim has no FACTION:
         return
@@ -134,6 +136,7 @@ after MISSED(target, attacker) as PROVOKE_MISS:
 
 - **Vakiot** ovat korvattavia lukuja kuten `TOLERANCE`: `FRIENDLY` = 50, `PROVOKED` = −50, `GOOD_AT` = 34, `EVIL_AT` = −34 ja `KIN_RANGE` = 8.
 - **Hyökkäys synnyttää vihaa.** Osuma ja huti laskevat uhrin suhteen lyöjään enintään arvoon `PROVOKED`. Rotta, jota pelaaja on ruokkinut, kääntyy siis pelaajaa vastaan, jos pelaaja lyö sitä. `PROVOKE_HIT` ajetaan ennen vahinkoa (prioriteetti 1), jotta kuoleva uhri ehtii suuttua.
+- **Ystävällinen tuli.** Istuinten jäsenet eivät suutu toisiinsa. Kaukoaseen harhalaukaus voi osua jäseneen (luku [5.1](05-komennot.md#51-kaukoaseet)) ja vahingoittaa sitä, mutta `PROVOKE` palaa heti, kun uhri ja hyökkääjä ovat molemmat jäseniä. Ilman poikkeusta yksi harhalaukaus tekisi jäsenistä toistensa vihollisia, koska `ENEMIES` on molemminpuolinen.
 - **Ruokinta.** `FEED` kutsuu `BEFRIEND`-funktiota ruoan `FOOD.points`-arvolla, ja `FOOD group true` muuttaa koko lajin suhdetta (luku [5](05-komennot.md)).
 
 ---

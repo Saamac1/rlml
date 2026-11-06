@@ -904,3 +904,23 @@ fn control_needs_a_joined_seat() {
     let e = w.begin().unwrap_err();
     assert!(e.contains("the seat is not joined"), "{e}");
 }
+
+#[test]
+fn std_spawns_a_member_per_seat() {
+    let mut f = mini();
+    let g = f.game.get_mut("game.rlml").unwrap();
+    *g = g.replace("- PLAYER HERO", "- PLAYER HERO\n- seats 1..2");
+    let m = model(&f);
+    let mut r = seats_game(&m, 2, |_| {});
+    let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
+    assert_eq!(r.w.s.players(), [a, b], "`SPAWN_PLAYER` makes one per seat (STD 8)");
+    assert_ne!(at(&r.w, a), at(&r.w, b), "on different cells around `game.at`");
+    assert_eq!(r.w.s.get(b).kind, "HERO");
+    assert!(r.w.s.leash, "`leash` defaults to on with more than one seat (D 3.3)");
+    for _ in 0..6 {
+        assert_eq!(r.run(0).unwrap(), Status::Input);
+        r.player(&cmd("STD.WAIT")).unwrap();
+    }
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.awaiting(), r.w.s.game.time), (Some(1), 360), "three rounds, both seats taking turns");
+}

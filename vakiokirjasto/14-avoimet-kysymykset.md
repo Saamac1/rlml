@@ -8,6 +8,13 @@
 
 - **Viestien järjestys kuolemassa.** `APPLY_DAMAGE` (`on HIT`) lähettää `DIED`-tapahtuman, jonka `DEATH_MESSAGE` kirjaa heti, ja vasta sen jälkeen `HIT`-tapahtuman `after`-vaihe ajaa `HIT_MESSAGE`-käsittelijän (luku [8](08-kasittelijat.md)). Pelaajan loki näyttää siksi ensin ”Kuolet.” ja sitten ”Otat 2 vahinkoa.”. Pitäisikö `APPLY_DAMAGE` lähettää `DIED` vasta `HIT`-tapahtuman jälkeen (esimerkiksi `after HIT` -käsittelijässä prioriteetilla −20), jotta vahinko kirjataan ennen kuolemaa?
 
+**Moninpeli 6.11.2026:**
+
+- **Jäsenen nimi.** Oletuspelaajan nimi on “sinä”, joten ryhmän viestit (`HIT`, `DIED`, `ALLY_PICKUP`) näyttävät “sinä ottaa”. Antaako STD istuinkohtaisen oletusnimen (“Pelaaja 2”), vai nimeääkö peli hahmoluokat aina itse (luku [9](09-aanet-viestit-ja-tekstit.md))?
+- **Viimeinen kuolema.** `SOLO` on tosi myös moninpelissä, kun viimeinen istuin on yksin, joten viimeisen jäsenen kuolema näkyy muodossa “Kuolet.” (luku [8](08-kasittelijat.md)).
+- **Vahvistettu ryhmäsiirto** dialogin `EXIT.LEAVE_OTHERS` kautta ei maksa komennon hintaa (luku [5](05-komennot.md)). Pitäisikö dialogin `YES`-haaran viedä ohjattavalta aikaa?
+- **Hihna kiertävällä kartalla.** `LEASHED` ei laske suorakulmiota lyhimmän välin mukaan (luku [5](05-komennot.md)).
+
 **Lataajan ensimmäinen versio 31.10.2026.** STD on nyt tiedostoina kansiossa `lib/std/`, ja lataaja tarkistaa sen. Seuraavat kohdat jouduttiin arvaamaan:
 
 - **Moduulien riippuvuudet.** Luvun [1.3](01-rajaus-periaatteet-ja-lataus.md#13-lataus-ja-moduulit) taulukon mukaan `core` ei tarvitse muita moduuleja, mutta `DEFAULT.PLAYER` käyttää komponentteja `HP`, `MELEE`, `PACK`, `ALIGNMENT` ja `FACTION`, tekoälyä `HUNTER` ja tileä `GLYPH.PLAYER`. Pelkkä `include lib/std/core.rlml` antaa siksi seitsemän latausvirhettä. Samoin `combat` käyttää datassa tileä `GLYPH.MISSILE` ja logiikassa nimiä `HOSTILES` (ai), `PACK` (items) ja `SOUND.SHOT` (sound). Pitäisikö `core`:n ottaa mukaan nämä moduulit, vai siirretäänkö `DEFAULT.PLAYER` omaan moduuliinsa?
@@ -32,7 +39,7 @@
 - **Reitti** ei sisällä lähtöruutua (moottoridokumentti, luku [9.3](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).
 - **Generointi:** `NOISE` on nyt `SCATTER_TILES` (luku [10](10-generointi.md)).
 - **Ulkoasu:** STD toimittaa tyylirivit omille tileilleen (luku [1.3](01-rajaus-periaatteet-ja-lataus.md#13-lataus-ja-moduulit)).
-- **Kuollut pelaaja** näkee viimeisen näkökenttänsä, joten `WITNESSED` toimii kuoleman jälkeen (luku [8](08-kasittelijat.md)).
+- **Kuollut pelaaja** näkee viimeisen näkökenttänsä, joten `WITNESSED` toimii kuoleman jälkeen (luku [8](08-kasittelijat.md)). Moninpeli 6.11.2026: `WITNESSED` käyttää yhteistä näkökenttää (`in_view`).
 - **Törmäys** syntyy vain liikkeen estosta (`tiles: false`, luku [5](05-komennot.md)).
 - **Suunnat:** oletus on kahdeksan suuntaa ilman seinän kulman ohitusta, ja `movement`-kentät `dirs` ja `corners` muuttavat sitä (luku [5](05-komennot.md)).
 - **Kaukoaseet:** kaksi lentotapaa, suora ja kaari, ja osuma ampujan taidon ja kohteen pelastusheiton vertailuna (luku [5.1](05-komennot.md#51-kaukoaseet)). Aluevaikutukset kuuluvat myöhempään vaiheeseen.
@@ -46,7 +53,7 @@
 - **Hiipiminen**: `SNEAK` tekee askeleesta hiljaisen (`SOUND.SNEAK` level 1), mutta askel maksaa 240. Omat askeleet peittävät hiljaisemmat äänet, joten kuunteleva pysyy paikallaan tai hiipii.
 - **Ruokinta** on `FEED`, ja ruoka on `FOOD`-komponentti (luvut [3](03-komponentit-ja-oletuspelaaja.md) ja [5](05-komennot.md)).
 - **Ystävät** vaihtavat paikkaa törmätessään (luku [5](05-komennot.md)).
-- **Kuuloviesti** kirjataan enintään kerran herätyksellä (`LISTENER`, luku [8](08-kasittelijat.md)).
+- **Kuuloviesti** kirjataan enintään kerran herätyksellä (`LISTENER`, luku [8](08-kasittelijat.md)). Moninpeli 6.11.2026: kerran ajanhetkessä koko ryhmälle, `game`-lohkon `LISTENER`.
 - **Tyylit**: STD ei kirjoita omaa `default`-riviä (luku [3](03-komponentit-ja-oletuspelaaja.md)).
 
 ---

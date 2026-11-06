@@ -71,7 +71,7 @@ on HIT(target, attacker, amount, cause) as APPLY_DAMAGE:
         emit DIED(target, attacker, cause)
 
 after HIT(target, attacker, amount) as HIT_MESSAGE priority -10 when WITNESSED(target):
-    if target == player:
+    if target == player and SOLO():
         log(MESSAGE.COMBAT.HURT, AMOUNT: amount)
     else:
         log(MESSAGE.COMBAT.HIT, TARGET: target, AMOUNT: amount)
@@ -82,7 +82,7 @@ on DIED(victim, killer) as DEATH priority -10:
     destroy(victim)
 
 after DIED(victim, killer) as DEATH_MESSAGE priority -10 when WITNESSED(victim):
-    if victim == player:
+    if victim == player and SOLO():
         log(MESSAGE.COMBAT.YOU_DIED)
     else:
         log(MESSAGE.COMBAT.DIED, VICTIM: victim)

@@ -11,6 +11,13 @@ Yhtenäistetty 25.10.2026. Muiden dokumenttien STD-esimerkit viittaavat nyt täh
 - **Dataformaatit 3:** include-esimerkit käyttävät tiedostoa `lib/std.rlml`, ja kansiolistaus mainitsee `lib/std/`.
 - **Moottoridokumentti 9.7:** vakiokirjaston tapahtumataulukko viittaa lukuun [4](04-tapahtumat.md).
 
+Moninpeli 6.11.2026 ([RLML-moninpeli](../RLML-moninpeli.md)):
+
+- **RogueScript 10.1:** `SPAWN_PLAYER` luo hahmon jokaiselle istuimelle kutsulla `control(e, seat: n)`, ja jäsenen kuolema tunnistetaan ehdolla `seat_of(victim) != none`.
+- **Moottoridokumentti 6.1.10:** STD pitää ryhmän samalla kartalla (`TAKE_EXIT`, talutushihna), joten useampi aktiivinen kartta on poikkeus.
+- **Moottoridokumentti 7.2:** `WITNESSED` käyttää kyselyä `in_view`, joka korvaa kuolleen pelaajan viimeisen näkökentän säännön.
+- **Dataformaatit 3.3:** `game`-kentän `leash` toteuttaa STD:n `LEASHED`, ja logiikka lukee sen totuusarvona `game.leash`.
+
 ---
 
 ← [12. Minipeli STD:llä](12-minipeli-std-lla.md) · [Sisällys](README.md) · [14. Avoimet kysymykset](14-avoimet-kysymykset.md) →
