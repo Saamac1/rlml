@@ -252,7 +252,7 @@ fn the_turn_marker_flashes_and_blinks() {
     let p = app.r.w.s.player.unwrap();
     let reversed = |app: &mut App| {
         let frame = app.draw();
-        frame.cells.iter().any(|c| c.style.as_ref().is_some_and(|s| s.bg == Some(termplate_core::style::Color::Rgb(0xf0, 0xd0, 0x40))))
+        frame.cells.iter().any(|c| c.ch == '@' && c.style.as_ref().is_some_and(|s| s.attrs.reverse))
     };
     app.tick(ms(10)).unwrap();
     assert!(reversed(&mut app), "the turn starts with a flash (M 7.1)");
@@ -272,4 +272,14 @@ fn one_member_has_no_turn_marker() {
     app.tick(ms(10)).unwrap();
     app.draw();
     assert_eq!(app.view.marked, None);
+}
+
+#[test]
+fn colors_fit_the_256_color_palette() {
+    use rlml_tui::draw::ansi256;
+    assert_eq!(ansi256([0, 0, 0]), 16);
+    assert_eq!(ansi256([255, 255, 255]), 231);
+    assert_eq!(ansi256([0xf0, 0xd0, 0x40]), 221, "the example's seat 1 yellow");
+    assert_eq!(ansi256([0x60, 0xa0, 0xff]), 75, "and seat 2 blue");
+    assert_eq!(ansi256([0x4a, 0x4a, 0x5a]), 239, "a grey takes the grey ramp");
 }

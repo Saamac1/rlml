@@ -41,8 +41,28 @@ pub struct View {
     pub marked: Option<rlml_core::rt::value::EntityId>,
 }
 
-fn rgb(c: Rgb) -> Color {
-    Color::Rgb(c[0], c[1], c[2])
+/// A style color for the terminal: 24-bit when the terminal says it takes
+/// it (`COLORTERM` is `truecolor` or `24bit`), else the nearest color of
+/// the 256-color palette, which every common terminal shows. macOS
+/// Terminal before version 26, for one, shows no 24-bit colors.
+pub fn rgb(c: Rgb) -> Color {
+    static TRUECOLOR: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let truecolor = *TRUECOLOR.get_or_init(|| std::env::var("COLORTERM").is_ok_and(|v| v == "truecolor" || v == "24bit"));
+    if truecolor { Color::Rgb(c[0], c[1], c[2]) } else { Color::Ansi(ansi256(c)) }
+}
+
+/// The nearest color of the 256-color palette: the 6×6×6 cube or, for a
+/// grey, the 24-step grey ramp, whichever is closer.
+pub fn ansi256(c: Rgb) -> u8 {
+    const STEPS: [i32; 6] = [0, 95, 135, 175, 215, 255];
+    let near = |v: u8| (0..6).min_by_key(|&i| (STEPS[i] - v as i32).abs()).unwrap();
+    let (r, g, b) = (near(c[0]), near(c[1]), near(c[2]));
+    let cube = [STEPS[r], STEPS[g], STEPS[b]];
+    let avg = (c[0] as i32 + c[1] as i32 + c[2] as i32) / 3;
+    let grey = ((avg - 8).max(0) / 10).min(23);
+    let grey_v = 8 + 10 * grey;
+    let dist = |t: [i32; 3]| (0..3).map(|i| (t[i] - c[i] as i32).pow(2)).sum::<i32>();
+    if dist([grey_v; 3]) < dist(cube) { 232 + grey as u8 } else { (16 + 36 * r + 6 * g + b) as u8 }
 }
 
 fn style_of(look: &Look) -> Style {
@@ -251,15 +271,16 @@ impl View {
                 }
             }
         }
-        // the turn marker: the member's cell in reverse colors (M 7.1)
+        // the turn marker: the member's cell in reverse video, which every
+        // terminal shows whatever its colors (M 7.1)
         if let Some(p) = self.marked.and_then(|e| world.s.at(e)).filter(|p| p.map == map) {
             let (sx, sy) = (p.x - x0, p.y - y0);
             if sx >= 0 && sy >= 0 && (sx as usize) < r.w && (sy as usize) < r.h {
-                let (x, y) = (r.x + sx as usize, r.y + sy as usize);
-                if let Some(look) = cells.get(p.y as usize).and_then(|row| row.get(p.x as usize)) {
-                    let fg = look.fg.unwrap_or([255, 255, 255]);
-                    let bg = look.bg.unwrap_or([0, 0, 0]);
-                    put_look(frame, x, y, &Look { ch: look.ch, fg: Some(bg), bg: Some(fg) });
+                let i = (r.y + sy as usize) * frame.width + r.x + sx as usize;
+                if let Some(cell) = frame.cells.get_mut(i) {
+                    let mut style = cell.style.clone().unwrap_or_default();
+                    style.attrs.reverse = true;
+                    cell.style = Some(style);
                 }
             }
         }

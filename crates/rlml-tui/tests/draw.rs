@@ -58,9 +58,9 @@ fn the_layout_map_and_colors() {
     // the player sees its own room only: the wall at column 5 hides the rest
     assert_eq!(rows[0][10..30].trim_end(), "######");
     assert_eq!(rows[2].chars().nth(12), Some('@'), "{rows:#?}");
-    assert_eq!(fg(&frame, 10, 0), Some(Color::Rgb(0x7a, 0x7a, 0x8e)), "WALL fg STONE");
-    assert_eq!(bg(&frame, 10, 0), Some(Color::Rgb(0x1a, 0x1a, 0x22)), "WALL bg DARK");
-    assert_eq!(fg(&frame, 11, 1), Some(Color::Rgb(0x4a, 0x4a, 0x5a)), "FLOOR");
+    assert_eq!(fg(&frame, 10, 0), Some(rlml_tui::draw::rgb([0x7a, 0x7a, 0x8e])), "WALL fg STONE");
+    assert_eq!(bg(&frame, 10, 0), Some(rlml_tui::draw::rgb([0x1a, 0x1a, 0x22])), "WALL bg DARK");
+    assert_eq!(fg(&frame, 11, 1), Some(rlml_tui::draw::rgb([0x4a, 0x4a, 0x5a])), "FLOOR");
     assert!(rows[9..].iter().all(|r| r.trim().is_empty()), "an empty log");
 }
 

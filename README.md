@@ -98,7 +98,7 @@ cargo test
 
 ## Pelaaminen
 
-`rlml play` pelaa pelin päätteessä ([M 7](moottori/07-esitys.md) ja [M 8](moottori/08-syote.md)). Komento tarvitsee oikean päätteen, koska se lukee näppäimiä suoraan.
+`rlml play` pelaa pelin päätteessä ([M 7](moottori/07-esitys.md) ja [M 8](moottori/08-syote.md)). Komento tarvitsee oikean päätteen, koska se lukee näppäimiä suoraan. Värit ovat 24-bittisiä, kun pääte kertoo tukevansa niitä (`COLORTERM=truecolor` tai `24bit`, esimerkiksi iTerm2, kitty ja WezTerm), ja muuten lähimmät 256 värin paletin värit, jotka näkyvät myös macOS:n Terminalissa.
 
 ```sh
 cargo run -p rlml -- play esimerkit/mini --seed 7
