@@ -290,7 +290,7 @@ fn the_camera_follows_the_group_and_falls_back_to_the_player() {
     use rlml_core::rt::value::Pos;
     let f = ryhma();
     let m = model(&f);
-    let mut app = App::new(&m, 7, (20, 12)).unwrap();
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
     let members = app.r.w.s.players();
     let player = app.r.w.s.player.unwrap();
     let place = |app: &mut App, xs: &[i32]| {
@@ -298,7 +298,7 @@ fn the_camera_follows_the_group_and_falls_back_to_the_player() {
             app.r.w.s.get_mut(e).place = Place::Map(Pos { map: 0, x, y: 4 });
         }
     };
-    // a 20-wide window: the map area is 20 wide on a 40-wide cave
+    // the map area stays 20 wide on a 40-wide cave: `hover` fills the rest
     let xs: Vec<i32> = members.iter().map(|&e| if e == player { 20 } else { 10 }).collect();
     place(&mut app, &xs);
     app.draw();
@@ -313,4 +313,16 @@ fn the_camera_follows_the_group_and_falls_back_to_the_player() {
     place(&mut app, &xs);
     app.draw();
     assert_eq!(app.view.camera[&0].0, 3);
+}
+
+#[test]
+fn the_group_example_keeps_its_map_area_in_a_wide_window() {
+    let f = ryhma();
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let frame = app.draw();
+    // the cave is 40 wide; the 20-wide map area shows half of it
+    let row = &frame.rows()[1];
+    assert!(row.chars().skip(20).all(|c| c == ' '), "the `hover` area fills the rest: {row:?}");
+    assert!(app.view.camera.contains_key(&0), "the camera has a place on the cave");
 }
