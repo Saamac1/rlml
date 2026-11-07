@@ -276,6 +276,12 @@ impl View {
 
     fn draw_map(&mut self, frame: &mut Frame, world: &mut World, r: Rect, follow: Follow) {
         let Some(map) = world.s.active_map() else { return };
+        // a written cell size is the map's view (M 7.1): the area may be
+        // larger, since the last track takes the spare room (D 11.1), but
+        // the map shows only what `view_width()` and `view_height()` say,
+        // so the leash and the screen measure the same cells
+        let (cw, ch) = world.m.map_area_cells();
+        let r = Rect::new(r.x, r.y, cw.map_or(r.w, |w| r.w.min(w.max(0) as usize)), ch.map_or(r.h, |h| r.h.min(h.max(0) as usize)));
         let cells = world.render_cells(map);
         let (x0, y0) = self.camera(world, map, r.w as i32, r.h as i32, follow);
         for sy in 0..r.h {

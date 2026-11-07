@@ -1,20 +1,20 @@
 # Käyttöliittymä
 
-> Kartta-alue on 20×8 solua, ja talutushihna käyttää sen kokoa
-> (`view_width`, `view_height`). Oikealla oleva `hover`-alue täyttää
-> ikkunan loppuleveyden, joten kartta-alue ei kasva leveässä ikkunassa ja
-> kamera seuraa ryhmää. Alla kolmen rivin loki.
+> Kartalle on kirjoitettu koko 20×8 solua. Leveässäkin ikkunassa kartta
+> näkyy sen kokoisena, ja kamera seuraa ryhmää 40 solun luolassa.
+> Talutushihna mittaa saman koon (`view_width`, `view_height`, M 7.1).
+> Loki on kartan alla. Se on vähintään kolme riviä korkea, ja koska se on
+> viimeinen raita, se saa ikkunan ylimääräisen korkeuden (D 11.1).
 
 layout MAIN
 
 ```
-mh
-ll
+m
+l
 ```
 
 legend:
 - m map size 20x8
-- h hover
 - l LOG size.height 3
 
 log LOG history 50

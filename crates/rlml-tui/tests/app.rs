@@ -298,7 +298,7 @@ fn the_camera_follows_the_group_and_falls_back_to_the_player() {
             app.r.w.s.get_mut(e).place = Place::Map(Pos { map: 0, x, y: 4 });
         }
     };
-    // the map area stays 20 wide on a 40-wide cave: `hover` fills the rest
+    // the map shows 20 cells of the 40-wide cave, even in a wide window
     let xs: Vec<i32> = members.iter().map(|&e| if e == player { 20 } else { 10 }).collect();
     place(&mut app, &xs);
     app.draw();
@@ -316,13 +316,16 @@ fn the_camera_follows_the_group_and_falls_back_to_the_player() {
 }
 
 #[test]
-fn the_group_example_keeps_its_map_area_in_a_wide_window() {
+fn the_map_shows_its_written_size_in_a_wide_window() {
     let f = ryhma();
     let m = model(&f);
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
-    let frame = app.draw();
-    // the cave is 40 wide; the 20-wide map area shows half of it
-    let row = &frame.rows()[1];
-    assert!(row.chars().skip(20).all(|c| c == ' '), "the `hover` area fills the rest: {row:?}");
-    assert!(app.view.camera.contains_key(&0), "the camera has a place on the cave");
+    for size in [(20, 12), (80, 24)] {
+        let mut app = App::new(&m, 7, size).unwrap();
+        let frame = app.draw();
+        let rows = frame.rows();
+        assert!(rows[0].starts_with('#'), "the map is drawn from column 0 in {size:?}: {:?}", rows[0]);
+        assert!(rows[..8].iter().all(|r| r.chars().take(20).any(|c| c != ' ')), "the map fills its 20x8 cells");
+        assert!(rows[..8].iter().all(|r| r.chars().skip(20).all(|c| c == ' ')), "and no more: what the leash measures (M 7.1)");
+        assert!(rows[8..].iter().all(|r| !r.starts_with('#')), "the log is below");
+    }
 }
