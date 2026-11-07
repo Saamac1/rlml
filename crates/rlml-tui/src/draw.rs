@@ -39,6 +39,9 @@ pub struct View {
     /// The member whose turn marker shows now (M 7.1); the app sets it
     /// and blinks it.
     pub marked: Option<rlml_core::rt::value::EntityId>,
+    /// Where the map was last drawn, inside its border: the cells
+    /// `cell_at` maps to the map (M 8.1).
+    pub map_rect: Option<Rect>,
 }
 
 /// A style color for the terminal: 24-bit when the terminal says it takes
@@ -254,6 +257,11 @@ impl View {
             let name = if area.source == "map" || area.source == "hover" { area.source.clone() } else { area.source.split('(').next().unwrap_or("").to_string() };
             frame.set_area(vec![name.clone()]);
             let (border, style) = panel_style(world, &name);
+            // a written cell size is the map's view (M 7.1): the area may be
+            // larger, since the last track takes the spare room (D 11.1), so
+            // the map area is cut to it once, before its paint and border,
+            // and the leash and the screen measure the same cells
+            let rect = if area.source == "map" { written_map_rect(world, rect, border) } else { rect };
             paint(&mut frame, rect, style);
             let inner = if border != Border::None && rect.w >= 2 && rect.h >= 2 {
                 frame.border(rect, border, Role::Normal);
@@ -275,13 +283,8 @@ impl View {
     }
 
     fn draw_map(&mut self, frame: &mut Frame, world: &mut World, r: Rect, follow: Follow) {
+        self.map_rect = Some(r);
         let Some(map) = world.s.active_map() else { return };
-        // a written cell size is the map's view (M 7.1): the area may be
-        // larger, since the last track takes the spare room (D 11.1), but
-        // the map shows only what `view_width()` and `view_height()` say,
-        // so the leash and the screen measure the same cells
-        let (cw, ch) = world.m.map_area_cells();
-        let r = Rect::new(r.x, r.y, cw.map_or(r.w, |w| r.w.min(w.max(0) as usize)), ch.map_or(r.h, |h| r.h.min(h.max(0) as usize)));
         let cells = world.render_cells(map);
         let (x0, y0) = self.camera(world, map, r.w as i32, r.h as i32, follow);
         for sy in 0..r.h {
@@ -338,6 +341,17 @@ fn log_rows(world: &World, name: &str) -> Vec<String> {
 
 /// The map cell at a screen position of a map area, for tests and the
 /// mouse later.
+/// The map area's rect cut to its written cell size, plus the border's
+/// cells when a border is drawn (D 11.1, M 7.1).
+fn written_map_rect(world: &World, rect: Rect, border: Border) -> Rect {
+    let (cw, ch) = world.map_area();
+    let inset = if border != Border::None && rect.w >= 2 && rect.h >= 2 { 2 } else { 0 };
+    let cut = |len: usize, cells: Option<i32>| cells.map_or(len, |c| len.min(c.max(0) as usize + inset));
+    Rect::new(rect.x, rect.y, cut(rect.w, cw), cut(rect.h, ch))
+}
+
+/// The map cell under screen cell (x, y), for the rect the map was drawn
+/// in (`View::map_rect`), or `None` outside it.
 pub fn cell_at(view: &View, map: MapId, r: Rect, x: usize, y: usize) -> Option<Pos> {
     let (x0, y0) = *view.camera.get(&map)?;
     r.contains(x, y).then(|| Pos { map, x: x0 + (x - r.x) as i32, y: y0 + (y - r.y) as i32 })

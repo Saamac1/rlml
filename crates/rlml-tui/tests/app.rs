@@ -322,10 +322,12 @@ fn the_map_shows_its_written_size_in_a_wide_window() {
     for size in [(20, 12), (80, 24)] {
         let mut app = App::new(&m, 7, size).unwrap();
         let frame = app.draw();
+        let r = app.view.map_rect.expect("the map is drawn");
+        assert_eq!((r.x, r.y, r.w, r.h), (0, 0, 20, 8), "the written 20x8 in {size:?}: what the leash measures (M 7.1)");
+        assert_eq!(app.r.w.view_dims(), (20, 8));
         let rows = frame.rows();
-        assert!(rows[0].starts_with('#'), "the map is drawn from column 0 in {size:?}: {:?}", rows[0]);
-        assert!(rows[..8].iter().all(|r| r.chars().take(20).any(|c| c != ' ')), "the map fills its 20x8 cells");
-        assert!(rows[..8].iter().all(|r| r.chars().skip(20).all(|c| c == ' ')), "and no more: what the leash measures (M 7.1)");
-        assert!(rows[8..].iter().all(|r| !r.starts_with('#')), "the log is below");
+        assert!(rows[..8].iter().all(|row| row.chars().skip(20).all(|c| c == ' ')), "nothing drawn beside the map");
+        let (cx, _) = app.view.camera[&0];
+        assert!((0..=20).contains(&cx), "the camera has a place on the 40-wide cave: {cx}");
     }
 }

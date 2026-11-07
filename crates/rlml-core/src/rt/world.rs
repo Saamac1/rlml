@@ -782,6 +782,12 @@ impl World<'_> {
     /// screen, so a game runs the same at any window size (M 4). An axis
     /// without a written cell count is the active map's own size. A border on the map area
     /// takes its cells, as on the screen.
+    /// The map area's written cells inside its border, per axis, as read
+    /// once from the layout (D 11.1); the front end draws the map this size.
+    pub fn map_area(&self) -> (Option<i32>, Option<i32>) {
+        self.map_area
+    }
+
     pub fn view_dims(&self) -> (i32, i32) {
         let map = self.s.active_map().map(|m| (self.s.maps[m].width, self.s.maps[m].height)).unwrap_or((0, 0));
         let (w, h) = self.map_area;
