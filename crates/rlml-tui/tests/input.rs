@@ -229,7 +229,7 @@ fn keyboard_parts_and_pads() {
     assert_eq!(keys.keyboard_parts(), [1, 2]);
     assert_eq!((keys.part_of(&key("w")), keys.part_of(&key("k")), keys.part_of(&key("esc"))), (2, 1, 1), "a key is its section's (D 11.3)");
     let on = |d: Device, p: Press| keys.lookup_on(&game, d, &p).cloned();
-    assert_eq!(on(Device::Keyboard(2), Press::Key(key("w"))), cmd("STD.MOVE.NORTH"));
+    assert_eq!(on(Device::Keyboard(2), Press::Key(key("w"))), cmd("WALK.NORTH"));
     assert_eq!(on(Device::Keyboard(2), Press::Key(key("k"))), None, "part 2 has its own section in GAME");
     assert_eq!(on(Device::Keyboard(1), Press::Key(key("w"))), None);
     // a context without part sections uses part 1's keys on every part
@@ -237,7 +237,7 @@ fn keyboard_parts_and_pads() {
     assert_eq!(keys.lookup_on(&menu, Device::Keyboard(2), &Press::Key(key("up"))).cloned(), Some(Action::Engine("cursor.north".into())));
     assert_eq!(keys.lookup_on(&menu, Device::Keyboard(2), &Press::Key(key("esc"))).cloned(), Some(Action::Open { menu: "PAUSE".into(), stack: false }), "`ALWAYS` from part 2 too");
     // pads: the game's rows, the engine's defaults and chords
-    assert_eq!(on(Device::Pad(0), Press::Pad(pad("lstick.up"))), cmd("STD.MOVE.NORTH"));
+    assert_eq!(on(Device::Pad(0), Press::Pad(pad("lstick.up"))), cmd("WALK.NORTH"));
     assert_eq!(on(Device::Pad(0), Press::Pad(pad("rb"))), cmd("STD.SWITCH"));
     assert_eq!(keys.lookup_on(&menu, Device::Pad(0), &Press::Pad(pad("south"))).cloned(), Some(Action::Engine("confirm".into())), "the engine's pad default in MENU (M 8)");
     assert_eq!(on(Device::Pad(0), Press::Key(key("w"))), None, "a pad presses no keys");

@@ -1269,3 +1269,18 @@ fn seats_have_their_own_colors() {
     let (x, y) = at(&w, robin);
     assert_eq!(w.render_cells(0)[y as usize][x as usize].fg, Some([0x60, 0xc0, 0x60]), "no seat row: the tile's own color");
 }
+
+#[test]
+fn in_the_group_example_a_wall_takes_the_turn() {
+    let m = model(&ryhma());
+    let mut r = Runner::new(started(&m));
+    r.run(0).unwrap();
+    let p = r.w.s.player.unwrap();
+    let (_, y) = at(&r.w, p);
+    // the cave's west wall is at x 0: stand next to it and walk into it
+    r.w.s.get_mut(p).place = Place::Map(Pos { map: 0, x: 1, y });
+    assert!(r.player(&cmd("WALK.WEST")).unwrap(), "the bump succeeds");
+    assert_eq!(at(&r.w, p), (1, y), "no step");
+    assert_eq!(r.w.s.wake_of(p).unwrap().at, 120, "it cost the step's 120");
+    assert!(log_texts(&r.w).iter().any(|t| t.contains("kolauttaa seinään")), "{:?}", log_texts(&r.w));
+}

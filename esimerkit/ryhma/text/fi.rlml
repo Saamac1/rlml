@@ -6,6 +6,7 @@ language fi
 HERO.NAME sankari
 ROBIN.NAME Robin
 RAT.NAME rotta
+MESSAGE.WALL {WHO} kolauttaa seinään.
 RAT.DESC Iso harmaa rotta. Se on nälkäinen.
 PAUSE.TITLE Tauko
 PAUSE.RESUME Jatka

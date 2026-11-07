@@ -10,7 +10,7 @@ turn 0  time 0  HP 10/10
 #..r...# ...
 ######## ###
 
-> l  STD.MOVE.EAST
+> l  WALK.EAST
 turn 0  time 0  HP 10/10
 [CAVE]
 ########
@@ -22,7 +22,7 @@ turn 0  time 0  HP 10/10
 #..r...# ...
 ######## ###
 
-> d  STD.MOVE.EAST
+> d  WALK.EAST
 turn 1  time 120  HP 10/10
 [CAVE]
 ########
@@ -46,7 +46,7 @@ turn 1  time 120  HP 10/10
 #......#  ..
 ######## # #
 
-> l  STD.MOVE.EAST
+> l  WALK.EAST
 turn 2  time 240  HP 10/10
 [CAVE]
 ########

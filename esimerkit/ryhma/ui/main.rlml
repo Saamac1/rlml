@@ -20,6 +20,7 @@ legend:
 log LOG history 50
 - STD.MESSAGE.COMBAT
 - STD.MESSAGE.SENSE
+- MESSAGE.WALL
 
 menu PAUSE
 - RESUME
@@ -38,28 +39,28 @@ pad ALWAYS
 - open PAUSE start
 
 keys GAME
-- MOVE.NORTH k up
-- MOVE.SOUTH j down
-- MOVE.WEST h left
-- MOVE.EAST l right
+- WALK.NORTH k up
+- WALK.SOUTH j down
+- WALK.WEST h left
+- WALK.EAST l right
 - WAIT .
 - SWITCH tab
 - SWITCH.PREV shift+tab
 - pass z
 
 keys GAME keyboard 2
-- MOVE.NORTH w
-- MOVE.SOUTH s
-- MOVE.WEST a
-- MOVE.EAST d
+- WALK.NORTH w
+- WALK.SOUTH s
+- WALK.WEST a
+- WALK.EAST d
 - WAIT q
 - join e
 
 pad GAME deadzone 40%
-- MOVE.NORTH dpad.up lstick.up
-- MOVE.SOUTH dpad.down lstick.down
-- MOVE.WEST dpad.left lstick.left
-- MOVE.EAST dpad.right lstick.right
+- WALK.NORTH dpad.up lstick.up
+- WALK.SOUTH dpad.down lstick.down
+- WALK.WEST dpad.left lstick.left
+- WALK.EAST dpad.right lstick.right
 - WAIT south
 - SWITCH rb
 - SWITCH.PREV lb

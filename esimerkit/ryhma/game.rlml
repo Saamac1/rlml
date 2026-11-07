@@ -5,8 +5,9 @@
 > lisäksi seuralainen Robin, jota pelaaja voi ohjata vaihtamalla
 > (`tab`). Kun Robin ei ole ohjattava, se seuraa lähintä sankaria
 > (`FOLLOWER`). Kartta-alueella on kirjoitettu koko, joten vakiokirjaston
-> talutushihna pitää ryhmän kartta-alueen sisällä. Pelissä ei ole yhtään
-> RogueScript-riviä.
+> talutushihna pitää ryhmän kartta-alueen sisällä. Pelin ainoa oma
+> logiikka on kävely (`WALK`): seinää päin kävely kirjoittaa lokiin ja vie
+> vuoron, ja muu askel on vakiokirjaston `MOVE`.
 
 game RYHMA
 - start CAVE
@@ -49,3 +50,31 @@ entity RAT
 - hearing
 - ai behavior HUNTER
 - render GLYPH.RAT
+
+messages
+- MESSAGE.WALL WHO
+
+## Kävely
+
+> Vakiokirjaston `STEP` ei vie aikaa, kun tile estää liikkeen (STD 5).
+> Tässä pelissä seinään törmäys on tekeminen: se kirjoittaa lokiin ja
+> maksaa askeleen hinnan. Estävä entiteetti (rotta, toinen jäsen) ja
+> talutushihna menevät vakiokirjaston säännöillä, joten lyönti,
+> paikanvaihto ja hihnan epäämä askel toimivat kuten ennen.
+
+```roguescript
+command WALK(dir: dir) cost 120:
+    to = actor.at + dir
+    if blocks(to, move, for: actor) and STD.BLOCKER(actor, to) == none:
+        log(MESSAGE.WALL, WHO: actor)
+        return
+    return STD.MOVE(dir)
+
+command WALK.NORTH = WALK(north)
+
+command WALK.SOUTH = WALK(south)
+
+command WALK.WEST = WALK(west)
+
+command WALK.EAST = WALK(east)
+```
