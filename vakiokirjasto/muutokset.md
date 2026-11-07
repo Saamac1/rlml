@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 7.11.2026 (tanssijumi):** `STEP` ei vaihda paikkaa hahmon kanssa, jota ihminen ohjaa (`controlled`), joten samaan suuntaan kulkevat pelaajat eivät jää vaihtamaan paikkaa keskenään (luku [5](05-komennot.md)).
+
 **Muutokset 7.11.2026 (ryhmäesimerkki):** paikanvaihto ystävän kanssa ei enää esty törmääjän omasta estosta (`except: actor`, luku [5](05-komennot.md)), ja `LEADER_OF` ei anna jäsenelle johtajaksi jäsentä itseään (luku [6.1](06-tekoaly.md#61-seuraaja)).
 
 **Muutokset 6.11.2026 (moninpeli):** `SPAWN_PLAYER` luo hahmon jokaiselle istuimelle, `JOIN_PLAYER` liittyvälle ja `PART_PLAYER` tekee poistuvan istuimen jäsenistä seuraajia (luvut [6.1](06-tekoaly.md#61-seuraaja) ja [8](08-kasittelijat.md)). `LEADER_OF` palauttaa ilman kohdetta lähimmän jäsenen (luku [6.1](06-tekoaly.md#61-seuraaja)). Talutushihna `LEASHED`, paikanvaihto jäsenen kanssa, ryhmän `TAKE_EXIT` ja `GROUP_ARRIVAL` sekä `SWITCH` ja `SWITCH.PREV` ovat uusia (luku [5](05-komennot.md)). Jäsenet eivät suutu toisiinsa (`PROVOKE`, luku [7](07-suhteet-ja-vihamielisyys.md)). `WITNESSED` käyttää yhteistä näkökenttää, viestit nimeävät jäsenen, kun pelaajia on useampi (`SOLO`, `ALLY_PICKUP`, `ALLY_DROP`), ja kuuloviesti kirjataan kerran ajanhetkessä ryhmälle (luvut [8](08-kasittelijat.md) ja [9](09-aanet-viestit-ja-tekstit.md)). Moduulit ja prioriteetit ovat luvuissa [1.3](01-rajaus-periaatteet-ja-lataus.md#13-lataus-ja-moduulit) ja [2](02-prioriteettivyohykkeet.md), avoimet kysymykset luvussa [14](14-avoimet-kysymykset.md).

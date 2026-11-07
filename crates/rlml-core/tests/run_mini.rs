@@ -854,7 +854,9 @@ fn switching_gives_no_free_turns() {
     assert!(r.player(&cmd("STD.WAIT")).unwrap());
     assert_eq!(r.run(0).unwrap(), Status::Input);
     assert_eq!((r.w.s.player, r.w.s.game.time), (Some(c), 120), "one turn each in a round");
-    assert_eq!(r.w.s.wake_of(a).unwrap().at, 120, "the switch cost `a` its turn, no more and no less");
+    // `a` kept its place in each moment: it rested first at 0 and at 120,
+    // one turn a round, so the switch cost it its turn and no more
+    assert_eq!(r.w.s.wake_of(a).unwrap().at, 240, "the switch cost `a` its turn, no more and no less");
 }
 
 #[test]
@@ -965,12 +967,12 @@ fn a_kept_turn_sends_no_second_wake() {
     let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
     r.run(0).unwrap();
     assert!(!r.input(1, &cmd("NOPE")).unwrap(), "a failure keeps the turn");
-    // seat 2's older wake comes in between
+    // the kept turn keeps its place: seat 1 is asked again before seat 2
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!((r.awaiting(), r.w.s.game.time), (Some(1), 0), "asked again first (M 6.1.5)");
+    assert!(r.input(1, &cmd("STD.WAIT")).unwrap());
     assert_eq!(r.run(0).unwrap(), Status::Input);
     assert_eq!(r.awaiting(), Some(2));
-    assert!(r.input(2, &cmd("STD.WAIT")).unwrap());
-    assert_eq!(r.run(0).unwrap(), Status::Input);
-    assert_eq!((r.awaiting(), r.w.s.game.time), (Some(1), 0));
     assert_eq!((wakes(&r.w, a), wakes(&r.w, b)), (1, 1), "one `wake` per turn (M 6.1.5)");
 }
 
@@ -1297,4 +1299,29 @@ fn seats_have_their_own_names() {
     assert_eq!(name(robin), "Robin kuolee.", "a child's own name wins over its parent's seat name");
     let rat = kinds(&w, "RAT")[0];
     assert_eq!(name(rat), "rotta kuolee.", "no seat: the kind's name");
+}
+
+#[test]
+fn players_going_the_same_way_do_not_dance() {
+    let m = model(&ryhma());
+    let mut r = Runner::new(started(&m));
+    let robin = kinds(&r.w, "ROBIN")[0];
+    r.w.s.get_mut(robin).place = Place::Map(Pos { map: 0, x: 1, y: 6 });
+    let (a, b) = (r.w.s.active(1).unwrap(), r.w.s.active(2).unwrap());
+    // seat 1's hero right behind seat 2's on the open row 4
+    r.w.s.get_mut(a).place = Place::Map(Pos { map: 0, x: 3, y: 4 });
+    r.w.s.get_mut(b).place = Place::Map(Pos { map: 0, x: 4, y: 4 });
+    assert!(r.w.s.controlled(a) && r.w.s.controlled(b) && !r.w.s.controlled(robin), "`controlled` (M 9.3)");
+    r.run(0).unwrap();
+    assert_eq!(r.awaiting(), Some(1));
+    assert!(!r.input(1, &cmd("STD.MOVE.EAST")).unwrap(), "no swap with a member a person plays (STD 5)");
+    assert_eq!((at(&r.w, a), at(&r.w, b)), ((3, 4), (4, 4)), "nobody moved");
+    r.run(0).unwrap();
+    assert_eq!((r.awaiting(), r.w.s.game.time), (Some(1), 0), "seat 1 again: no time went by");
+    assert!(r.input(1, &cmd("STD.WAIT")).unwrap());
+    r.run(0).unwrap();
+    assert!(r.input(2, &cmd("STD.MOVE.EAST")).unwrap());
+    r.run(0).unwrap();
+    assert!(r.input(1, &cmd("STD.MOVE.EAST")).unwrap(), "the way is free now");
+    assert_eq!((at(&r.w, a), at(&r.w, b)), ((4, 4), (5, 4)), "both went east, one behind the other");
 }

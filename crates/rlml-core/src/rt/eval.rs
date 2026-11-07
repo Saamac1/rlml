@@ -1620,6 +1620,7 @@ impl World<'_> {
                     (_, n) => n.and_then(|n| self.s.active(n)).map(Value::Entity).unwrap_or(Value::None),
                 }
             }
+            "controlled" => Value::Bool(a0.as_entity().is_some_and(|e| self.s.controlled(e))),
             "view_width" | "view_height" => {
                 let size = self.view_dims();
                 Value::Number(if f == "view_width" { size.0 } else { size.1 } as i64)

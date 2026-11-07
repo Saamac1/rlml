@@ -319,6 +319,13 @@ impl State {
         self.wakes.push(Wake { entity, at, seq });
     }
 
+    /// Puts a wake back as it was, its sequence number kept: a kept turn
+    /// keeps its place in the moment's order (M 6.1.5).
+    pub fn restore(&mut self, w: Wake) {
+        self.unschedule(w.entity);
+        self.wakes.push(w);
+    }
+
     pub fn unschedule(&mut self, entity: EntityId) {
         self.wakes.retain(|w| w.entity != entity);
     }
@@ -467,6 +474,13 @@ impl State {
     /// A seat's living controlled member.
     pub fn active(&self, n: SeatId) -> Option<EntityId> {
         self.seat(n).and_then(|s| s.active).filter(|&e| self.get(e).alive)
+    }
+
+    /// `controlled(e)` (M 6.1.10): does `e` wait for its seat's input on
+    /// its turns? The seat's controlled member does, and with `party each`
+    /// every living member.
+    pub fn controlled(&self, e: EntityId) -> bool {
+        self.get(e).alive && self.seat_of(e).is_some_and(|n| self.party_each || self.active(n) == Some(e))
     }
 
     /// An actor: a member, or an instance with `ai` (M 6.1.10).

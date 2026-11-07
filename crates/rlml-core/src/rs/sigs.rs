@@ -154,6 +154,7 @@ query seats() -> list number
 query seat_of(e: entity) -> number
 query members(n: number) -> collection
 query active(n: number) -> entity
+query controlled(e: entity) -> bool
 query view_width() -> number
 query view_height() -> number
 query text_of(key: name, …) -> text query_or_present

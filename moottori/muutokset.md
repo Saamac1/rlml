@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 7.11.2026 (tanssijumi):** uusi kysely `controlled(e)` (luku [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)). Säilytetty vuoro pitää järjestysnumeronsa, joten epäonnistuneen tai maksuttoman komennon jälkeen kysytään samalta istuimelta (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)).
+
 **Muutokset 7.11.2026 (näppäimistöosat ja peliohjaimet):** laitteet jaetaan istuimille järjestyksessä, kunnes liittymisruutu on toteutettu, ja peliohjaimen yhdistelmät ja tatin kuollut alue on kuvattu (luku [8.2](08-syote.md#82-istuimet-ja-laitteet)).
 
 **Muutokset 7.11.2026 (ryhmäesimerkki):** `blocks` saa parametrin `except` (luku [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)). Istuimen jäsenen tile haetaan ensin muodossa `TILE.SEATn`, ja vuoron merkki välähtää ja vilkkuu (luvut [7.1](07-esitys.md#71-asettelu) ja [7.2](07-esitys.md#72-kartan-piirtäminen)).
