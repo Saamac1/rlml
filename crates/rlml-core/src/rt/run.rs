@@ -40,8 +40,6 @@ pub struct Runner<'m> {
     woke: BTreeMap<EntityId, Wake>,
     /// The seat whose input the scheduler waits for (M 8.2).
     awaiting: Option<SeatId>,
-    /// The wake the seat's input took, for a kept turn to keep its place.
-    taken: Option<Wake>,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -50,7 +48,7 @@ fn engine_env(name: &str) -> Env {
 
 impl<'m> Runner<'m> {
     pub fn new(w: World<'m>) -> Runner<'m> {
-        Runner { w, waiting: BTreeMap::new(), woke: BTreeMap::new(), awaiting: None, taken: None }
+        Runner { w, waiting: BTreeMap::new(), woke: BTreeMap::new(), awaiting: None }
     }
 
     /// The seat whose input is awaited, after `run` returned `Input`.
@@ -77,8 +75,8 @@ impl<'m> Runner<'m> {
 
     /// A kept turn at `now`: the wake the input took goes back with its
     /// sequence number, so no other actor of the moment comes in between.
-    fn keep_place(&mut self, e: EntityId, now: i64) {
-        match self.taken.take().filter(|w| w.entity == e) {
+    fn keep_place(&mut self, e: EntityId, now: i64, taken: Option<Wake>) {
+        match taken.filter(|w| w.entity == e) {
             Some(w) => self.w.s.restore(Wake { at: now, ..w }),
             None => self.w.s.schedule(e, now),
         }
@@ -239,7 +237,17 @@ impl<'m> Runner<'m> {
             self.waiting.remove(&e);
             return self.end_action();
         }
-        let outcome = match self.waiting.remove(&e) {
+        self.w.s.acting = Some(e);
+        let outcome = self.act(e);
+        self.w.s.acting = None;
+        let outcome = outcome?;
+        self.finish(e, outcome, None)?;
+        self.end_action()
+    }
+
+    /// The ai's choice or the waiting command, run.
+    fn act(&mut self, e: EntityId) -> RtResult<Outcome> {
+        Ok(match self.waiting.remove(&e) {
             Some(state) => self.w.continue_command(e, state, true)?,
             None => {
                 let ai = self.w.s.get(e).get("ai").and_then(|c| c.get("behavior")).cloned();
@@ -253,14 +261,15 @@ impl<'m> Runner<'m> {
                     _ => Outcome::Done { cost: DEFAULT_COST },
                 }
             }
-        };
-        self.finish(e, outcome, false)?;
-        self.end_action()
+        })
     }
 
     /// Schedules after a command (M 6.1.5): success waits for the cost's
     /// delay, an ai's failure loses the turn, a wait comes back later.
-    fn finish(&mut self, e: EntityId, outcome: Outcome, player: bool) -> RtResult<bool> {
+    /// `taken` is the wake a seat's input took: the player's command, whose
+    /// kept turn goes back to that wake's place.
+    fn finish(&mut self, e: EntityId, outcome: Outcome, taken: Option<Wake>) -> RtResult<bool> {
+        let player = taken.is_some();
         let Some(at) = self.w.s.at(e) else { return Ok(true) };
         if !self.w.s.get(e).alive {
             return Ok(true);
@@ -276,7 +285,7 @@ impl<'m> Runner<'m> {
             Outcome::Done { cost } => {
                 if player && cost == 0 {
                     // a free action: the player acts again now, without a new wake
-                    self.keep_place(e, now);
+                    self.keep_place(e, now, taken);
                     self.keep_turn(e);
                     return Ok(true);
                 }
@@ -288,7 +297,7 @@ impl<'m> Runner<'m> {
             Outcome::Failed { .. } if player => {
                 // the player's failure costs nothing; time already waited
                 // stays spent, and the seat is asked again first (M 6.1.5)
-                self.keep_place(e, now);
+                self.keep_place(e, now, taken);
                 self.keep_turn(e);
                 false
             }
@@ -331,13 +340,13 @@ impl<'m> Runner<'m> {
         if wake.at > self.clock(map) {
             return Err("it is not the player's turn".into());
         }
-        self.taken = Some(wake);
         self.w.s.unschedule(p);
         self.woke.remove(&p);
         self.awaiting = None;
-        let outcome = self.w.start_command(p, cmd)?;
-        let ok = self.finish(p, outcome, true)?;
-        self.taken = None;
+        self.w.s.acting = Some(p);
+        let outcome = self.w.start_command(p, cmd);
+        self.w.s.acting = None;
+        let ok = self.finish(p, outcome?, Some(wake))?;
         self.end_action()?;
         Ok(ok)
     }

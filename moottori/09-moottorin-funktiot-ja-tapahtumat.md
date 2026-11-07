@@ -154,7 +154,7 @@ Pakan `.count` on kenttä, ei kutsu. Esto ja maasto (kyselyjä): blocks(p: alue,
 | `seat_of(e: entity)` | `number` tai `none` | jäsenen istuin |
 | `members(n: number)` | `collection` | istuimen elävät jäsenet jäseneksi tulon järjestyksessä |
 | `active(n: number)` | `entity` tai `none` | istuimen ohjattava |
-| `controlled(e: entity)` | `bool` | `e` odottaa vuorollaan istuimensa syötettä: istuimen ohjattava, ja säännöllä `party each` jokainen elävä jäsen (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)) |
+| `controlled(e: entity)` | `bool` | `e` odottaa vuorollaan istuimensa syötettä: istuimen ohjattava, säännöllä `party each` jokainen elävä jäsen, ja säännöllä `party switch` jokainen jäsen, kun ohjattava ei voi toimia (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)) |
 | `view_width()`, `view_height()` | `number` | kartta-alueen kirjoitettu koko soluina, ilman sitä kartan koko; ei riipu ruudun koosta (luku [7.1](07-esitys.md#71-asettelu)) |
 | `text_of(key: name, …)` | `text` | kielen mukainen teksti paikkamerkit täytettyinä; vain kyselyssä, esityksessä, paneelissa, listavalikossa ja `naming`-kyselyssä (luku [7.3](07-esitys.md#73-tekstit)) |
 

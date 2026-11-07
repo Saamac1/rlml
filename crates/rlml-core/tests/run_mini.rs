@@ -1325,3 +1325,32 @@ fn players_going_the_same_way_do_not_dance() {
     assert!(r.input(1, &cmd("STD.MOVE.EAST")).unwrap(), "the way is free now");
     assert_eq!((at(&r.w, a), at(&r.w, b)), ((4, 4), (5, 4)), "both went east, one behind the other");
 }
+
+#[test]
+fn a_follower_still_passes_the_player() {
+    let m = model(&ryhma());
+    let mut r = Runner::new(started(&m));
+    let robin = kinds(&r.w, "ROBIN")[0];
+    let a = r.w.s.active(1).unwrap();
+    r.w.s.get_mut(a).place = Place::Map(Pos { map: 0, x: 3, y: 4 });
+    r.w.s.get_mut(robin).place = Place::Map(Pos { map: 0, x: 2, y: 4 });
+    assert!(!r.w.s.controlled(robin), "Robin is played by its ai");
+    // Robin bumps into the player: one of them is no person's, so they swap
+    let env = rlml_core::rt::eval::Env::new(rlml_core::rt::eval::BodyKind::Handler, "test", None, "test");
+    let out = r.w.start_command(robin, &cmd("STD.MOVE.EAST")).unwrap();
+    let _ = env;
+    assert!(matches!(out, rlml_core::rt::eval::Outcome::Done { .. }), "{out:?}");
+    assert_eq!((at(&r.w, robin), at(&r.w, a)), ((3, 4), (2, 4)), "the follower passes in a corridor (STD 5)");
+}
+
+#[test]
+fn control_that_will_move_counts_as_controlled() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut c = 0;
+    let mut r = seats_game(&m, 1, |w| c = second_member(w));
+    let a = r.w.s.active(1).unwrap();
+    assert!(!r.w.s.controlled(c), "the other member, played by its rule");
+    r.w.s.unschedule(a);
+    assert!(r.w.s.controlled(c), "the controlled member cannot act: control moves to `c` when it wakes (M 6.1.10)");
+}

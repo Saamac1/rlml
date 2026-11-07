@@ -1919,10 +1919,8 @@ impl World<'_> {
             };
             self.s.get_mut(t.who).place = Place::Map(to);
             if let Some(left) = left {
-                let seq = wake.unwrap().seq;
                 let at = self.s.maps[id].clock(self.s.game.time) + left;
-                self.s.wakes.retain(|w| w.entity != t.who);
-                self.s.wakes.push(super::state::Wake { entity: t.who, at, seq });
+                self.s.restore(super::state::Wake { at, ..wake.unwrap() });
             }
             if self.s.player == Some(t.who) {
                 // the active map changes at the microstep's end (M 6.7)

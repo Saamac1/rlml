@@ -4,7 +4,7 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
-**Muutokset 7.11.2026 (tanssijumi):** `STEP` ei vaihda paikkaa hahmon kanssa, jota ihminen ohjaa (`controlled`), joten samaan suuntaan kulkevat pelaajat eivät jää vaihtamaan paikkaa keskenään (luku [5](05-komennot.md)).
+**Muutokset 7.11.2026 (tanssijumi):** `STEP` ei vaihda paikkaa kahden ihmisen ohjaaman hahmon välillä (`controlled`), joten samaan suuntaan kulkevat pelaajat eivät jää vaihtamaan paikkaa keskenään (luku [5](05-komennot.md)).
 
 **Muutokset 7.11.2026 (ryhmäesimerkki):** paikanvaihto ystävän kanssa ei enää esty törmääjän omasta estosta (`except: actor`, luku [5](05-komennot.md)), ja `LEADER_OF` ei anna jäsenelle johtajaksi jäsentä itseään (luku [6.1](06-tekoaly.md#61-seuraaja)).
 

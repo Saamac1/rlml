@@ -230,6 +230,9 @@ pub struct State {
     pub seats: Vec<Seat>,
     /// `party each`: every member waits for its seat's input (D 3.3).
     pub party_each: bool,
+    /// The actor whose command runs now; its wake is out of the queue
+    /// meanwhile (M 6.1.5). Only the scheduler sets it, between actions.
+    pub acting: Option<EntityId>,
     /// `leash on`, by default when more than one seat may join (D 3.3).
     pub leash: bool,
     /// The game's `seats a..b` (D 3.3), locked for the session.
@@ -313,10 +316,9 @@ impl State {
     /// Schedules a wake on the actor's map clock; an actor has at most one
     /// wake, so an earlier one is replaced (M 6.1.2).
     pub fn schedule(&mut self, entity: EntityId, at: i64) {
-        self.unschedule(entity);
         let seq = self.next_seq;
         self.next_seq += 1;
-        self.wakes.push(Wake { entity, at, seq });
+        self.restore(Wake { entity, at, seq });
     }
 
     /// Puts a wake back as it was, its sequence number kept: a kept turn
@@ -477,10 +479,20 @@ impl State {
     }
 
     /// `controlled(e)` (M 6.1.10): does `e` wait for its seat's input on
-    /// its turns? The seat's controlled member does, and with `party each`
-    /// every living member.
+    /// its turns? The seat's controlled member does, with `party each`
+    /// every living member, and with `party switch` any member while the
+    /// controlled one cannot act (dead, without a wake or off the map),
+    /// since control moves to whoever wakes first: the scheduler's rule.
     pub fn controlled(&self, e: EntityId) -> bool {
-        self.get(e).alive && self.seat_of(e).is_some_and(|n| self.party_each || self.active(n) == Some(e))
+        if !self.get(e).alive {
+            return false;
+        }
+        let Some(n) = self.seat_of(e) else { return false };
+        let active = self.active(n);
+        // the member whose command runs has its wake out of the queue
+        // meanwhile; it can still act
+        let cannot = |a: EntityId| self.at(a).is_none() || (self.wake_of(a).is_none() && self.acting != Some(a));
+        self.party_each || active == Some(e) || active.is_none_or(cannot)
     }
 
     /// An actor: a member, or an instance with `ai` (M 6.1.10).
