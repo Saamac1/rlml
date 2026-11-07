@@ -56,7 +56,7 @@ pub struct World<'m> {
     /// The player's last view, for a dead player's `sees` (M 7.2).
     pub last_view: Option<(MapId, std::collections::BTreeSet<(i32, i32)>)>,
     /// The map area's written cells, read once (M 7.1).
-    map_area: (Option<i32>, Option<i32>),
+    map_area: crate::model::MapArea,
 }
 
 /// A `log` call: the message key and its text arguments.
@@ -98,7 +98,7 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area_cells() }
+        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area() }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {
@@ -776,21 +776,20 @@ impl<'m> World<'m> {
 }
 
 impl World<'_> {
-    /// `view_width()` and `view_height()` (M 7.1): the map area's size in
-    /// cells as the layout's legend writes it (`size.width N`,
-    /// `size.height N`, `size WxH`). It comes from data, not from the
-    /// screen, so a game runs the same at any window size (M 4). An axis
-    /// without a written cell count is the active map's own size. A border on the map area
-    /// takes its cells, as on the screen.
-    /// The map area's written cells inside its border, per axis, as read
-    /// once from the layout (D 11.1); the front end draws the map this size.
-    pub fn map_area(&self) -> (Option<i32>, Option<i32>) {
+    /// The layout's map area, read once (D 11.1); the front end draws the
+    /// map at its written size and border.
+    pub fn map_area(&self) -> crate::model::MapArea {
         self.map_area
     }
 
+    /// `view_width()` and `view_height()` (M 7.1): the map area's cells
+    /// inside its border as the layout's legend writes them (`size.width
+    /// N`, `size.height N`, `size WxH`). They come from data, not from the
+    /// screen, so a game runs the same at any window size (M 4). An axis
+    /// without a written cell count is the active map's own size.
     pub fn view_dims(&self) -> (i32, i32) {
         let map = self.s.active_map().map(|m| (self.s.maps[m].width, self.s.maps[m].height)).unwrap_or((0, 0));
-        let (w, h) = self.map_area;
+        let (w, h) = self.map_area.cells();
         (w.unwrap_or(map.0), h.unwrap_or(map.1))
     }
 }

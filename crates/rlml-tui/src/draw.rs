@@ -224,6 +224,8 @@ impl View {
     /// Draws the game into a frame of the window's size.
     pub fn draw(&mut self, world: &mut World, lang: &str, width: usize, height: usize) -> Frame {
         let mut frame = Frame::new(width, height);
+        // set again when the map is drawn: a too small window has none
+        self.map_rect = None;
         let block = layout_block(world);
         let (areas, solved) = match &block {
             Some(b) => {
@@ -256,12 +258,21 @@ impl View {
             let Some(&rect) = solved.rects.get(&area.ch) else { continue };
             let name = if area.source == "map" || area.source == "hover" { area.source.clone() } else { area.source.split('(').next().unwrap_or("").to_string() };
             frame.set_area(vec![name.clone()]);
-            let (border, style) = panel_style(world, &name);
+            let (mut border, style) = panel_style(world, &name);
             // a written cell size is the map's view (M 7.1): the area may be
             // larger, since the last track takes the spare room (D 11.1), so
             // the map area is cut to it once, before its paint and border,
-            // and the leash and the screen measure the same cells
-            let rect = if area.source == "map" { written_map_rect(world, rect, border) } else { rect };
+            // and the leash and the screen measure the same cells; the
+            // model decides whether its border is drawn
+            let rect = if area.source == "map" {
+                let a = world.map_area();
+                if !a.border {
+                    border = Border::None;
+                }
+                written_map_rect(a, rect)
+            } else {
+                rect
+            };
             paint(&mut frame, rect, style);
             let inner = if border != Border::None && rect.w >= 2 && rect.h >= 2 {
                 frame.border(rect, border, Role::Normal);
@@ -341,18 +352,17 @@ fn log_rows(world: &World, name: &str) -> Vec<String> {
 
 /// The map cell at a screen position of a map area, for tests and the
 /// mouse later.
-/// The map area's rect cut to its written cell size, plus the border's
-/// cells when a border is drawn (D 11.1, M 7.1).
-fn written_map_rect(world: &World, rect: Rect, border: Border) -> Rect {
-    let (cw, ch) = world.map_area();
-    let inset = if border != Border::None && rect.w >= 2 && rect.h >= 2 { 2 } else { 0 };
-    let cut = |len: usize, cells: Option<i32>| cells.map_or(len, |c| len.min(c.max(0) as usize + inset));
-    Rect::new(rect.x, rect.y, cut(rect.w, cw), cut(rect.h, ch))
+/// The map area's rect cut to its written cell size, border included
+/// (D 11.1, M 7.1).
+fn written_map_rect(a: rlml_core::model::MapArea, rect: Rect) -> Rect {
+    let cut = |len: usize, cells: Option<i32>| cells.map_or(len, |c| len.min(c.max(0) as usize));
+    Rect::new(rect.x, rect.y, cut(rect.w, a.width), cut(rect.h, a.height))
 }
 
-/// The map cell under screen cell (x, y), for the rect the map was drawn
-/// in (`View::map_rect`), or `None` outside it.
-pub fn cell_at(view: &View, map: MapId, r: Rect, x: usize, y: usize) -> Option<Pos> {
+/// The map cell under screen cell (x, y), where the map was last drawn
+/// (`View::map_rect`), or `None` outside it; for tests and the mouse later.
+pub fn cell_at(view: &View, map: MapId, x: usize, y: usize) -> Option<Pos> {
+    let r = view.map_rect?;
     let (x0, y0) = *view.camera.get(&map)?;
     r.contains(x, y).then(|| Pos { map, x: x0 + (x - r.x) as i32, y: y0 + (y - r.y) as i32 })
 }

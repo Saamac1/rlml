@@ -210,25 +210,26 @@ impl Model {
         border
     }
 
-    /// The map area's cells inside its border as the layout's legend writes
-    /// them, per axis (D 11.1); `None` where the size is not a cell count.
-    pub fn map_area_cells(&self) -> (Option<i32>, Option<i32>) {
-        let Some(b) = self.layout() else { return (None, None) };
+    /// The map area as the layout's legend writes it (D 11.1, M 7.1): its
+    /// written size per axis and whether its border is drawn. The rule for
+    /// the border lives here only; the terminal and the core both read it.
+    pub fn map_area(&self) -> MapArea {
+        let Some(b) = self.layout() else { return MapArea::default() };
         let cells = |s: Option<&str>| s.and_then(|s| s.parse::<i32>().ok()).filter(|&n| n > 0);
-        let border = self.panel_border("map").is_some_and(|b| b != "none");
+        let styled = self.panel_border("map").is_some_and(|b| b != "none");
         for item in b.sub("legend") {
             let Ok((_, rest)) = glyph_char(item) else { continue };
             let words: Vec<&str> = rest.tokens.iter().map(|t| t.text.as_str()).collect();
             if words.first() == Some(&"map") {
                 let (w, h) = legend_size(&words);
-                let (w, h) = (cells(w), cells(h));
-                // the terminal draws a border only on an area of 2x2 or more
-                let inset = if border && w.is_none_or(|n| n >= 2) && h.is_none_or(|n| n >= 2) { 2 } else { 0 };
-                // as on the screen, a border may leave no cells (D 11.1)
-                return (w.map(|n| n - inset), h.map(|n| n - inset));
+                let (width, height) = (cells(w), cells(h));
+                // a border needs 2x2 cells; an axis without a written size
+                // takes the window's room, which is at least that
+                let border = styled && width.is_none_or(|n| n >= 2) && height.is_none_or(|n| n >= 2);
+                return MapArea { width, height, border };
             }
         }
-        (None, None)
+        MapArea { border: styled, ..MapArea::default() }
     }
 
     /// Text keys of one language, merged row by row (D 10).
@@ -498,6 +499,23 @@ pub fn row_tiles(rest: &RawItem) -> Vec<String> {
     }
     out.retain(|w| w != "none");
     out
+}
+
+/// The map area of a layout (D 11.1): written cell counts, border
+/// included, and whether the border is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MapArea {
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub border: bool,
+}
+
+impl MapArea {
+    /// The map's cells inside the border; a border may leave none.
+    pub fn cells(&self) -> (Option<i32>, Option<i32>) {
+        let inset = if self.border { 2 } else { 0 };
+        (self.width.map(|n| n - inset), self.height.map(|n| n - inset))
+    }
 }
 
 /// The written width and height of a layout legend row's words (D 11.1):

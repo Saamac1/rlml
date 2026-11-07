@@ -327,7 +327,19 @@ fn the_map_shows_its_written_size_in_a_wide_window() {
         assert_eq!(app.r.w.view_dims(), (20, 8));
         let rows = frame.rows();
         assert!(rows[..8].iter().all(|row| row.chars().skip(20).all(|c| c == ' ')), "nothing drawn beside the map");
-        let (cx, _) = app.view.camera[&0];
+        let (cx, cy) = app.view.camera[&0];
         assert!((0..=20).contains(&cx), "the camera has a place on the 40-wide cave: {cx}");
+        // the map is drawn: the player shows where `cell_at` finds it
+        let p = app.r.w.s.at(app.r.w.s.player.unwrap()).unwrap();
+        let (sx, sy) = ((p.x - cx) as usize, (p.y - cy) as usize);
+        assert_eq!(rows[sy].chars().nth(sx), Some('@'), "{rows:#?}");
+        assert_eq!(rlml_tui::draw::cell_at(&app.view, 0, sx, sy), Some(p));
+        assert_eq!(rlml_tui::draw::cell_at(&app.view, 0, 30, sy), None, "beside the map is no map cell");
     }
+    // a window too small for the layout draws no map, and keeps no rect
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    app.draw();
+    app.resize(10, 5);
+    app.draw();
+    assert_eq!(app.view.map_rect, None);
 }
