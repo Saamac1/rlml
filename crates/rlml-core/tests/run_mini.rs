@@ -1284,3 +1284,17 @@ fn in_the_group_example_a_wall_takes_the_turn() {
     assert_eq!(r.w.s.wake_of(p).unwrap().at, 120, "it cost the step's 120");
     assert!(log_texts(&r.w).iter().any(|t| t.contains("kolauttaa seinään")), "{:?}", log_texts(&r.w));
 }
+
+#[test]
+fn seats_have_their_own_names() {
+    let m = model(&ryhma());
+    let w = started(&m);
+    let heroes = kinds(&w, "HERO");
+    let robin = kinds(&w, "ROBIN")[0];
+    let name = |e: usize| w.text("fi", "STD.MESSAGE.COMBAT.DIED", &[("VICTIM".into(), Value::Entity(e))]);
+    assert_eq!(name(heroes[0]), "Aino kuolee.", "`HERO.SEAT1.NAME` (D 10)");
+    assert_eq!(name(heroes[1]), "Eero kuolee.");
+    assert_eq!(name(robin), "Robin kuolee.", "a child's own name wins over its parent's seat name");
+    let rat = kinds(&w, "RAT")[0];
+    assert_eq!(name(rat), "rotta kuolee.", "no seat: the kind's name");
+}

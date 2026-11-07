@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 7.11.2026 (istuinten nimet):** istuimen jäsenen nimi haetaan ensin avaimella `<ENTITEETTI>.SEATn.NAME` (luku [10](10-tekstit.md)).
+
 **Muutokset 7.11.2026 (ryhmäesimerkki):** istuimen jäsenen tile `TILE.SEATn` (luku [9.2](09-ulkoasu.md#92-tilejen-ulkoasu-tilesglyphs)).
 
 **Muutokset 6.11.2026 (moninpeli):** `game`-lohko saa kentät `seats`, `party` ja `leash`, ja `begin` luo hahmon jokaiselle istuimelle (luvut [1.2](01-rajaus-ja-periaatteet.md#12-rajapinnat-pelilogiikkaan) ja [3.3](03-tiedostot-ja-include.md#33-aloitus)). `on input every N` laskee kaikkien istuinten odotukset (luku [3.4](03-tiedostot-ja-include.md#34-automaattinen-tallennus-autosave)). Moottorin komponentti `seat` tekee entiteetistä istuimen jäsenen (luku [5.3](05-komponentit-ja-entiteetit.md#53-moottorin-komponentit)). Näppäimistön voi jakaa osiin `keys KONTEKSTI keyboard N`, moottorin toiminnot `join` ja `leave_seat` ja konteksti `JOIN` ovat uusia, ja kartta-alue saa vuoron merkin `turn` (luvut [11.1](11-kayttoliittyman-data.md#111-asettelu), [11.3](11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad) ja [14](14-osiot-ja-otsikkorivit.md)). Perustelut ovat lisädokumentissa [RLML-moninpeli](../RLML-moninpeli.md).

@@ -10,7 +10,7 @@
 
 **Moninpeli 6.11.2026:**
 
-- **Jäsenen nimi.** Oletuspelaajan nimi on “sinä”, joten ryhmän viestit (`HIT`, `DIED`, `ALLY_PICKUP`) näyttävät “sinä ottaa”. Antaako STD istuinkohtaisen oletusnimen (“Pelaaja 2”), vai nimeääkö peli hahmoluokat aina itse (luku [9](09-aanet-viestit-ja-tekstit.md))?
+- **Jäsenen nimi.** Oletuspelaajan nimi on “sinä”, joten ryhmän viestit (`HIT`, `DIED`, `ALLY_PICKUP`) näyttävät “sinä ottaa”. Ratkaistu osin 7.11.2026: peli antaa istuimille omat nimet avaimella `<ENTITEETTI>.SEATn.NAME` (dataformaatit, luku [10](../dataformaatit/10-tekstit.md)). Avoinna on, antaako STD itse oletusnimet, kuten `STD.DEFAULT.PLAYER.SEAT2.NAME`.
 - **Viimeinen kuolema.** `SOLO` on tosi myös moninpelissä, kun viimeinen istuin on yksin, joten viimeisen jäsenen kuolema näkyy muodossa “Kuolet.” (luku [8](08-kasittelijat.md)).
 - **Vahvistettu ryhmäsiirto** dialogin `EXIT.LEAVE_OTHERS` kautta ei maksa komennon hintaa (luku [5](05-komennot.md)). Pitäisikö dialogin `YES`-haaran viedä ohjattavalta aikaa?
 - **Hihna kiertävällä kartalla.** `LEASHED` ei laske suorakulmiota lyhimmän välin mukaan (luku [5](05-komennot.md)).

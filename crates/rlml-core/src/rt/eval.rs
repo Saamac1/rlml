@@ -1994,7 +1994,11 @@ impl World<'_> {
                 {
                     return t.clone();
                 }
-                self.kind_text(lang, &inst.kind, suffix)
+                // a seat's member reads `KIND.SEATn.NAME` before `KIND.NAME`
+                // at each level of its kind, so seats have their own names
+                // and a child's own name still wins (D 10, M 7.3)
+                let seat = self.s.seat_of(*e).map(|n| format!("SEAT{n}.{suffix}"));
+                self.kind_text_opt(lang, &inst.kind, seat.as_deref(), suffix).unwrap_or_else(|| format!("{}.{suffix}", inst.kind))
             }
             Value::Name(n) => {
                 if self.m.kind(n) == Some(Kind::Entity) || suffix != "NAME" {
@@ -2011,20 +2015,28 @@ impl World<'_> {
 
     /// `<KIND>.NAME`, from the nearest parent that has the text (D 10).
     fn kind_text(&self, lang: &str, kind: &str, suffix: &str) -> String {
+        self.kind_text_opt(lang, kind, None, suffix).unwrap_or_else(|| format!("{kind}.{suffix}"))
+    }
+
+    /// The text of the nearest kind that has `first` or `suffix`, `first`
+    /// winning on the same level.
+    fn kind_text_opt(&self, lang: &str, kind: &str, first: Option<&str>, suffix: &str) -> Option<String> {
         let texts = self.m.texts(lang);
         let mut cur = Some(kind.to_string());
         for _ in 0..64 {
-            let Some(k) = cur else { break };
-            let key = format!("{k}.{suffix}");
-            if texts.contains_key(&key) {
-                return self.text(lang, &key, &[]);
+            let k = cur?;
+            for s in first.into_iter().chain([suffix]) {
+                let key = format!("{k}.{s}");
+                if texts.contains_key(&key) {
+                    return Some(self.text(lang, &key, &[]));
+                }
             }
             cur = self.m.defs.get(&k).and_then(|d| d.block()).and_then(|b| {
                 let parent = b.arg_after("extends")?;
                 self.m.resolve(b.namespace.as_deref(), parent).ok().map(|d| d.full.clone())
             });
         }
-        format!("{kind}.{suffix}")
+        None
     }
 }
 

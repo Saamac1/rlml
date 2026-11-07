@@ -1,9 +1,13 @@
 language fi
 
 > Pelin omat tekstit. Moninpelissä viestit nimeävät hahmon, joten
-> sankarilla on nimi eikä "sinä" (STD 9).
+> sankarilla on nimi eikä "sinä" (STD 9). Istuimen jäsen haetaan ensin
+> avaimella `HERO.SEATn.NAME`, joten istuimen 1 sankari on Aino ja
+> istuimen 2 Eero.
 
 HERO.NAME sankari
+HERO.SEAT1.NAME Aino
+HERO.SEAT2.NAME Eero
 ROBIN.NAME Robin
 RAT.NAME rotta
 MESSAGE.WALL {WHO} kolauttaa seinään.
