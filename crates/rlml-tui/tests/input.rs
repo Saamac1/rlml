@@ -207,3 +207,65 @@ fn numpad_keys_are_digits_in_a_terminal() {
     assert_eq!(input.press(&m, &st, key("8")), Effect::Counting("8".into()));
     assert_eq!(input.press(&m, &st, key("s")), Effect::Command(CommandValue { name: "SEARCH".into(), args: vec![(Some("n".into()), Value::Number(8))] }));
 }
+
+fn ryhma() -> MemFiles {
+    let mut f = files(&[]);
+    let game = repo().join("esimerkit/ryhma");
+    read_tree(&game, &game, &mut f.game);
+    f
+}
+
+fn pad(s: &str) -> rlml_tui::input::PadPress {
+    rlml_tui::input::PadPress::parse(s).unwrap()
+}
+
+#[test]
+fn keyboard_parts_and_pads() {
+    use rlml_tui::input::{Device, Press};
+    let m = model(&ryhma());
+    let keys = Keys::from_model(&m);
+    let game = stack(&["GAME"]);
+    let cmd = |s: &str| Some(Action::Command(s.into()));
+    assert_eq!(keys.keyboard_parts(), [1, 2]);
+    assert_eq!((keys.part_of(&key("w")), keys.part_of(&key("k")), keys.part_of(&key("esc"))), (2, 1, 1), "a key is its section's (D 11.3)");
+    let on = |d: Device, p: Press| keys.lookup_on(&game, d, &p).cloned();
+    assert_eq!(on(Device::Keyboard(2), Press::Key(key("w"))), cmd("STD.MOVE.NORTH"));
+    assert_eq!(on(Device::Keyboard(2), Press::Key(key("k"))), None, "part 2 has its own section in GAME");
+    assert_eq!(on(Device::Keyboard(1), Press::Key(key("w"))), None);
+    // a context without part sections uses part 1's keys on every part
+    let menu = stack(&["GAME", "MENU"]);
+    assert_eq!(keys.lookup_on(&menu, Device::Keyboard(2), &Press::Key(key("up"))).cloned(), Some(Action::Engine("cursor.north".into())));
+    assert_eq!(keys.lookup_on(&menu, Device::Keyboard(2), &Press::Key(key("esc"))).cloned(), Some(Action::Open { menu: "PAUSE".into(), stack: false }), "`ALWAYS` from part 2 too");
+    // pads: the game's rows, the engine's defaults and chords
+    assert_eq!(on(Device::Pad(0), Press::Pad(pad("lstick.up"))), cmd("STD.MOVE.NORTH"));
+    assert_eq!(on(Device::Pad(0), Press::Pad(pad("rb"))), cmd("STD.SWITCH"));
+    assert_eq!(keys.lookup_on(&menu, Device::Pad(0), &Press::Pad(pad("south"))).cloned(), Some(Action::Engine("confirm".into())), "the engine's pad default in MENU (M 8)");
+    assert_eq!(on(Device::Pad(0), Press::Key(key("w"))), None, "a pad presses no keys");
+    assert_eq!(pad("rb+lb+start"), pad("lb+rb+start"), "a chord's held buttons are sorted");
+    assert_ne!(pad("start+lb"), pad("lb+start"), "the last button is the one pressed");
+    assert!(rlml_tui::input::PadPress::parse("lb+jump").is_err());
+    assert_eq!(keys.deadzone(&game), 0.4, "`pad GAME deadzone 40%`");
+    assert_eq!(keys.deadzone(&stack(&["MENU"])), 0.5, "the default");
+}
+
+#[test]
+fn pad_events_make_presses() {
+    use rlml_tui::pad::{PadState, Raw};
+    let mut s = PadState::default();
+    let b = |name: &str, down| Raw::Button { name: name.into(), down };
+    let ax = |name: &str, value| Raw::Axis { name: name.into(), value };
+    assert_eq!(s.event(&b("south", true), 0.5), Some(pad("south")));
+    assert_eq!(s.event(&b("south", false), 0.5), None);
+    // a held shoulder makes a chord
+    assert_eq!(s.event(&b("lb", true), 0.5), Some(pad("lb")));
+    assert_eq!(s.event(&b("start", true), 0.5), Some(pad("lb+start")));
+    s.event(&b("start", false), 0.5);
+    s.event(&b("lb", false), 0.5);
+    // a stick gives its direction once when it crosses the deadzone
+    assert_eq!(s.event(&ax("lstick.y", 0.3), 0.5), None, "inside the deadzone");
+    assert_eq!(s.event(&ax("lstick.y", 0.8), 0.5), Some(pad("lstick.up")));
+    assert_eq!(s.event(&ax("lstick.y", 0.9), 0.5), None, "held: no repeat");
+    assert_eq!(s.event(&ax("lstick.y", 0.0), 0.5), None, "back to the middle");
+    assert_eq!(s.event(&ax("lstick.x", -0.7), 0.5), Some(pad("lstick.left")));
+    assert_eq!(s.event(&ax("dpad.y", -1.0), 0.5), Some(pad("dpad.down")));
+}

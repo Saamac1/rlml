@@ -22,7 +22,7 @@ turn 0  time 0  HP 10/10
 #..r...# ...
 ######## ###
 
-> l  STD.MOVE.EAST
+> d  STD.MOVE.EAST
 turn 1  time 120  HP 10/10
 [CAVE]
 ########
@@ -58,7 +58,7 @@ turn 2  time 240  HP 10/10
 #......#  ..
 ########
 
-> s  STD.WAIT
+> .  STD.WAIT
 turn 2  time 240  HP 10/10
 [CAVE]
 ########
@@ -70,7 +70,7 @@ turn 2  time 240  HP 10/10
 #......#  ..
 ########
 
-> s  STD.WAIT
+> q  STD.WAIT
 turn 3  time 360  HP 10/10
 [CAVE]
 ########
@@ -84,7 +84,7 @@ turn 3  time 360  HP 10/10
   · rotta kuolee.
   · rotta ottaa 3 vahinkoa.
 
-> s  STD.WAIT
+> .  STD.WAIT
 turn 3  time 360  HP 10/10
 [CAVE]
 ########
@@ -96,7 +96,7 @@ turn 3  time 360  HP 10/10
 #......#  ..
 ########
 
-> s  STD.WAIT
+> q  STD.WAIT
 turn 4  time 480  HP 10/10
 [CAVE]
 ########

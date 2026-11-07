@@ -35,10 +35,80 @@ pub enum Mode {
     Passthrough,
 }
 
+/// A device that presses keys (M 8.2): a keyboard part (D 11.3), 1 for
+/// the section without `keyboard N`, or a pad by its connection id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Device {
+    Keyboard(u8),
+    Pad(usize),
+}
+
+/// A pad press (D 11.3): a button or stick direction with the buttons held
+/// with it, as written `lb+start`; `held` is sorted.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PadPress {
+    pub button: String,
+    pub held: Vec<String>,
+}
+
+/// The pad's place-based names (D 11.3).
+pub const PAD_NAMES: &[&str] = &[
+    "south", "east", "west", "north", "lb", "rb", "lt", "rt", "start", "select", "lstick", "rstick", "dpad.up", "dpad.down", "dpad.left", "dpad.right",
+    "lstick.up", "lstick.down", "lstick.left", "lstick.right", "rstick.up", "rstick.down", "rstick.left", "rstick.right",
+];
+
+impl PadPress {
+    /// `south`, `dpad.up`, `lb+start`.
+    pub fn parse(s: &str) -> Result<PadPress, String> {
+        let mut parts: Vec<&str> = s.split('+').collect();
+        let button = parts.pop().unwrap_or("");
+        for p in parts.iter().chain([&button]) {
+            if !PAD_NAMES.contains(p) {
+                return Err(format!("unknown pad button `{p}` in `{s}` (D 11.3)"));
+            }
+        }
+        let mut held: Vec<String> = parts.into_iter().map(String::from).collect();
+        held.sort();
+        Ok(PadPress { button: button.to_string(), held })
+    }
+}
+
+/// A press from a device.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Press {
+    Key(Binding),
+    Pad(PadPress),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Context {
     pub mode: Mode,
+    /// Keyboard part 1's rows, which every keyboard part uses when the
+    /// context has no section of its own for it (D 11.3).
     pub rows: Vec<(Binding, Action)>,
+    /// `keys CONTEXT keyboard N` sections by part.
+    pub parts: BTreeMap<u8, Vec<(Binding, Action)>>,
+    /// `pad CONTEXT` rows.
+    pub pad: Vec<(PadPress, Action)>,
+    /// `pad CONTEXT deadzone P%`, as a share of the stick's reach.
+    pub deadzone: Option<f32>,
+}
+
+impl Context {
+    fn new() -> Context {
+        Context { mode: Mode::Modal, rows: vec![], parts: BTreeMap::new(), pad: vec![], deadzone: None }
+    }
+
+    fn find(&self, device: Device, press: &Press) -> Option<&Action> {
+        match (device, press) {
+            (Device::Keyboard(p), Press::Key(b)) => {
+                let rows = self.parts.get(&p).unwrap_or(&self.rows);
+                rows.iter().find(|(x, _)| x == b).map(|(_, a)| a)
+            }
+            (Device::Pad(_), Press::Pad(p)) => self.pad.iter().find(|(x, _)| x == p).map(|(_, a)| a),
+            _ => None,
+        }
+    }
 }
 
 /// The engine's contexts and their default bindings (D 11.3).
@@ -69,6 +139,30 @@ fn defaults() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
     ]
 }
 
+/// The engine's pad defaults (M 8): the d-pad moves, `south` confirms,
+/// `east` goes back.
+fn pad_defaults() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
+    let cursor = vec![
+        ("cursor.north", "dpad.up lstick.up"),
+        ("cursor.south", "dpad.down lstick.down"),
+        ("cursor.west", "dpad.left lstick.left"),
+        ("cursor.east", "dpad.right lstick.right"),
+        ("next", "rb"),
+        ("prev", "lb"),
+        ("confirm", "south"),
+        ("back", "east"),
+    ];
+    let menu = vec![("cursor.north", "dpad.up"), ("cursor.south", "dpad.down"), ("confirm", "south"), ("back", "east")];
+    vec![
+        ("MENU", menu.clone()),
+        ("DIALOGUE", menu),
+        ("SCENE", vec![("confirm", "south"), ("skip", "start"), ("rewind", "east")]),
+        ("AIM", cursor.clone()),
+        ("LOOK", cursor.clone()),
+        ("DIRECTION", cursor),
+    ]
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Keys {
     pub contexts: BTreeMap<String, Context>,
@@ -82,7 +176,7 @@ impl Keys {
     pub fn from_model(m: &Model) -> Keys {
         let mut keys = Keys::default();
         for (name, rows) in defaults() {
-            let mut ctx = Context { mode: Mode::Modal, rows: vec![] };
+            let mut ctx = Context::new();
             for (action, names) in rows {
                 for n in names.split_whitespace() {
                     if let Ok(b) = parse_binding(n) {
@@ -92,12 +186,28 @@ impl Keys {
             }
             keys.contexts.insert(name.to_string(), ctx);
         }
+        for (name, rows) in pad_defaults() {
+            let ctx = keys.contexts.entry(name.to_string()).or_insert_with(Context::new);
+            for (action, names) in rows {
+                for n in names.split_whitespace() {
+                    if let Ok(p) = PadPress::parse(n) {
+                        ctx.pad.push((p, Action::Engine(action.to_string())));
+                    }
+                }
+            }
+        }
         for (full, blocks) in &m.contexts {
             let name = full.clone();
-            for b in blocks.iter().filter(|b| b.kind == "keys") {
-                let ctx = keys.contexts.entry(name.clone()).or_insert(Context { mode: Mode::Modal, rows: vec![] });
-                if b.has_arg("passthrough") {
+            for b in blocks.iter().filter(|b| b.kind == "keys" || b.kind == "pad") {
+                let part = rlml_core::check::keyboard_part(b).unwrap_or(1);
+                let ctx = keys.contexts.entry(name.clone()).or_insert_with(Context::new);
+                if b.kind == "keys" && part == 1 && b.has_arg("passthrough") {
                     ctx.mode = Mode::Passthrough;
+                }
+                if b.kind == "pad"
+                    && let Some(p) = b.arg_after("deadzone").and_then(|d| d.strip_suffix('%')).and_then(|d| d.parse::<f32>().ok())
+                {
+                    ctx.deadzone = Some(p / 100.0);
                 }
                 for item in &b.items {
                     let (_, row) = item.marker();
@@ -110,14 +220,29 @@ impl Keys {
                             Err(_) => continue,
                         },
                     };
-                    // the game's row for an action replaces the default's keys
                     let ctx = keys.contexts.get_mut(&name).unwrap();
-                    ctx.rows.retain(|(_, a)| *a != action);
+                    if b.kind == "pad" {
+                        // the game's row for an action replaces the default's buttons
+                        ctx.pad.retain(|(_, a)| *a != action);
+                        for k in row.tokens.iter().skip(n) {
+                            match PadPress::parse(&k.text) {
+                                Ok(p) => {
+                                    ctx.pad.retain(|(x, _)| *x != p);
+                                    ctx.pad.push((p, action.clone()));
+                                }
+                                Err(e) => keys.warnings.push(format!("{}:{}: {e}", item.file, item.line)),
+                            }
+                        }
+                        continue;
+                    }
+                    // the game's row for an action replaces the default's keys
+                    let rows = if part == 1 { &mut ctx.rows } else { ctx.parts.entry(part).or_default() };
+                    rows.retain(|(_, a)| *a != action);
                     for k in row.tokens.iter().skip(n) {
                         match parse_binding(&k.text) {
                             Ok(b) => {
-                                ctx.rows.retain(|(x, _)| *x != b);
-                                ctx.rows.push((b, action.clone()));
+                                rows.retain(|(x, _)| *x != b);
+                                rows.push((b, action.clone()));
                             }
                             Err(e) => keys.warnings.push(format!("{}:{}: {e}", item.file, item.line)),
                         }
@@ -131,15 +256,44 @@ impl Keys {
         keys
     }
 
-    /// The action of a key in a context stack (bottom first): `ALWAYS`
-    /// first, then the top down while contexts pass keys through (D 11.3).
-    pub fn lookup(&self, stack: &[String], b: &Binding) -> Option<&Action> {
-        let find = |name: &str| self.contexts.get(name).and_then(|c| c.rows.iter().find(|(x, _)| x == b).map(|(_, a)| a));
-        if let Some(a) = find("ALWAYS") {
+    /// The keyboard parts any context has a section for, part 1 first.
+    pub fn keyboard_parts(&self) -> Vec<u8> {
+        let mut parts: Vec<u8> = self.contexts.values().flat_map(|c| c.parts.keys().copied()).collect();
+        parts.push(1);
+        parts.sort();
+        parts.dedup();
+        parts
+    }
+
+    /// The keyboard part a key belongs to (D 11.3): the part whose section
+    /// binds it, or part 1. The checker keeps a key in one part per
+    /// context, so the base context and `ALWAYS` decide first.
+    pub fn part_of(&self, b: &Binding) -> u8 {
+        let order = self.base.iter().map(String::as_str).chain(["ALWAYS"]).chain(self.contexts.keys().map(String::as_str));
+        for name in order {
+            if let Some(c) = self.contexts.get(name)
+                && let Some((p, _)) = c.parts.iter().find(|(_, rows)| rows.iter().any(|(x, _)| x == b))
+            {
+                return *p;
+            }
+        }
+        1
+    }
+
+    /// A pad's deadzone in a context stack: the top context's, or 50%.
+    pub fn deadzone(&self, stack: &[String]) -> f32 {
+        stack.iter().rev().find_map(|n| self.contexts.get(n).and_then(|c| c.deadzone)).unwrap_or(0.5)
+    }
+
+    /// The action of a press from a device in a context stack (bottom
+    /// first): `ALWAYS` first, then the top down while contexts pass
+    /// presses through (D 11.3).
+    pub fn lookup_on(&self, stack: &[String], device: Device, press: &Press) -> Option<&Action> {
+        if let Some(a) = self.contexts.get("ALWAYS").and_then(|c| c.find(device, press)) {
             return Some(a);
         }
         for name in stack.iter().rev() {
-            if let Some(a) = find(name) {
+            if let Some(a) = self.contexts.get(name).and_then(|c| c.find(device, press)) {
                 return Some(a);
             }
             if self.contexts.get(name).is_none_or(|c| c.mode == Mode::Modal) {
@@ -147,6 +301,17 @@ impl Keys {
             }
         }
         None
+    }
+
+    /// Is an action `ALWAYS`'s for this press?
+    pub fn is_always(&self, device: Device, press: &Press) -> bool {
+        self.contexts.get("ALWAYS").is_some_and(|c| c.find(device, press).is_some())
+    }
+
+    /// The action of a key in a context stack, for the key's own keyboard
+    /// part.
+    pub fn lookup(&self, stack: &[String], b: &Binding) -> Option<&Action> {
+        self.lookup_on(stack, Device::Keyboard(self.part_of(b)), &Press::Key(b.clone()))
     }
 }
 
@@ -161,8 +326,8 @@ pub enum Effect {
     Toggle(String),
     /// The repeat count is being typed (D 11.3).
     Counting(String),
-    /// The key is not bound here.
-    Unbound(Binding),
+    /// The press is not bound here.
+    Unbound,
 }
 
 /// Keys and the repeat count being typed.
@@ -189,18 +354,25 @@ impl Input {
         self.keys.base.iter().cloned().collect()
     }
 
+    /// A key from its own keyboard part.
     pub fn press(&mut self, m: &Model, stack: &[String], b: Binding) -> Effect {
+        let device = Device::Keyboard(self.keys.part_of(&b));
+        self.press_on(m, stack, device, Press::Key(b))
+    }
+
+    /// A press from a device (M 8.2).
+    pub fn press_on(&mut self, m: &Model, stack: &[String], device: Device, press: Press) -> Effect {
         // `repeat`: digits write the count, the first other key ends it and is
         // the command's key (D 11.3)
         if let Some(count) = &mut self.count {
-            if let Binding::Key(KeyCode::Char(c), _) = b
+            if let Press::Key(Binding::Key(KeyCode::Char(c), _)) = press
                 && c.is_ascii_digit()
             {
                 count.push(c);
                 return Effect::Counting(count.clone());
             }
             let n = self.count.take().unwrap();
-            return match self.keys.lookup(stack, &b).cloned() {
+            return match self.keys.lookup_on(stack, device, &press).cloned() {
                 Some(Action::Engine(a)) if a == "back" => Effect::Counting(String::new()),
                 Some(Action::Command(c)) => {
                     let mut cmd = CommandValue { name: c.clone(), args: vec![] };
@@ -209,28 +381,25 @@ impl Input {
                     }
                     Effect::Command(cmd)
                 }
-                Some(a) => self.effect(a, &b),
-                None => Effect::Unbound(b),
+                Some(a) => self.effect(a, device, &press),
+                None => Effect::Unbound,
             };
         }
-        match self.keys.lookup(stack, &b).cloned() {
+        match self.keys.lookup_on(stack, device, &press).cloned() {
             Some(Action::Engine(a)) if a == "repeat" => {
                 self.count = Some(String::new());
                 Effect::Counting(String::new())
             }
-            Some(a) => self.effect(a, &b),
-            None => Effect::Unbound(b),
+            Some(a) => self.effect(a, device, &press),
+            None => Effect::Unbound,
         }
     }
 
-    fn effect(&self, a: Action, b: &Binding) -> Effect {
+    fn effect(&self, a: Action, device: Device, press: &Press) -> Effect {
         match a {
             Action::Command(c) => Effect::Command(CommandValue { name: c, args: vec![] }),
             Action::Engine(e) => Effect::Engine(e),
-            Action::Open { menu, stack } => {
-                let always = self.keys.contexts.get("ALWAYS").is_some_and(|c| c.rows.iter().any(|(x, _)| x == b));
-                Effect::Open { menu, stack, always }
-            }
+            Action::Open { menu, stack } => Effect::Open { menu, stack, always: self.keys.is_always(device, press) },
             Action::Toggle(p) => Effect::Toggle(p),
         }
     }

@@ -1238,7 +1238,7 @@ fn the_group_example() {
 
 #[test]
 fn golden_the_group_example() {
-    golden_of(ryhma(), "ryhma", "l l tab l s s s s");
+    golden_of(ryhma(), "ryhma", "l d tab l . q . q");
 }
 
 #[test]

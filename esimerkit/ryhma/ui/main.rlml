@@ -27,15 +27,40 @@ menu PAUSE
 
 ## Näppäimet
 
+> Istuin 1 pelaa näppäimistön osalla 1 (`hjkl` ja nuolet), istuin 2 osalla
+> 2 (`wasd`). Kytketty peliohjain ottaa istuimen 2 osalta 2 (M 8.2), ja
+> irrotettu ohjain palauttaa sen. Taukovalikko aukeaa kaikilta laitteilta.
+
 keys ALWAYS
 - open PAUSE esc
+
+pad ALWAYS
+- open PAUSE start
 
 keys GAME
 - MOVE.NORTH k up
 - MOVE.SOUTH j down
 - MOVE.WEST h left
 - MOVE.EAST l right
-- WAIT s
+- WAIT .
 - SWITCH tab
 - SWITCH.PREV shift+tab
 - pass z
+
+keys GAME keyboard 2
+- MOVE.NORTH w
+- MOVE.SOUTH s
+- MOVE.WEST a
+- MOVE.EAST d
+- WAIT q
+- join e
+
+pad GAME deadzone 40%
+- MOVE.NORTH dpad.up lstick.up
+- MOVE.SOUTH dpad.down lstick.down
+- MOVE.WEST dpad.left lstick.left
+- MOVE.EAST dpad.right lstick.right
+- WAIT south
+- SWITCH rb
+- SWITCH.PREV lb
+- pass west

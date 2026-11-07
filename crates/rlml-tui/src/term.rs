@@ -28,6 +28,9 @@ fn run(m: &Model, seed: u64, screen: &mut Screen<std::fs::File>) -> Result<(), S
     let io = |e: io::Error| e.to_string();
     let start = Instant::now();
     let mut app = App::new(m, seed, terminal_size())?;
+    // pads come from their own thread, as raw events (M 8.2)
+    let pads = crate::pad::spawn();
+    let mut pad_states: std::collections::BTreeMap<usize, crate::pad::PadState> = Default::default();
     loop {
         // in-between frames first, each shown `frame` long (M 7.2)
         for f in std::mem::take(&mut app.frames) {
@@ -48,6 +51,21 @@ fn run(m: &Model, seed: u64, screen: &mut Screen<std::fs::File>) -> Result<(), S
                     screen.invalidate();
                 }
                 _ => {}
+            }
+        }
+        while let Ok((id, raw)) = pads.try_recv() {
+            match raw {
+                crate::pad::Raw::Connected => app.pad_connected(id),
+                crate::pad::Raw::Disconnected => {
+                    pad_states.remove(&id);
+                    app.pad_disconnected(id);
+                }
+                raw => {
+                    let deadzone = app.input.keys.deadzone(&app.contexts());
+                    if let Some(p) = pad_states.entry(id).or_default().event(&raw, deadzone) {
+                        app.pad(id, p, start.elapsed())?;
+                    }
+                }
             }
         }
         app.tick(start.elapsed())?;

@@ -343,3 +343,64 @@ fn the_map_shows_its_written_size_in_a_wide_window() {
     app.draw();
     assert_eq!(app.view.map_rect, None);
 }
+
+#[test]
+fn each_seat_plays_from_its_own_device() {
+    use rlml_tui::input::{Device, PadPress};
+    let f = ryhma();
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    assert_eq!(app.seat_devices.get(&1), Some(&Device::Keyboard(1)));
+    assert_eq!(app.seat_devices.get(&2), Some(&Device::Keyboard(2)), "keyboard parts first (M 8.2)");
+    assert_eq!(app.r.awaiting(), Some(1));
+    // seat 2's key on seat 1's turn is dropped
+    app.key(key("."), ms(10)).unwrap_or(());
+    let t = app.r.w.s.game.time;
+    assert_eq!(app.r.awaiting(), Some(2), "seat 1 waited with `.`");
+    app.key(key("."), ms(20)).unwrap();
+    assert_eq!((app.r.awaiting(), app.r.w.s.game.time), (Some(2), t), "`.` is part 1's: dropped on seat 2's turn");
+    app.key(key("q"), ms(30)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(1), "`q` is part 2's: seat 2 waited");
+    // a pad that connects plays seat 2 instead of keyboard part 2
+    app.pad(0, PadPress::parse("south").unwrap(), ms(40)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(1), "seat 1's turn: the pad's press is dropped");
+    assert_eq!(app.seat_devices.get(&2), Some(&Device::Pad(0)), "pads before the other keyboard parts (M 8.2)");
+    app.pad_disconnected(0);
+    assert_eq!(app.seat_devices.get(&2), Some(&Device::Keyboard(2)), "back to its keyboard part");
+}
+
+#[test]
+fn a_pad_takes_the_first_seat_without_a_device() {
+    use rlml_tui::input::{Device, PadPress};
+    let f = {
+        let mut f = ryhma();
+        let ui = f.game.get_mut("ui/main.rlml").unwrap();
+        let i = ui.find("keys GAME keyboard 2").unwrap();
+        let j = ui[i..].find("\npad GAME").unwrap() + i;
+        ui.replace_range(i..j, "");
+        f
+    };
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    assert_eq!(app.seat_devices.get(&2), None, "one keyboard part: seat 2 has no device yet");
+    app.pad_connected(3);
+    assert_eq!(app.seat_devices.get(&2), Some(&Device::Pad(3)));
+    // seat 1 waits from the keyboard; the pad is seat 2's
+    app.pad(3, PadPress::parse("south").unwrap(), ms(10)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(1), "the pad does not play seat 1");
+    app.key(key("."), ms(20)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(2));
+    app.key(key("."), ms(30)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(2), "the keyboard does not play the pad's seat");
+    app.pad(3, PadPress::parse("south").unwrap(), ms(40)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(1), "`south` is WAIT on the pad");
+    // a menu belongs to the device that opened it
+    app.pad(3, PadPress::parse("start").unwrap(), ms(50)).unwrap();
+    assert!(app.menus.is_open(), "`start` opens the pause menu from the pad (ALWAYS)");
+    app.key(key("down"), ms(60)).unwrap();
+    assert_eq!(app.menus.layers.last().unwrap().cursor, 0, "the keyboard does not drive the pad's menu");
+    app.pad(3, PadPress::parse("dpad.down").unwrap(), ms(70)).unwrap();
+    assert_eq!(app.menus.layers.last().unwrap().cursor, 1);
+    app.pad_disconnected(3);
+    assert_eq!(app.seat_devices.get(&2), None);
+}

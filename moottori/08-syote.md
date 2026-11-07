@@ -98,6 +98,10 @@ Matka ei ole moottorin komento eikä kuulu tallennukseen: tallennettava tila on 
 
 Moninpelissä (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)) laite on näppäimistöosa ([D 11.3](../dataformaatit/11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad)), peliohjain tai hiiri. Reititin kuvaa laitteen istuimeksi. Ydin saa syötteen parina (istuin, toiminto) eikä tiedä laitteista mitään.
 
+**Laitteet ilman liittymisruutua.** Kunnes liittymisruutu on toteutettu, istuimet saavat laitteet järjestyksessä: istuin 1 saa näppäimistöosan 1, seuraavat istuimet ensin peliohjaimet kytkentäjärjestyksessä ja sitten muut näppäimistöosat. Ohjain kytketään pelaamista varten, joten kytketty ohjain ottaa istuimen näppäimistöosalta, ja irrotettu ohjain palauttaa sen. Istuinta, jolla ei ole laitetta, ohjataan näppäimistöosalla 1. Näppäin kuuluu osaan, jonka osio sitoo sen, ja muuten osaan 1. Pelin peruskontekstissa osa käyttää omaa osiotaan, ja konteksti ilman osioita, kuten `MENU`, käyttää osan 1 sidontoja kaikille osille.
+
+**Peliohjaimet.** Painikkeiden nimet ovat paikkapohjaisia ([D 11.3](../dataformaatit/11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad)). Painike, joka pidetään pohjassa toista painettaessa, tekee yhdistelmän (`lb+start`). Tatti antaa suuntansa kerran, kun se ylittää kontekstin kuolleen alueen (`pad K deadzone P%`, oletus 50 %), eikä se toista suuntaa pidettäessä.
+
 **Liittymisruutu: konteksti `JOIN`.** Järjestys on moottorin pelivalitsin, pelin alkuvalikko, `new_game`, liittymisruutu ja laskettu aloitus. Ruutu näytetään vain, kun `seats`-yläraja on yli 1, ja `new_game` pelin aikana ei ohita sitä.
 
 - Laite, joka valitsi `new_game`, on istuin 1. Muut laitteet liittyvät toiminnolla `join` ja saavat seuraavan vapaan numeron.

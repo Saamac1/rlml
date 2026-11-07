@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 crossterm = { version = "0.28", features = ["use-dev-tty"] }
+# pads (crossterm reads no pads)
+gilrs = "0.11"
 rlml-core = { path = "../rlml-core" }
 # Termplate's frame, layout, styles, keys and terminal (github.com/Saamac1/termplate)
 termplate-core = { git = "https://github.com/Saamac1/termplate", rev = "bebd8e356589ba6809732429b46c45d2da995a28" }

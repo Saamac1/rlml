@@ -865,7 +865,49 @@ impl Checker<'_> {
     }
 
     fn keys(&mut self) {
+        let game = self.m.named_game();
+        let upper = game.and_then(|g| g.items.iter().find(|i| i.key() == "seats")).and_then(|i| i.word(1)).and_then(crate::rt::world::seat_range).map_or(1, |(_, b)| b);
+        let base = game.and_then(|g| g.items.iter().find(|i| i.key() == "keys")).and_then(|i| i.word(1)).and_then(|n| self.context(game.and_then(|g| g.namespace.as_deref()), n));
         for (name, blocks) in &self.m.contexts {
+            // keyboard parts (D 11.3): `keys K keyboard N`, part 1 unmarked
+            let mut parts: BTreeMap<u8, (&RawBlock, bool)> = BTreeMap::new();
+            for b in blocks {
+                let part = match keyboard_part(b) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        self.r.push(b.err(e));
+                        continue;
+                    }
+                };
+                if b.kind == "pad" && part != 1 {
+                    self.r.push(b.err("`keyboard N` is for `keys` sections; pads tell seats apart by device (D 11.3)"));
+                    continue;
+                }
+                if b.kind != "keys" {
+                    continue;
+                }
+                let passthrough = b.has_arg("passthrough");
+                if part != 1 {
+                    let joins = b.items.iter().any(|i| i.marker().1.key() == "join");
+                    let e = parts.entry(part).or_insert((b, false));
+                    e.1 |= joins;
+                    if b.has_arg("modal") || passthrough {
+                        self.r.push(b.err(format!("`modal` and `passthrough` are written on part 1 of context `{name}` only (D 11.3)")));
+                    }
+                }
+            }
+            if upper == 1
+                && let Some((b, _)) = parts.values().next()
+            {
+                self.r.push(b.warn(format!("keyboard parts in a one-seat game: context `{name}` (D 11.3)")));
+            }
+            if base.as_deref() == Some(name.as_str()) {
+                for (part, (b, joins)) in &parts {
+                    if !joins {
+                        self.r.push(b.warn(format!("keyboard part {part} of the base context `{name}` has no `join` key (D 11.3)")));
+                    }
+                }
+            }
             let mut seen: BTreeMap<String, usize> = BTreeMap::new();
             // keys by their terminal key: `num8` is `8` there (D 11.3)
             let mut terminal: BTreeMap<String, (String, String, usize)> = BTreeMap::new();
@@ -885,7 +927,8 @@ impl Checker<'_> {
                     let action = row.span(0, n.min(row.tokens.len())).to_string();
                     for k in &row.tokens[n.min(row.tokens.len())..] {
                         if let Some(line) = seen.insert(k.text.clone(), item.line) {
-                            self.r.push(item.err(format!("key `{}` is bound twice in context `{name}` (also line {line})", k.text)));
+                            // also across keyboard parts: whose press would it be?
+                            self.r.push(item.err(format!("key `{}` is bound twice in context `{name}` (also line {line}), in one keyboard part or in two (D 11.3)", k.text)));
                             continue;
                         }
                         let key = terminal_key(&k.text);
@@ -1093,5 +1136,17 @@ mod tests {
         assert_eq!(placeholders("{TARGET} ottaa {AMOUNT} {SOUND:DESC} {ITEM.DESC} {@GOLD.NAME} {^confirm}"), ["TARGET", "AMOUNT", "SOUND:DESC", "ITEM.DESC"]);
         assert_eq!(refs("Löysit {@GOLD.NAME}!"), ["GOLD.NAME"]);
         assert!(is_joining('\u{0308}') && is_joining('\u{200D}') && !is_joining('a'));
+    }
+}
+
+/// The keyboard part of a `keys` section (D 11.3): `keyboard N` with N from
+/// 2 to 8, or part 1 without it.
+pub fn keyboard_part(b: &RawBlock) -> Result<u8, String> {
+    if !b.has_arg("keyboard") {
+        return Ok(1);
+    }
+    match b.arg_after("keyboard").and_then(|n| n.parse::<u8>().ok()) {
+        Some(n) if (2..=8).contains(&n) => Ok(n),
+        _ => Err("`keyboard N` takes a part number from 2 to 8; part 1 is the section without it (D 11.3)".into()),
     }
 }

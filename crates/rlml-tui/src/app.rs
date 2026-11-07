@@ -12,17 +12,19 @@
 //!   menu the game starts there; `quit` returns to it, or without one to
 //!   the engine's menu of a new game and leaving.
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use rlml_core::model::Model;
 use rlml_core::rt::run::{Runner, Status};
+use rlml_core::rt::state::SeatId;
 use rlml_core::rt::value::{CommandValue, Value};
 use rlml_core::rt::world::{RtResult, World};
 use termplate_core::frame::Frame;
 use termplate_core::keys::{Binding, KeyCode, Mods};
 
 use crate::draw::View;
-use crate::input::{Effect, Input};
+use crate::input::{Device, Effect, Input, PadPress, Press};
 use crate::menu::{self, ItemAction, Item, Menu, Menus};
 
 /// `500ms`, `1s`, `0500ms` (D 2.4).
@@ -91,6 +93,15 @@ pub struct App<'m> {
     /// when, for the turn marker's blink (M 7.1).
     clock: Duration,
     turn_start: Option<(rlml_core::rt::value::EntityId, Duration)>,
+    /// Pads by connection id, in the order they connected (M 8.2).
+    pub pads: Vec<usize>,
+    /// Each seat's device. Until the join screen exists, seat 1 takes
+    /// keyboard part 1, the next seats the pads in connection order and
+    /// then the other keyboard parts; a seat without a device is played
+    /// from keyboard part 1 (M 8.2).
+    pub seat_devices: BTreeMap<SeatId, Device>,
+    /// The device that opened the menus on top, which drives them (M 8.2).
+    menu_owner: Option<Device>,
 }
 
 /// The turn marker flashes on for this long when a turn starts, then
@@ -136,6 +147,9 @@ impl<'m> App<'m> {
             last_frame: None,
             clock: Duration::ZERO,
             turn_start: None,
+            pads: vec![],
+            seat_devices: BTreeMap::new(),
+            menu_owner: None,
         };
         match app.title() {
             Some(title) => {
@@ -167,7 +181,41 @@ impl<'m> App<'m> {
         self.status = Status::NoPlayer { rounds: 0 };
         self.playing = true;
         self.games += 1;
+        self.assign_devices();
         self.advance(0)
+    }
+
+    /// Gives the seats their devices: keyboard part 1, then the pads in
+    /// connection order, then the other keyboard parts (M 8.2). A pad that
+    /// connects takes a seat from a keyboard part, since it is plugged in
+    /// to play.
+    fn assign_devices(&mut self) {
+        let parts = self.input.keys.keyboard_parts();
+        let devices = [Device::Keyboard(1)].into_iter().chain(self.pads.iter().map(|&p| Device::Pad(p))).chain(parts.into_iter().filter(|&p| p != 1).map(Device::Keyboard));
+        self.seat_devices = self.r.w.s.seats.iter().map(|s| s.n).zip(devices).collect();
+    }
+
+    /// A pad connected or came back (M 8.2): the seats take their devices
+    /// again, so the pad plays the first seat after seat 1 that no pad has.
+    pub fn pad_connected(&mut self, id: usize) {
+        if !self.pads.contains(&id) {
+            self.pads.push(id);
+            self.assign_devices();
+        }
+    }
+
+    pub fn pad_disconnected(&mut self, id: usize) {
+        self.pads.retain(|&p| p != id);
+        self.assign_devices();
+    }
+
+    /// Does `device` play seat `n`? Its own device does, and keyboard part
+    /// 1 plays a seat that has none.
+    pub fn drives(&self, device: Device, n: SeatId) -> bool {
+        match self.seat_devices.get(&n) {
+            Some(d) => *d == device,
+            None => device == Device::Keyboard(1),
+        }
     }
 
     /// `quit`: back to the `title` menu, or to the engine's (M 8).
@@ -274,8 +322,40 @@ impl<'m> App<'m> {
             self.quit = true;
             return Ok(());
         }
+        let device = Device::Keyboard(self.input.keys.part_of(&b));
+        self.press(device, Press::Key(b), now)
+    }
+
+    /// A pad press at time `now` (M 8.2).
+    pub fn pad(&mut self, id: usize, p: PadPress, now: Duration) -> RtResult<()> {
+        self.last_key = now;
+        self.clock = now;
+        self.note = None;
+        self.pad_connected(id);
+        self.press(Device::Pad(id), Press::Pad(p), now)
+    }
+
+    /// A press from a device, routed by M 8.2: `ALWAYS` from every device,
+    /// a menu from the device that opened it (keyboard parts count as one
+    /// there), the game's context on a turn from the awaited seat's device
+    /// only; other presses are dropped.
+    fn press(&mut self, device: Device, press: Press, now: Duration) -> RtResult<()> {
+        let always = self.input.keys.is_always(device, &press);
+        if !always {
+            let same = |a: Device, b: Device| matches!((a, b), (Device::Keyboard(_), Device::Keyboard(_))) || a == b;
+            if self.menus.is_open() {
+                if self.menu_owner.is_some_and(|o| !same(o, device)) {
+                    return Ok(());
+                }
+            } else if self.players_turn()
+                && let Some(n) = self.r.awaiting()
+                && !self.drives(device, n)
+            {
+                return Ok(());
+            }
+        }
         let contexts = self.contexts();
-        match self.input.press(self.m, &contexts, b) {
+        match self.input.press_on(self.m, &contexts, device, press) {
             Effect::Command(cmd) => self.command(cmd)?,
             Effect::Engine(a) => self.engine(&a, now)?,
             Effect::Open { menu, stack, always } => {
@@ -283,12 +363,17 @@ impl<'m> App<'m> {
                 // toggle; it does not close a `final` menu (M 8)
                 match self.menus.position(&menu) {
                     Some(i) if always && !self.menus.layers[i].menu.is_final => self.menus.layers.truncate(i),
-                    _ => self.open(&menu, stack),
+                    _ => {
+                        if !self.menus.is_open() {
+                            self.menu_owner = Some(device);
+                        }
+                        self.open(&menu, stack)
+                    }
                 }
             }
             Effect::Toggle(p) => self.note = Some(format!("panel {p}: panels are not supported yet")),
             Effect::Counting(n) => self.note = Some(format!("count: {n}")),
-            Effect::Unbound(_) => {}
+            Effect::Unbound => {}
         }
         Ok(())
     }

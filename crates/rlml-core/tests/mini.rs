@@ -354,3 +354,33 @@ fn a_seat_number_above_the_upper_bound() {
     edit(&mut f, "game.rlml", "- PLAYER HERO", "- PLAYER HERO\n- seats 1..2");
     assert!(errors(&run(&f)).is_empty());
 }
+
+#[test]
+fn keyboard_parts() {
+    let two = |f: &mut MemFiles| edit(f, "game.rlml", "- PLAYER HERO", "- PLAYER HERO\n- seats 1..2");
+    // a part with its own keys and `join` loads cleanly
+    let mut f = mini();
+    two(&mut f);
+    f.game.get_mut("ui/main.rlml").unwrap().push_str("\nkeys GAME keyboard 2\n- MOVE.NORTH w\n- join e\n");
+    let r = run(&f);
+    assert!(r.0.is_empty(), "{:#?}", r.0.iter().map(|d| d.to_string()).collect::<Vec<_>>());
+    for (extra, part) in [
+        ("\nkeys GAME keyboard 2\n- MOVE.NORTH k\n- join e\n", "key `k` is bound twice in context `GAME`"),
+        ("\nkeys GAME keyboard 9\n- join e\n", "`keyboard N` takes a part number from 2 to 8"),
+        ("\nkeys GAME passthrough keyboard 2\n- join e\n", "`modal` and `passthrough` are written on part 1"),
+        ("\npad GAME keyboard 2\n- join start\n", "pads tell seats apart by device"),
+    ] {
+        let mut f = mini();
+        two(&mut f);
+        f.game.get_mut("ui/main.rlml").unwrap().push_str(extra);
+        expect_error(&run(&f), part);
+    }
+    // warnings: no `join` in a part of the base context, parts in a one-seat game
+    let mut f = mini();
+    two(&mut f);
+    f.game.get_mut("ui/main.rlml").unwrap().push_str("\nkeys GAME keyboard 2\n- MOVE.NORTH w\n");
+    assert!(run(&f).0.iter().any(|d| d.to_string().contains("keyboard part 2 of the base context `GAME` has no `join` key")));
+    let mut f = mini();
+    f.game.get_mut("ui/main.rlml").unwrap().push_str("\nkeys GAME keyboard 2\n- MOVE.NORTH w\n- join e\n");
+    assert!(run(&f).0.iter().any(|d| d.to_string().contains("keyboard parts in a one-seat game")));
+}
