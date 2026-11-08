@@ -1983,6 +1983,11 @@ impl World<'_> {
         out
     }
 
+    /// The name of an entity or a name value, as `{X}` shows it (D 10).
+    pub fn name_text(&self, lang: &str, v: &Value) -> String {
+        self.placeholder(lang, "X", &[("X".to_string(), v.clone())])
+    }
+
     /// The description of an entity or a tile, as `{X:DESC}` shows it
     /// (D 10): `<KIND>.DESC` from the nearest kind that has it.
     pub fn description(&self, lang: &str, v: &Value) -> String {

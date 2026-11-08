@@ -105,7 +105,7 @@ pub fn source_ring(params: &[Param]) -> Option<Vec<String>> {
 }
 
 /// The nearest of the eight directions from `a` towards `b` (M 8.1).
-fn toward(a: Pos, b: Pos) -> Option<Dir> {
+pub fn toward(a: Pos, b: Pos) -> Option<Dir> {
     let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
     if dx == 0.0 && dy == 0.0 {
         return None;
@@ -116,7 +116,104 @@ fn toward(a: Pos, b: Pos) -> Option<Dir> {
     Some([Dir::East, Dir::Northeast, Dir::North, Dir::Northwest, Dir::West, Dir::Southwest, Dir::South, Dir::Southeast][i])
 }
 
+/// What a player's command needs before it runs (M 8, RS 7.1): the next
+/// parameter to ask, in parameter order.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Ask {
+    /// Every parameter is given: the command can run.
+    Ready,
+    /// The command fails before asking and takes no time: an empty `from`,
+    /// or an `aim` range that is `none`.
+    Fails,
+    /// Filled without asking: `count` is 1 without the repeat count.
+    Given(String, Value),
+    /// `from`: a list menu of the members.
+    From { name: String, members: Vec<EntityId> },
+    /// `aim N [at SET]`: a cell in range; the candidates nearest first.
+    Aim { name: String, range: i64, candidates: Vec<Pos> },
+    /// `ask` of `dir` or `pos`: a direction, the cell next to the actor
+    /// that way for `pos`.
+    Direction { name: String, pos: bool },
+    /// `ask` of a number or a text: an input field.
+    Field { name: String },
+}
+
 impl World<'_> {
+    /// The next parameter of `actor`'s command `full` to ask, after the
+    /// `given` arguments (named, or by position). A command alias or
+    /// another kind asks nothing (M 8).
+    pub fn next_ask(&mut self, actor: EntityId, full: &str, given: &[(Option<String>, Value)]) -> RtResult<Ask> {
+        let Some(params) = self.command_params(full) else { return Ok(Ask::Ready) };
+        let Some(at) = self.s.at(actor) else { return Ok(Ask::Ready) };
+        let (_, ns, file) = self.decl_of(full).ok_or("no command")?;
+        // the given values by parameter name
+        let mut named: Vec<(String, Value)> = Vec::new();
+        let mut next = 0;
+        for (n, v) in given {
+            let name = match n {
+                Some(n) => n.clone(),
+                None => {
+                    next += 1;
+                    match params.get(next - 1) {
+                        Some(p) => p.name.clone(),
+                        None => continue,
+                    }
+                }
+            };
+            named.push((name, v.clone()));
+        }
+        for p in &params {
+            if named.iter().any(|(n, _)| *n == p.name) {
+                continue;
+            }
+            let Some(source) = &p.source else { continue };
+            let mut env = Env::new(BodyKind::Query, full, ns.clone(), &file);
+            env.actor = Some(actor);
+            env.self_ = Some(actor);
+            env.map = Some(at.map);
+            for (n, v) in &named {
+                env.locals.insert(n.clone(), v.clone());
+            }
+            return Ok(match source {
+                Source::Count => Ask::Given(p.name.clone(), Value::Number(1)),
+                Source::From(e) => {
+                    let members: Vec<EntityId> = match self.eval(e, &mut env)? {
+                        Value::Collection(v) | Value::List(v) => v.iter().filter_map(Value::as_entity).collect(),
+                        _ => vec![],
+                    };
+                    if members.is_empty() { Ask::Fails } else { Ask::From { name: p.name.clone(), members } }
+                }
+                Source::Aim { range, at: within } => {
+                    let range = match self.eval(range, &mut env)? {
+                        Value::Number(n) => n,
+                        _ => return Ok(Ask::Fails),
+                    };
+                    let mut candidates: Vec<Pos> = match within {
+                        None => vec![],
+                        Some(w) => match self.eval(w, &mut env)? {
+                            Value::Collection(v) | Value::List(v) => v
+                                .iter()
+                                .filter_map(|x| match x {
+                                    Value::Entity(e) => self.s.at(*e),
+                                    Value::Pos(q) => Some(*q),
+                                    _ => None,
+                                })
+                                .collect(),
+                            v => self.area(&v, &env, p.pos).map(|a| a.cells().to_vec()).unwrap_or_default(),
+                        },
+                    };
+                    candidates.retain(|c| at.distance(*c) <= range);
+                    candidates.sort_by_key(|c| (at.distance(*c), c.y, c.x));
+                    candidates.dedup();
+                    Ask::Aim { name: p.name.clone(), range, candidates }
+                }
+                Source::Ask(_) if matches!(p.ty.base.as_str(), "dir" | "pos") => Ask::Direction { name: p.name.clone(), pos: p.ty.base == "pos" },
+                Source::Ask(_) => Ask::Field { name: p.name.clone() },
+            });
+        }
+        Ok(Ask::Ready)
+    }
+
     /// A command's parameters, by full name.
     fn command_params(&self, full: &str) -> Option<Vec<Param>> {
         let (item, _, _) = self.decl_of(full)?;
