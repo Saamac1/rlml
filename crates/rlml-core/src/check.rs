@@ -23,7 +23,7 @@ pub const ENGINE_ACTIONS: &[&str] = &[
 pub const ENGINE_EVENTS: &[&str] = &["begin", "turn", "wake", "created", "removed", "enter", "leave", "arrive", "depart", "hear", "join", "part"];
 
 const GAME_FIELDS: &[&str] =
-    &["start", "at", "seed", "call_depth", "loop_steps", "keys", "title", "layout", "naming", "walk", "walk_stop", "masking", "seats", "party", "leash"];
+    &["start", "at", "seed", "call_depth", "loop_steps", "keys", "title", "layout", "naming", "walk", "walk_stop", "leader", "rest", "follow_distance", "follow_ai", "masking", "seats", "party", "leash"];
 
 const SETTINGS: &[&str] = &["language", "style", "round", "idle", "external", "external_timeout", "mouse", "targeting"];
 
@@ -499,7 +499,15 @@ impl Checker<'_> {
             ("naming", &[Kind::Query]),
             ("walk", &[Kind::Command]),
             ("walk_stop", &[Kind::Query]),
+            ("leader", &[Kind::Query]),
+            ("rest", &[Kind::Command]),
+            ("follow_ai", &[Kind::Ai]),
         ];
+        if let Some(item) = fields.get("follow_distance")
+            && !one(item).and_then(|w| w.parse::<i64>().ok()).is_some_and(|n| n >= 1)
+        {
+            self.r.push(item.err("`follow_distance` takes a number of at least 1 (D 3.3)"));
+        }
         for (field, kinds) in refs {
             if let Some(item) = fields.get(*field) {
                 match one(item) {

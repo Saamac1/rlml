@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 
 use super::eval::{BodyKind, Env, Outcome, Scope, Suspended};
 use super::state::{SeatId, Wake};
+use super::travel::{Order, Travel, TravelFields};
 use super::value::{CommandValue, EntityId, MapId, Value};
 use super::world::{DEFAULT_COST, RtResult, World, delay};
 
@@ -40,6 +41,12 @@ pub struct Runner<'m> {
     woke: BTreeMap<EntityId, Wake>,
     /// The seat whose input the scheduler waits for (M 8.2).
     awaiting: Option<SeatId>,
+    /// Travels by seat: click travel and following (M 8.1). Not state.
+    pub travels: BTreeMap<SeatId, Travel>,
+    /// Orders given on other seats' turns, by seat (M 8.1). Not state.
+    pub orders: BTreeMap<SeatId, Order>,
+    /// The `game` fields of travel (D 3.3).
+    pub fields: TravelFields,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -48,7 +55,8 @@ fn engine_env(name: &str) -> Env {
 
 impl<'m> Runner<'m> {
     pub fn new(w: World<'m>) -> Runner<'m> {
-        Runner { w, waiting: BTreeMap::new(), woke: BTreeMap::new(), awaiting: None }
+        let fields = TravelFields::read(w.m);
+        Runner { w, waiting: BTreeMap::new(), woke: BTreeMap::new(), awaiting: None, travels: BTreeMap::new(), orders: BTreeMap::new(), fields }
     }
 
     /// The seat whose input is awaited, after `run` returned `Input`.

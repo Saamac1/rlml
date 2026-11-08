@@ -323,6 +323,12 @@ impl World<'_> {
     /// `path(a, b, for)`: an A* route from `a` to the nearest cell of `b`,
     /// without the start cell, in order (M 9.3).
     pub fn route(&self, from: Pos, to: &[Pos], who: Option<EntityId>) -> Vec<Pos> {
+        self.route_within(from, to, who, None)
+    }
+
+    /// `route` through the cells of `known` only, when given: a travel's
+    /// route passes only cells the players see or remember (M 8.1).
+    pub fn route_within(&self, from: Pos, to: &[Pos], who: Option<EntityId>, known: Option<&BTreeSet<(i32, i32)>>) -> Vec<Pos> {
         let goals: BTreeSet<(i32, i32)> = to.iter().filter(|p| p.map == from.map).map(|p| (p.x, p.y)).collect();
         if goals.is_empty() || goals.contains(&(from.x, from.y)) {
             return vec![];
@@ -336,7 +342,7 @@ impl World<'_> {
         // actor is passed at four steps on a route `for` someone (M 9.3)
         let enter = |x: i32, y: i32| -> Option<i64> {
             let p = Pos { map: from.map, x, y };
-            if !map.inside(x, y) || self.blocks_tiles(p, "move", who) {
+            if !map.inside(x, y) || known.is_some_and(|k| !k.contains(&(x, y))) || self.blocks_tiles(p, "move", who) {
                 return None;
             }
             let Some(w) = who else { return Some(1) };
