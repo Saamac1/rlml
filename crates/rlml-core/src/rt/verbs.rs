@@ -132,6 +132,27 @@ impl World<'_> {
         params.iter().filter(|p| clickable(p)).map(|p| VerbParam { name: p.name.clone(), deps: deps_of(p, &params) }).collect()
     }
 
+    /// Is the command hidden from the verb coin (`noverb`, RS 7.1)?
+    pub fn is_noverb(&self, full: &str) -> bool {
+        self.decl_of(full).is_some_and(|(item, _, _)| matches!(item.kind, ItemKind::Command { noverb: true, .. }))
+    }
+
+    /// The verb coin (M 8.1): the candidates, in order, that `t` fits for
+    /// one of their free parameters, each with that fill. A command
+    /// without clickable parameters fits nothing.
+    pub fn coin(&mut self, actor: EntityId, candidates: &[String], t: Target) -> RtResult<Vec<(String, (String, Value))>> {
+        let mut out = Vec::new();
+        for c in candidates {
+            if out.iter().any(|(o, _): &(String, _)| o == c) {
+                continue;
+            }
+            if let Some(fill) = self.fill_verb(actor, c, &[], t)? {
+                out.push((c.clone(), fill));
+            }
+        }
+        Ok(out)
+    }
+
     /// Has the command a clickable parameter not filled yet?
     pub fn verb_open(&self, full: &str, filled: &[(String, Value)]) -> bool {
         self.verb_params(full).iter().any(|p| !filled.iter().any(|(n, _)| *n == p.name))

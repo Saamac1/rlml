@@ -444,7 +444,8 @@ impl Parser {
                 } else {
                     let params = self.params()?;
                     let cost = if self.eat_word("cost") { Some(self.int()?) } else { None };
-                    ItemKind::Command { params, cost, body: self.block()? }
+                    let noverb = self.eat_word("noverb");
+                    ItemKind::Command { params, cost, noverb, body: self.block()? }
                 }
             }
             "ai" => {

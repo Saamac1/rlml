@@ -65,7 +65,7 @@ fn docked_menus(m: &Model) -> Vec<Menu> {
 }
 
 fn engine_menu() -> Menu {
-    let item = |key: &str, action: &str| Item { key: key.into(), action: ItemAction::Engine(action.into()), hide: None, disabled: None };
+    let item = |key: &str, action: &str| Item { key: key.into(), action: ItemAction::Engine(action.into()), hide: None, disabled: None, label: None };
     Menu {
         full: ENGINE_MENU.into(),
         ns: None,
@@ -74,6 +74,7 @@ fn engine_menu() -> Menu {
         width: None,
         height: None,
         items: vec![item("NEW_GAME", "new_game"), item("EXIT", "exit")],
+        verbs: false,
     }
 }
 
@@ -137,6 +138,22 @@ pub struct App<'m> {
     /// Why the last click fitted no parameter, for the hover until the
     /// pointer moves.
     verb_hint: Option<String>,
+    /// The open verb coin's verbs (M 8.1), and where the top menu was drawn.
+    coin: Option<Coin>,
+    menu_drawn: crate::menu::Drawn,
+}
+
+/// The verb coin's name as a menu layer.
+pub const COIN_MENU: &str = "<verbs>";
+
+/// An open verb coin (M 8.1): its rows' commands, each with the
+/// parameter the cell fills.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Coin {
+    pub seat: SeatId,
+    pub entries: Vec<(String, (String, Value))>,
+    /// Opened from the look cursor: the verb's other targets come from it.
+    pub keys: bool,
 }
 
 /// A verb chosen from a docked menu (M 8.1): presentation, not state.
@@ -216,6 +233,8 @@ impl<'m> App<'m> {
             verb: None,
             focus: None,
             verb_hint: None,
+            coin: None,
+            menu_drawn: Default::default(),
         };
         match app.title() {
             Some(title) => {
@@ -350,8 +369,12 @@ impl<'m> App<'m> {
         self.view.sentence = self.sentence();
         let (w, h) = self.size;
         let mut f = if self.playing { self.view.draw(&mut self.r.w, &self.lang, w, h) } else { Frame::new(w, h) };
-        if let Some(layer) = self.menus.layers.last() {
-            menu::draw(&mut f, &self.r.w, &self.lang, layer);
+        self.menu_drawn = match self.menus.layers.last() {
+            Some(layer) => menu::draw(&mut f, &self.r.w, &self.lang, layer),
+            None => Default::default(),
+        };
+        if self.coin.is_some() && self.menus.position(COIN_MENU).is_none() {
+            self.coin = None;
         }
         if let Some(note) = &self.note
             && h > 0
@@ -540,7 +563,12 @@ impl<'m> App<'m> {
                     self.open_cursor(n, false);
                 }
             }
-            "travel_to" | "follow" | "look" => {}
+            "verbs" if self.players_turn() => {
+                if let (Some(n), Some(p)) = (self.r.awaiting(), self.pointer_cell()) {
+                    self.open_coin(n, p, false)?;
+                }
+            }
+            "travel_to" | "follow" | "look" | "verbs" => {}
             "quit" if self.playing => self.quit_game(),
             "quit" | "exit" => self.quit = true,
             other => self.note = Some(format!("`{other}` is not supported yet")),
@@ -550,6 +578,9 @@ impl<'m> App<'m> {
 
     /// `confirm` in a menu: the item under the cursor (M 7.5).
     fn choose(&mut self, now: Duration) -> RtResult<()> {
+        if self.menus.layers.last().is_some_and(|l| l.menu.full == COIN_MENU) {
+            return self.choose_coin(now);
+        }
         let Some(item) = self.menus.top().and_then(|l| l.chosen().cloned()) else { return Ok(()) };
         match item.action {
             ItemAction::Open { menu, stack } => self.open(&menu, stack),
@@ -657,6 +688,16 @@ impl<'m> App<'m> {
             self.verb_hint = None;
         }
         self.pointer = Some((x, y));
+        // the pointer highlights a menu's row (M 8.1)
+        if self.menus.is_open() {
+            if let Some(i) = self.menu_drawn.row_at(x, y)
+                && let Some(top) = self.menus.top()
+                && top.rows.get(i).is_some_and(|r| r.enabled)
+            {
+                top.cursor = i;
+            }
+            return;
+        }
         // with the awaited seat's cursor open, the pointer is that cursor (M 8.1)
         if let (Some(n), Some(p)) = (self.r.awaiting().filter(|_| self.players_turn()), self.pointer_cell())
             && let Some(c) = self.cursors.get_mut(&n)
@@ -746,6 +787,7 @@ impl<'m> App<'m> {
                     self.cursors.insert(n, Cursor { pos: cells[k], ..c });
                 }
             }
+            "verbs" if my_turn => self.open_coin(n, c.pos, true)?,
             "confirm" if my_turn && self.verb.as_ref().is_some_and(|v| v.seat == n) => {
                 self.verb_target(Target::Cell(c.pos), now)?;
             }
@@ -785,6 +827,116 @@ impl<'m> App<'m> {
             _ => {}
         }
         Ok(())
+    }
+
+    /// The verb coin's candidates for seat `n` (M 8.1): the docked verbs
+    /// menus' commands, or without one the commands bound in the game's
+    /// base context for the seat's device, `noverb` ones left out.
+    fn coin_candidates(&self, n: SeatId) -> Vec<String> {
+        let from_menus: Vec<String> = self
+            .docked
+            .iter()
+            .filter(|d| d.verbs)
+            .flat_map(|d| d.items.iter())
+            .filter_map(|it| match &it.action {
+                ItemAction::Command(c) => Some(c.clone()),
+                _ => None,
+            })
+            .collect();
+        if self.docked.iter().any(|d| d.verbs) {
+            return from_menus;
+        }
+        let device = self.seat_devices.get(&n).copied().unwrap_or(Device::Keyboard(1));
+        let Some(ctx) = self.input.keys.base.as_ref().and_then(|b| self.input.keys.contexts.get(b)) else { return vec![] };
+        let actions: Vec<&Action> = match device {
+            Device::Keyboard(p) => ctx.parts.get(&p).unwrap_or(&ctx.rows).iter().map(|(_, a)| a).collect(),
+            Device::Pad(_) => ctx.pad.iter().map(|(_, a)| a).collect(),
+        };
+        let mut out: Vec<String> = Vec::new();
+        for a in actions {
+            if let Action::Command(c) = a
+                && !out.contains(c)
+                && !self.r.w.is_noverb(c)
+            {
+                out.push(c.clone());
+            }
+        }
+        out
+    }
+
+    /// A verb's row text: its docked menu's `<MENU>.<ITEM>`, else the
+    /// command's `<COMMAND>.NAME`, else its name; and its shortcut.
+    fn verb_label(&self, n: SeatId, command: &str) -> String {
+        let docked = self.docked.iter().filter(|d| d.verbs).find_map(|d| d.items.iter().find(|it| it.action == ItemAction::Command(command.to_string())).map(|it| format!("{}.{}", d.full, it.key)));
+        let key = docked.unwrap_or_else(|| format!("{command}.NAME"));
+        let label = if self.m.texts(&self.lang).contains_key(&key) { self.r.w.text(&self.lang, &key, &[]) } else { command.rsplit('.').next().unwrap_or(command).to_string() };
+        let device = self.seat_devices.get(&n).copied().unwrap_or(Device::Keyboard(1));
+        match self.input.keys.shortcut(&self.contexts(), device, command) {
+            Some(k) => format!("{label}  {k}"),
+            None => label,
+        }
+    }
+
+    /// `verbs`: the verb coin at cell `p` for seat `n` (M 8.1), next to the
+    /// cell. Nothing opens when no verb fits.
+    fn open_coin(&mut self, n: SeatId, p: rlml_core::rt::value::Pos, keys: bool) -> RtResult<()> {
+        let Some(actor) = self.r.w.s.player else { return Ok(()) };
+        let candidates = self.coin_candidates(n);
+        let entries = self.r.w.coin(actor, &candidates, Target::Cell(p))?;
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let items = entries
+            .iter()
+            .map(|(c, _)| Item { key: c.clone(), action: ItemAction::Command(c.clone()), hide: None, disabled: None, label: Some(self.verb_label(n, c)) })
+            .collect();
+        let menu = Menu { full: COIN_MENU.into(), ns: None, context: "MENU".into(), is_final: false, width: None, height: None, items, verbs: true };
+        let mut layer = menu::Layer::open(&mut self.r.w, menu);
+        layer.at = self.screen_cell(p);
+        self.menus.layers.push(layer);
+        self.menu_owner = Some(self.seat_devices.get(&n).copied().unwrap_or(Device::Keyboard(1)));
+        self.coin = Some(Coin { seat: n, entries, keys });
+        Ok(())
+    }
+
+    /// The coin's row chosen: its parameter is filled, and the command runs
+    /// or, with more to fill, becomes the chosen verb (M 8.1).
+    fn choose_coin(&mut self, now: Duration) -> RtResult<()> {
+        let i = self.menus.layers.last().and_then(|l| l.rows.get(l.cursor)).map(|r| r.item);
+        let coin = self.coin.take();
+        self.menus.back();
+        let (Some(coin), Some(i)) = (coin, i) else { return Ok(()) };
+        let Some((command, fill)) = coin.entries.get(i).cloned() else { return Ok(()) };
+        let filled = vec![fill];
+        if self.r.w.verb_open(&command, &filled) {
+            let (menu, item) = self
+                .docked
+                .iter()
+                .filter(|d| d.verbs)
+                .find_map(|d| d.items.iter().position(|it| it.action == ItemAction::Command(command.clone())).map(|k| (d.full.clone(), k)))
+                .unwrap_or_default();
+            self.verb = Some(Verb { seat: coin.seat, command, menu, item, filled });
+            if coin.keys && !self.cursors.contains_key(&coin.seat) {
+                self.open_cursor(coin.seat, false);
+            }
+            return Ok(());
+        }
+        let _ = now;
+        let args = filled.into_iter().map(|(n, v)| (Some(n), v)).collect();
+        self.command(CommandValue { name: command, args })
+    }
+
+    /// Where the top menu's window was last drawn.
+    pub fn menu_drawn_window(&self) -> Option<termplate_core::layout::Rect> {
+        self.menu_drawn.window
+    }
+
+    /// The screen cell of map cell `p`, from the last frame.
+    fn screen_cell(&self, p: rlml_core::rt::value::Pos) -> Option<(usize, usize)> {
+        let r = self.view.map_rect?;
+        let (cx, cy) = *self.view.camera.get(&p.map)?;
+        let (sx, sy) = (p.x - cx, p.y - cy);
+        (sx >= 0 && sy >= 0 && (sx as usize) < r.w && (sy as usize) < r.h).then(|| (r.x + sx as usize, r.y + sy as usize))
     }
 
     /// A press for the focused docked menu (D 11.3): `MENU`'s keys move,
@@ -991,7 +1143,26 @@ impl<'m> App<'m> {
         let contexts = self.contexts();
         let press = Press::Key(b.clone());
         let always = self.input.keys.is_always(Device::Keyboard(1), &press);
-        if !always && (self.menus.is_open() || !self.players_turn()) {
+        // menus take the mouse without bindings (M 8.1): a click chooses the
+        // row under it, and a click outside the window is `back`
+        if !always && self.menus.is_open() {
+            if b == Binding::mouse(termplate_core::keys::Mouse::Click) {
+                match self.menu_drawn.row_at(x, y) {
+                    Some(i) => {
+                        if let Some(top) = self.menus.top() {
+                            top.cursor = i;
+                        }
+                        self.choose(now)?;
+                    }
+                    None if !self.menu_drawn.inside(x, y) => self.engine("back", now)?,
+                    None => {}
+                }
+            } else if b == Binding::mouse(termplate_core::keys::Mouse::RightClick) && !self.menu_drawn.inside(x, y) {
+                self.engine("back", now)?;
+            }
+            return Ok(());
+        }
+        if !always && !self.players_turn() {
             return Ok(());
         }
         if !always

@@ -1130,7 +1130,7 @@ impl World<'_> {
                     _ => Err(format!("`{}` does not name a command", cmd.name)),
                 }
             }
-            ItemKind::Command { params, cost, body } => {
+            ItemKind::Command { params, cost, body, .. } => {
                 self.bind(params, cmd.args.clone(), &mut env, ns.as_deref(), item.pos)?;
                 let state = Suspended { command: cmd.name.clone(), cost: cost.unwrap_or(DEFAULT_COST), frames: vec![Frame::Block { stmts: body.clone(), i: 0 }], env };
                 self.continue_command(actor, state, false)

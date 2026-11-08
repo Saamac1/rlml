@@ -165,3 +165,22 @@ fn a_ring_among_the_sources_is_a_load_error() {
     let errors: Vec<String> = r.errors().map(|d| d.to_string()).collect();
     assert!(errors.iter().any(|e| e.contains("`a`, `b` name each other in a ring")), "{errors:#?}");
 }
+
+#[test]
+fn the_coin_offers_the_verbs_a_cell_fits() {
+    let src = ROOM.replace("command SPOT(to: pos aim 3) cost 120:", "command SPOT(to: pos aim 3) cost 120 noverb:");
+    let m = model(&src);
+    let mut w = world(&m);
+    let p = w.s.player.unwrap();
+    let (gate, gp) = kind_at(&w, "GATE");
+    let (_, kp) = kind_at(&w, "KEYCARD");
+    let all: Vec<String> = ["SPOT", "UNLOCK", "TOSS", "PUSH", "STD.WAIT"].iter().map(|s| s.to_string()).collect();
+    let names = |c: &[(String, (String, Value))]| c.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>();
+    // the door: UNLOCK by its second parameter, PUSH towards it; not TOSS
+    let coin = w.coin(p, &all, Target::Cell(gp)).unwrap();
+    assert_eq!(names(&coin), ["UNLOCK", "PUSH"], "SPOT is out of range there, WAIT takes no target");
+    assert_eq!(coin[0].1, ("door".to_string(), Value::Entity(gate)));
+    // the key: UNLOCK and TOSS by the key, PUSH, and SPOT in range
+    assert_eq!(names(&w.coin(p, &all, Target::Cell(kp)).unwrap()), ["SPOT", "UNLOCK", "TOSS", "PUSH"]);
+    assert!(w.is_noverb("SPOT") && !w.is_noverb("UNLOCK"), "`noverb` (RS 7.1)");
+}

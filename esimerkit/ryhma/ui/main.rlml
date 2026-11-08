@@ -89,6 +89,7 @@ pad GAME deadzone 40%
 
 keys LOOK
 - follow f
+- verbs v
 - back backspace
 
 keys LOOK keyboard 2
@@ -98,7 +99,9 @@ keys LOOK keyboard 2
 - cursor.east d
 - confirm q
 - follow r
+- verbs g
 - back x
 
 pad LOOK
 - follow north
+- verbs west
