@@ -16,7 +16,7 @@ use crate::token::Token;
 /// Engine actions a key, menu item or `{^…}` may name (M 9.1).
 pub const ENGINE_ACTIONS: &[&str] = &[
     "save", "quit", "pass", "repeat", "help", "confirm", "back", "close", "resume", "skip", "restart", "rewind", "new_game", "load_game",
-    "exit", "next", "prev", "toggle", "travel_to", "look", "join", "leave_seat",
+    "exit", "next", "prev", "toggle", "travel_to", "look", "cursor", "follow", "verbs", "focus", "join", "leave_seat",
 ];
 
 /// Engine events (M 9.1, M 9.6).
@@ -968,6 +968,12 @@ impl Checker<'_> {
             let name = target.split('(').next().unwrap_or(target);
             self.m.resolve_kind(ns, name, &[Kind::Menu, Kind::Panel])?;
             return Ok(if row.word(2) == Some("stack") { 3 } else { 2 });
+        }
+        if w == "focus" {
+            // `focus MENU`: a menu docked in the layout (D 11.3)
+            let target = row.word(1).ok_or("`focus` needs a docked menu")?;
+            self.m.resolve_kind(ns, target, &[Kind::Menu])?;
+            return Ok(2);
         }
         if names::is_vocabulary(w) {
             let dir = w.strip_prefix("cursor.").is_some_and(|d| fields::DIRS.contains(&d));

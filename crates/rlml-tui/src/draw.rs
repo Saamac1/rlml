@@ -42,6 +42,9 @@ pub struct View {
     /// Where the map was last drawn, inside its border: the cells
     /// `cell_at` maps to the map (M 8.1).
     pub map_rect: Option<Rect>,
+    /// The `hover` area's text: what is under the pointer (M 8.1); the app
+    /// sets it.
+    pub hover: Option<String>,
 }
 
 /// A style color for the terminal: 24-bit when the terminal says it takes
@@ -282,7 +285,11 @@ impl View {
             };
             match area.source.as_str() {
                 "map" => self.draw_map(&mut frame, world, inner, area.follow),
-                "hover" => {}
+                "hover" => {
+                    if let Some(t) = &self.hover {
+                        frame.text(inner.x, inner.y, inner.w, t, Role::Normal);
+                    }
+                }
                 _ => {
                     if world.m.resolve(None, &name).is_ok_and(|d| d.kind == Kind::Log) {
                         draw_log(&mut frame, world, lang, &name, inner);

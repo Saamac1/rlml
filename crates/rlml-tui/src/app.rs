@@ -24,7 +24,7 @@ use termplate_core::frame::Frame;
 use termplate_core::keys::{Binding, KeyCode, Mods};
 
 use crate::draw::View;
-use crate::input::{Device, Effect, Input, PadPress, Press};
+use crate::input::{Action, Device, Effect, Input, PadPress, Press};
 use crate::menu::{self, ItemAction, Item, Menu, Menus};
 
 /// `500ms`, `1s`, `0500ms` (D 2.4).
@@ -102,7 +102,17 @@ pub struct App<'m> {
     pub seat_devices: BTreeMap<SeatId, Device>,
     /// The device that opened the menus on top, which drives them (M 8.2).
     menu_owner: Option<Device>,
+    /// `settings - mouse on|off` (D 3.2), on by default.
+    pub mouse: bool,
+    /// The pointer's screen cell, while the mouse is over the window.
+    pub pointer: Option<(usize, usize)>,
+    /// When the last travel step ran, for the travel's pace.
+    last_step: Duration,
 }
+
+/// The least time between two travel steps, so a travel shows even
+/// without `presentation frame` (M 8.1).
+const STEP_PACE: Duration = Duration::from_millis(80);
 
 /// The turn marker flashes on for this long when a turn starts, then
 /// blinks with this period, half on and half off.
@@ -150,6 +160,9 @@ impl<'m> App<'m> {
             pads: vec![],
             seat_devices: BTreeMap::new(),
             menu_owner: None,
+            mouse: setting("mouse").as_deref() != Some("off"),
+            pointer: None,
+            last_step: Duration::ZERO,
         };
         match app.title() {
             Some(title) => {
@@ -274,6 +287,7 @@ impl<'m> App<'m> {
 
     pub fn draw(&mut self) -> Frame {
         self.view.marked = self.turn_marker();
+        self.view.hover = self.pointer_cell().and_then(|p| self.r.w.hover_text(&self.lang, p));
         let (w, h) = self.size;
         let mut f = if self.playing { self.view.draw(&mut self.r.w, &self.lang, w, h) } else { Frame::new(w, h) };
         if let Some(layer) = self.menus.layers.last() {
@@ -354,6 +368,17 @@ impl<'m> App<'m> {
                 return Ok(());
             }
         }
+        // any press of the travelling seat stops its travel and does
+        // nothing else (M 8.1)
+        if !always
+            && !self.menus.is_open()
+            && self.players_turn()
+            && let Some(n) = self.r.awaiting()
+            && self.r.travelling(n)
+        {
+            self.r.stop_travel(n);
+            return Ok(());
+        }
         let contexts = self.contexts();
         match self.input.press_on(self.m, &contexts, device, press) {
             Effect::Command(cmd) => self.command(cmd)?,
@@ -416,6 +441,23 @@ impl<'m> App<'m> {
                 self.start(seed)?;
                 self.last_round = now;
             }
+            "travel_to" if self.players_turn() => {
+                if let (Some(n), Some(p)) = (self.r.awaiting(), self.pointer_cell())
+                    && self.r.travel_to(n, p)?
+                {
+                    self.travel_step(now)?;
+                }
+            }
+            "follow" if self.players_turn() => {
+                if let Some(n) = self.r.awaiting() {
+                    if self.r.follow(n, None)? {
+                        self.travel_step(now)?;
+                    } else {
+                        self.note = Some("follow: nobody to follow".into());
+                    }
+                }
+            }
+            "travel_to" | "follow" => {}
             "quit" if self.playing => self.quit_game(),
             "quit" | "exit" => self.quit = true,
             other => self.note = Some(format!("`{other}` is not supported yet")),
@@ -469,6 +511,16 @@ impl<'m> App<'m> {
             return Ok(());
         }
         self.last_round = now;
+        // a travel steps at its pace; `idle` waits meanwhile (M 8.1)
+        if let Some(n) = self.r.awaiting()
+            && self.r.travelling(n)
+        {
+            self.last_key = now;
+            if self.frames.is_empty() && now.saturating_sub(self.last_step) >= self.frame.max(STEP_PACE) {
+                self.travel_step(now)?;
+            }
+            return Ok(());
+        }
         if let Some(idle) = self.idle.clone()
             && now.saturating_sub(self.last_key) >= idle.after
         {
@@ -497,10 +549,75 @@ impl<'m> App<'m> {
         if !self.playing || self.menus.is_open() {
             return Duration::from_millis(500);
         }
+        if self.players_turn() && self.r.awaiting().is_some_and(|n| self.r.travelling(n)) {
+            return self.frame.max(STEP_PACE);
+        }
         let step = if self.players_turn() { self.idle.as_ref().map(|i| i.after) } else { self.round };
         // the turn marker blinks, so a group's turn redraws often enough
         let step = if self.players_turn() && self.r.w.s.players().len() > 1 { Some(step.map_or(MARK_BLINK / 4, |s| s.min(MARK_BLINK / 4))) } else { step };
         step.map_or(Duration::from_millis(500), |s| s.min(Duration::from_millis(100)))
+    }
+
+    /// The map cell under the pointer, on the active map.
+    pub fn pointer_cell(&self) -> Option<rlml_core::rt::value::Pos> {
+        let (x, y) = self.pointer?;
+        let map = self.r.w.s.active_map()?;
+        crate::draw::cell_at(&self.view, map, x, y)
+    }
+
+    /// The pointer moved to screen cell (x, y): the hover follows it.
+    pub fn pointer_at(&mut self, x: usize, y: usize) {
+        if self.mouse {
+            self.pointer = Some((x, y));
+        }
+    }
+
+    /// A mouse press at screen cell (x, y) and time `now` (M 8.1, M 8.2).
+    /// The mouse is shared and follows the turn: on a turn its press is the
+    /// awaited seat's, read from keyboard part 1's rows, since the mouse
+    /// has no part of its own. Menus take the mouse later.
+    pub fn mouse_press(&mut self, b: Binding, x: usize, y: usize, now: Duration) -> RtResult<()> {
+        if !self.mouse {
+            return Ok(());
+        }
+        self.pointer = Some((x, y));
+        self.last_key = now;
+        self.clock = now;
+        self.note = None;
+        let contexts = self.contexts();
+        let press = Press::Key(b);
+        let always = self.input.keys.is_always(Device::Keyboard(1), &press);
+        if !always && (self.menus.is_open() || !self.players_turn()) {
+            return Ok(());
+        }
+        if !always
+            && let Some(n) = self.r.awaiting()
+            && self.r.travelling(n)
+        {
+            self.r.stop_travel(n);
+            return Ok(());
+        }
+        match self.input.keys.lookup_on(&contexts, Device::Keyboard(1), &press).cloned() {
+            Some(Action::Command(c)) => self.command(CommandValue { name: c, args: vec![] })?,
+            Some(Action::Engine(a)) => self.engine(&a, now)?,
+            Some(Action::Open { menu, stack }) => {
+                if !self.menus.is_open() {
+                    self.menu_owner = self.r.awaiting().and_then(|n| self.seat_devices.get(&n).copied()).or(Some(Device::Keyboard(1)));
+                }
+                self.open(&menu, stack)
+            }
+            Some(Action::Toggle(p)) => self.note = Some(format!("panel {p}: panels are not supported yet")),
+            None => {}
+        }
+        Ok(())
+    }
+
+    /// One step of the awaited seat's travel, then the world to the next
+    /// turn (M 8.1).
+    fn travel_step(&mut self, now: Duration) -> RtResult<()> {
+        self.last_step = now;
+        self.r.step_travel()?;
+        self.advance(0)
     }
 
     /// How long each in-between frame shows.

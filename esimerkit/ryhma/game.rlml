@@ -14,6 +14,9 @@ game RYHMA
 - at SPAWN
 - keys GAME
 - PLAYER HERO
+- walk WALK
+- leader STD.LEADER_OF
+- rest STD.WAIT
 - seats 2..2
 - party switch
 - leash on

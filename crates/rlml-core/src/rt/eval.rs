@@ -1983,6 +1983,12 @@ impl World<'_> {
         out
     }
 
+    /// The description of an entity or a tile, as `{X:DESC}` shows it
+    /// (D 10): `<KIND>.DESC` from the nearest kind that has it.
+    pub fn description(&self, lang: &str, v: &Value) -> String {
+        self.placeholder(lang, "X:DESC", &[("X".to_string(), v.clone())])
+    }
+
     fn placeholder(&self, lang: &str, inner: &str, args: &[(String, Value)]) -> String {
         if let Some(key) = inner.strip_prefix('@') {
             return self.text(lang, key, &[]);

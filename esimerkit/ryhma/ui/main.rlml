@@ -10,11 +10,13 @@ layout MAIN
 
 ```
 m
+h
 l
 ```
 
 legend:
 - m map size 20x8
+- h hover size.height 1
 - l LOG size.height 3
 
 log LOG history 50
@@ -46,6 +48,7 @@ keys GAME
 - WAIT .
 - SWITCH tab
 - SWITCH.PREV shift+tab
+- follow f
 - pass z
 
 keys GAME keyboard 2
@@ -54,6 +57,7 @@ keys GAME keyboard 2
 - WALK.WEST a
 - WALK.EAST d
 - WAIT q
+- follow r
 - join e
 
 pad GAME deadzone 40%
@@ -64,4 +68,5 @@ pad GAME deadzone 40%
 - WAIT south
 - SWITCH rb
 - SWITCH.PREV lb
+- follow north
 - pass west

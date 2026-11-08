@@ -6,7 +6,7 @@
 use std::collections::BTreeSet;
 
 use super::eval::{BodyKind, Env};
-use super::value::{MapId, Pos, Value};
+use super::value::{EntityId, MapId, Pos, Value};
 use super::world::World;
 use crate::names;
 
@@ -197,6 +197,26 @@ impl World<'_> {
             }
         }
         grid
+    }
+
+    /// The hover text of a cell (M 8.1): the top drawn entity's
+    /// description, or the top tile's; only for a cell in the shared view,
+    /// and for a remembered one its tile. `None` for a cell nobody sees or
+    /// remembers, so the hover gives nothing away.
+    pub fn hover_text(&mut self, lang: &str, p: Pos) -> Option<String> {
+        let view = self.player_view(p.map);
+        let seen = view.contains(&(p.x, p.y));
+        let drawn = |e: EntityId| self.s.get(e).get("render").is_some();
+        let entity = self.s.entities_at(p).into_iter().rev().find(|&e| drawn(e) && (seen || self.s.get(e).get("revealed").is_some()));
+        if let Some(e) = entity {
+            return Some(self.description(lang, &Value::Entity(e)));
+        }
+        if !seen && !self.s.maps[p.map].remembered.contains(&(p.x, p.y)) {
+            return None;
+        }
+        let m = &self.s.maps[p.map];
+        let tile = (0..m.layers.len()).rev().find_map(|l| m.tile(l, p.x, p.y).map(String::from))?;
+        Some(self.description(lang, &Value::Name(tile)))
     }
 
     /// A cell as `x,y` for messages.

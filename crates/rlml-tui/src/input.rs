@@ -253,6 +253,15 @@ impl Keys {
         let game = m.named_game();
         let ns = game.and_then(|g| g.namespace.as_deref());
         keys.base = game.and_then(|g| g.items.iter().find(|i| i.key() == "keys")).and_then(|i| i.word(1)).and_then(|n| names::candidates(ns, n).into_iter().find(|c| keys.contexts.contains_key(c)));
+        // the base context's mouse default (M 8): `travel_to click`, unless
+        // the game binds `travel_to` or `click` there itself
+        if let Some(ctx) = keys.base.clone().and_then(|b| keys.contexts.get_mut(&b)) {
+            let click = Binding::mouse(termplate_core::keys::Mouse::Click);
+            let travel = Action::Engine("travel_to".into());
+            if !ctx.rows.iter().any(|(b, a)| *a == travel || *b == click) {
+                ctx.rows.push((click, travel));
+            }
+        }
         keys
     }
 

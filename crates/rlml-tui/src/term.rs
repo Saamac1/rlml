@@ -16,7 +16,9 @@ use crate::app::App;
 /// Plays a new game in the terminal until the player quits. A runtime
 /// error ends the game and is returned after the terminal is restored.
 pub fn play(m: &Model, seed: u64) -> Result<(), String> {
-    let (guard, tty) = TtyGuard::new(false).map_err(|e| format!("cannot open the terminal: {e}"))?;
+    // the mouse is on unless the player's settings turn it off (D 3.2)
+    let mouse = m.settings().get("mouse").and_then(|i| i.word(1)) != Some("off");
+    let (guard, tty) = TtyGuard::new(mouse).map_err(|e| format!("cannot open the terminal: {e}"))?;
     let no_color = no_color_from_env(std::env::var("NO_COLOR").ok().as_deref());
     let mut screen = Screen::new(tty, StyleSheet::default(), no_color);
     let result = run(m, seed, &mut screen);
@@ -46,11 +48,12 @@ fn run(m: &Model, seed: u64, screen: &mut Screen<std::fs::File>) -> Result<(), S
         {
             match ev {
                 InputEvent::Key(code, mods) => app.key(Binding::key(code, mods), start.elapsed())?,
+                InputEvent::Mouse { binding, x, y } => app.mouse_press(binding, x as usize, y as usize, start.elapsed())?,
+                InputEvent::MouseMove { x, y } => app.pointer_at(x as usize, y as usize),
                 InputEvent::Resize(w, h) => {
                     app.resize(w, h);
                     screen.invalidate();
                 }
-                _ => {}
             }
         }
         while let Ok((id, raw)) = pads.try_recv() {
