@@ -19,6 +19,7 @@ use rlml_core::model::Model;
 use rlml_core::rt::run::{Runner, Status};
 use rlml_core::rt::state::SeatId;
 use rlml_core::rt::travel::OrderGoal;
+use rlml_core::rt::verbs::Target;
 use rlml_core::rt::value::{CommandValue, Value};
 use rlml_core::rt::world::{RtResult, World};
 use termplate_core::frame::Frame;
@@ -48,6 +49,20 @@ pub struct Idle {
 /// The engine's menu when the game has no `title` (M 8): a new game or
 /// leaving.
 pub const ENGINE_MENU: &str = "ENGINE";
+
+/// The menus docked in the layout: its `- v menu NAME` rows (D 11.1).
+fn docked_menus(m: &Model) -> Vec<Menu> {
+    let Some(layout) = m.layout() else { return vec![] };
+    layout
+        .sub("legend")
+        .filter_map(|item| {
+            let words: Vec<&str> = item.tokens.iter().map(|t| t.text.as_str()).collect();
+            let i = words.iter().position(|w| *w == "menu")?;
+            let full = m.resolve(item.namespace.as_deref(), words.get(i + 1)?).ok()?.full.clone();
+            Menu::read(m, &full)
+        })
+        .collect()
+}
 
 fn engine_menu() -> Menu {
     let item = |key: &str, action: &str| Item { key: key.into(), action: ItemAction::Engine(action.into()), hide: None, disabled: None };
@@ -113,6 +128,33 @@ pub struct App<'m> {
     /// The seats' look cursors (M 8.1), and the seat that moved one last.
     pub cursors: BTreeMap<SeatId, Cursor>,
     last_cursor: Option<SeatId>,
+    /// The menus docked in the layout (D 11.1), in legend order.
+    pub docked: Vec<Menu>,
+    /// The chosen verb and what clicks have filled (M 8.1).
+    pub verb: Option<Verb>,
+    /// The docked menu that has the keys, `focus MENU` (D 11.3).
+    pub focus: Option<Focus>,
+    /// Why the last click fitted no parameter, for the hover until the
+    /// pointer moves.
+    verb_hint: Option<String>,
+}
+
+/// A verb chosen from a docked menu (M 8.1): presentation, not state.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Verb {
+    pub seat: SeatId,
+    pub command: String,
+    pub menu: String,
+    pub item: usize,
+    pub filled: Vec<(String, Value)>,
+}
+
+/// A docked menu with the keys of a seat (D 11.3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Focus {
+    pub seat: SeatId,
+    pub menu: String,
+    pub row: usize,
 }
 
 /// The least time between two travel steps, so a travel shows even
@@ -170,6 +212,10 @@ impl<'m> App<'m> {
             last_step: Duration::ZERO,
             cursors: BTreeMap::new(),
             last_cursor: None,
+            docked: docked_menus(m),
+            verb: None,
+            focus: None,
+            verb_hint: None,
         };
         match app.title() {
             Some(title) => {
@@ -294,8 +340,14 @@ impl<'m> App<'m> {
 
     pub fn draw(&mut self) -> Frame {
         self.view.marked = self.turn_marker();
-        self.view.hover = self.hover_cell().and_then(|p| self.r.w.hover_text(&self.lang, p));
+        self.expire_verb();
+        self.view.hover = match &self.verb_hint {
+            Some(h) => Some(h.clone()),
+            None => self.hover_cell().and_then(|p| self.r.w.hover_text(&self.lang, p)),
+        };
         self.view.cursors = self.cursor_marks();
+        self.view.docked = self.docked_view();
+        self.view.sentence = self.sentence();
         let (w, h) = self.size;
         let mut f = if self.playing { self.view.draw(&mut self.r.w, &self.lang, w, h) } else { Frame::new(w, h) };
         if let Some(layer) = self.menus.layers.last() {
@@ -366,6 +418,9 @@ impl<'m> App<'m> {
         // a seat's own cursor goes before the turn's routing: it works on
         // other seats' turns too (M 8.2)
         let travelling_seat = self.r.awaiting().filter(|&n| self.players_turn() && self.r.travelling(n) && self.drives(device, n));
+        if !always && travelling_seat.is_none() && !self.menus.is_open() && self.focus_press(device, &press, now)? {
+            return Ok(());
+        }
         if !always && !self.menus.is_open() && self.playing && travelling_seat.is_none() && self.cursor_press(device, &press, now)? {
             return Ok(());
         }
@@ -412,6 +467,14 @@ impl<'m> App<'m> {
                 }
             }
             Effect::Toggle(p) => self.note = Some(format!("panel {p}: panels are not supported yet")),
+            Effect::Focus(menu) => {
+                if self.players_turn()
+                    && let Some(n) = self.r.awaiting()
+                    && self.docked.iter().any(|d| d.full == menu)
+                {
+                    self.focus = Some(Focus { seat: n, menu, row: 0 });
+                }
+            }
             Effect::Counting(n) => self.note = Some(format!("count: {n}")),
             Effect::Unbound => {}
         }
@@ -590,6 +653,9 @@ impl<'m> App<'m> {
         if !self.mouse {
             return;
         }
+        if self.pointer != Some((x, y)) {
+            self.verb_hint = None;
+        }
         self.pointer = Some((x, y));
         // with the awaited seat's cursor open, the pointer is that cursor (M 8.1)
         if let (Some(n), Some(p)) = (self.r.awaiting().filter(|_| self.players_turn()), self.pointer_cell())
@@ -680,6 +746,15 @@ impl<'m> App<'m> {
                     self.cursors.insert(n, Cursor { pos: cells[k], ..c });
                 }
             }
+            "confirm" if my_turn && self.verb.as_ref().is_some_and(|v| v.seat == n) => {
+                self.verb_target(Target::Cell(c.pos), now)?;
+            }
+            "back" if self.verb.as_ref().is_some_and(|v| v.seat == n) => {
+                self.undo_verb();
+                if self.verb.is_none() && !c.stays {
+                    self.cursors.remove(&n);
+                }
+            }
             "confirm" if my_turn => {
                 if !c.stays {
                     self.cursors.remove(&n);
@@ -710,6 +785,173 @@ impl<'m> App<'m> {
             _ => {}
         }
         Ok(())
+    }
+
+    /// A press for the focused docked menu (D 11.3): `MENU`'s keys move,
+    /// choose and go back; other presses pass through to the game.
+    fn focus_press(&mut self, device: Device, press: &Press, now: Duration) -> RtResult<bool> {
+        let Some(f) = self.focus.clone() else { return Ok(false) };
+        if !self.drives(device, f.seat) {
+            return Ok(false);
+        }
+        let rows = self.docked.iter().find(|d| d.full == f.menu).map_or(0, |d| d.items.len());
+        let menu = vec!["MENU".to_string()];
+        let Some(Action::Engine(a)) = self.input.keys.lookup_on(&menu, device, press).cloned() else { return Ok(false) };
+        match a.as_str() {
+            "cursor.north" => self.focus = Some(Focus { row: f.row.saturating_sub(1), ..f }),
+            "cursor.south" => self.focus = Some(Focus { row: (f.row + 1).min(rows.saturating_sub(1)), ..f }),
+            "confirm" => {
+                self.focus = None;
+                self.choose_verb(f.seat, &f.menu, f.row, true, now)?;
+            }
+            "back" => self.focus = None,
+            _ => return Ok(false),
+        }
+        Ok(true)
+    }
+
+    /// Seat `n` chose a docked menu's row (M 8.1): a command without
+    /// clickable parameters runs now, another becomes the chosen verb. From
+    /// the keys, its targets are chosen with the look cursor.
+    fn choose_verb(&mut self, n: SeatId, menu: &str, row: usize, keys: bool, now: Duration) -> RtResult<()> {
+        if !self.players_turn() || self.r.awaiting() != Some(n) {
+            return Ok(());
+        }
+        let Some(item) = self.docked.iter().find(|d| d.full == menu).and_then(|d| d.items.get(row)).cloned() else { return Ok(()) };
+        let command = match item.action {
+            ItemAction::Command(c) => c,
+            ItemAction::Engine(a) => return self.engine(&a, now),
+            ItemAction::Open { menu, stack } => {
+                self.open(&menu, stack);
+                return Ok(());
+            }
+        };
+        self.verb_hint = None;
+        if !self.r.w.verb_open(&command, &[]) {
+            self.verb = None;
+            return self.command(CommandValue { name: command, args: vec![] });
+        }
+        self.verb = Some(Verb { seat: n, command, menu: menu.to_string(), item: row, filled: vec![] });
+        if keys && !self.cursors.contains_key(&n) {
+            self.open_cursor(n, false);
+        }
+        Ok(())
+    }
+
+    /// A click or the cursor's `confirm` on `t` for the chosen verb: it
+    /// fills the first free parameter it fits, and when no clickable one is
+    /// left the command runs (M 8.1). A target that fits none says so in
+    /// the hover and takes no time.
+    fn verb_target(&mut self, t: Target, _now: Duration) -> RtResult<()> {
+        let (Some(v), Some(p)) = (self.verb.clone(), self.r.w.s.player) else { return Ok(()) };
+        match self.r.w.fill_verb(p, &v.command, &v.filled, t)? {
+            Some(fill) => {
+                let mut filled = v.filled.clone();
+                filled.push(fill);
+                if self.r.w.verb_open(&v.command, &filled) {
+                    self.verb = Some(Verb { filled, ..v });
+                } else {
+                    self.verb = None;
+                    if self.cursors.get(&v.seat).is_some_and(|c| !c.stays) {
+                        self.cursors.remove(&v.seat);
+                    }
+                    let args = filled.into_iter().map(|(n, v)| (Some(n), v)).collect();
+                    self.command(CommandValue { name: v.command, args })?;
+                }
+            }
+            None => {
+                let key = format!("{}.NO_TARGET", v.command);
+                let has = self.m.texts(&self.lang).contains_key(&key);
+                self.verb_hint = Some(if has { self.r.w.text(&self.lang, &key, &[]) } else { "–".to_string() });
+            }
+        }
+        Ok(())
+    }
+
+    /// `rclick` or `back` with a verb: the last filled parameter goes, and
+    /// with none filled the verb (M 8.1).
+    fn undo_verb(&mut self) {
+        self.verb_hint = None;
+        match &mut self.verb {
+            Some(v) if !v.filled.is_empty() => {
+                v.filled.pop();
+            }
+            _ => self.verb = None,
+        }
+    }
+
+    /// The verb and the focus belong to the turn: they go when it ends.
+    fn expire_verb(&mut self) {
+        let turn = self.r.awaiting().filter(|_| self.players_turn());
+        if self.verb.as_ref().is_some_and(|v| Some(v.seat) != turn) {
+            self.verb = None;
+            self.verb_hint = None;
+        }
+        if self.focus.as_ref().is_some_and(|f| Some(f.seat) != turn) {
+            self.focus = None;
+        }
+    }
+
+    /// The docked menus as drawn now: each row's text and the shortcut of
+    /// the seat whose turn it is (M 8.1).
+    fn docked_view(&self) -> BTreeMap<String, crate::draw::Docked> {
+        let turn = self.r.awaiting().filter(|_| self.players_turn());
+        let device = turn.and_then(|n| self.seat_devices.get(&n).copied()).unwrap_or(Device::Keyboard(1));
+        let contexts = self.contexts();
+        let pointed = self.pointer.and_then(|(x, y)| crate::draw::docked_at(&self.view, x, y));
+        self.docked
+            .iter()
+            .map(|d| {
+                let rows = d
+                    .items
+                    .iter()
+                    .map(|it| {
+                        let key = match &it.action {
+                            ItemAction::Command(c) => self.input.keys.shortcut(&contexts, device, c).unwrap_or_default(),
+                            _ => String::new(),
+                        };
+                        crate::draw::DockRow { label: self.r.w.text(&self.lang, &format!("{}.{}", d.full, it.key), &[]), key, enabled: turn.is_some() }
+                    })
+                    .collect();
+                let docked = crate::draw::Docked {
+                    rows,
+                    pointed: pointed.as_ref().filter(|(m, _)| *m == d.full).map(|(_, i)| *i),
+                    focused: self.focus.as_ref().filter(|f| f.menu == d.full).map(|f| f.row),
+                    chosen: self.verb.as_ref().filter(|v| v.menu == d.full).map(|v| v.item),
+                };
+                (d.full.clone(), docked)
+            })
+            .collect()
+    }
+
+    /// The sentence line (M 8.1): the chosen verb's `<COMMAND>.SENTENCE`
+    /// with the filled parameters and the target under the pointer or the
+    /// cursor where it would go; without the text, the verb's label and
+    /// the hover.
+    fn sentence(&mut self) -> Option<String> {
+        let v = self.verb.clone()?;
+        let mut args: Vec<(String, Value)> = v.filled.clone();
+        if let (Some(cell), Some(p)) = (self.hover_cell(), self.r.w.s.player)
+            && let Ok(Some(preview)) = self.r.w.fill_verb(p, &v.command, &v.filled, Target::Cell(cell))
+        {
+            args.push(preview);
+        }
+        let key = format!("{}.SENTENCE", v.command);
+        if self.m.texts(&self.lang).contains_key(&key) {
+            // a parameter not filled shows empty
+            for p in self.r.w.verb_params(&v.command) {
+                if !args.iter().any(|(n, _)| *n == p.name) {
+                    args.push((p.name, Value::Text(String::new())));
+                }
+            }
+            return Some(self.r.w.text(&self.lang, &key, &args));
+        }
+        let label = self.docked.iter().find(|d| d.full == v.menu).and_then(|d| d.items.get(v.item)).map(|it| self.r.w.text(&self.lang, &format!("{}.{}", v.menu, it.key), &[])).unwrap_or(v.command.clone());
+        let hover = self.hover_cell().and_then(|p| self.r.w.hover_text(&self.lang, p));
+        Some(match hover {
+            Some(h) => format!("{label} {h}"),
+            None => label,
+        })
     }
 
     /// The cell the hover describes: the awaited seat's cursor, else the
@@ -747,7 +989,7 @@ impl<'m> App<'m> {
         self.clock = now;
         self.note = None;
         let contexts = self.contexts();
-        let press = Press::Key(b);
+        let press = Press::Key(b.clone());
         let always = self.input.keys.is_always(Device::Keyboard(1), &press);
         if !always && (self.menus.is_open() || !self.players_turn()) {
             return Ok(());
@@ -759,6 +1001,24 @@ impl<'m> App<'m> {
             self.r.stop_travel(n);
             return Ok(());
         }
+        if !always && let Some(n) = self.r.awaiting() {
+            let click = b == Binding::mouse(termplate_core::keys::Mouse::Click);
+            let rclick = b == Binding::mouse(termplate_core::keys::Mouse::RightClick);
+            // a docked menu's row chooses its verb (M 8.1)
+            if click && let Some((menu, row)) = crate::draw::docked_at(&self.view, x, y) {
+                self.focus = None;
+                return self.choose_verb(n, &menu, row, false, now);
+            }
+            if self.verb.as_ref().is_some_and(|v| v.seat == n) {
+                if click && let Some(p) = self.pointer_cell() {
+                    return self.verb_target(Target::Cell(p), now);
+                }
+                if rclick {
+                    self.undo_verb();
+                    return Ok(());
+                }
+            }
+        }
         match self.input.keys.lookup_on(&contexts, Device::Keyboard(1), &press).cloned() {
             Some(Action::Command(c)) => self.command(CommandValue { name: c, args: vec![] })?,
             Some(Action::Engine(a)) => self.engine(&a, now)?,
@@ -769,7 +1029,7 @@ impl<'m> App<'m> {
                 self.open(&menu, stack)
             }
             Some(Action::Toggle(p)) => self.note = Some(format!("panel {p}: panels are not supported yet")),
-            None => {}
+            Some(Action::Focus(_)) | None => {}
         }
         Ok(())
     }

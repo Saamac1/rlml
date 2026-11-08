@@ -56,6 +56,7 @@ entity RAT
 
 messages
 - MESSAGE.WALL WHO
+- MESSAGE.EXAMINE WHAT
 
 ## Kävely
 
@@ -80,4 +81,18 @@ command WALK.SOUTH = WALK(south)
 command WALK.WEST = WALK(west)
 
 command WALK.EAST = WALK(east)
+```
+
+## Verbit
+
+> Verbivalikon komennot (D 11.2). Kohde valitaan klikkaamalla tai
+> kursorilla: `EXAMINE` kuvaa näkyvän olennon tai esineen, ja `STRIKE_AT`
+> lyö viereistä vihollista.
+
+```roguescript
+command EXAMINE(what: entity from entities(in: near(actor.at, 9)) where it has render and in_view(it)) cost 0:
+    log(MESSAGE.EXAMINE, WHAT: what)
+
+command STRIKE_AT(target: entity from STD.HOSTILES(actor) where distance(it, actor) <= 1) cost 120:
+    return STD.ATTACK(target)
 ```

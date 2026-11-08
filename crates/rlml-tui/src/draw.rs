@@ -25,9 +25,32 @@ pub enum Follow {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Area {
     pub ch: char,
-    /// `map`, `hover`, or a log or panel name as written.
+    /// `map`, `hover`, `sentence`, `menu`, or a log or panel name as
+    /// written.
     pub source: String,
     pub follow: Follow,
+    /// A docked menu's name as written: `- v menu VERBS` (D 11.1).
+    pub menu: Option<String>,
+}
+
+/// A docked menu's row as the app gives it to draw (M 7.1, M 8.1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DockRow {
+    pub label: String,
+    /// The shortcut, right-aligned: the verb's binding for the seat whose
+    /// turn it is, or empty.
+    pub key: String,
+    pub enabled: bool,
+}
+
+/// A docked menu to draw: its rows, the row under the pointer, the
+/// focused row and the chosen verb's row.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Docked {
+    pub rows: Vec<DockRow>,
+    pub pointed: Option<usize>,
+    pub focused: Option<usize>,
+    pub chosen: Option<usize>,
 }
 
 /// The presentation's own state between frames.
@@ -47,6 +70,12 @@ pub struct View {
     pub hover: Option<String>,
     /// Cells to mark on the map: open cursors and orders' targets (M 7.1).
     pub cursors: Vec<rlml_core::rt::value::Pos>,
+    /// Docked menus by full name, as the app sets them, and where each was
+    /// last drawn, inside its border, for the mouse.
+    pub docked: BTreeMap<String, Docked>,
+    pub docked_rects: BTreeMap<String, Rect>,
+    /// The `sentence` area's text (M 8.1); the app sets it.
+    pub sentence: Option<String>,
 }
 
 /// A style color for the terminal: 24-bit when the terminal says it takes
@@ -107,7 +136,9 @@ fn areas(rows: &[RawItem]) -> (Vec<Area>, Dims) {
             }
         }
         dims.insert(ch, size);
-        out.push(Area { ch, source: words.first().copied().unwrap_or("").to_string(), follow });
+        let source = words.first().copied().unwrap_or("").to_string();
+        let menu = (source == "menu").then(|| words.get(1).map(|w| w.to_string())).flatten();
+        out.push(Area { ch, source, follow, menu });
     }
     (out, dims)
 }
@@ -231,6 +262,7 @@ impl View {
         let mut frame = Frame::new(width, height);
         // set again when the map is drawn: a too small window has none
         self.map_rect = None;
+        self.docked_rects.clear();
         let block = layout_block(world);
         let (areas, solved) = match &block {
             Some(b) => {
@@ -252,7 +284,7 @@ impl View {
             None => {
                 let mut rects = BTreeMap::new();
                 rects.insert('m', Rect::new(0, 0, width, height));
-                (vec![Area { ch: 'm', source: "map".into(), follow: Follow::Center }], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 })
+                (vec![Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None }], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 })
             }
         };
         if solved.too_small {
@@ -261,7 +293,11 @@ impl View {
         }
         for area in &areas {
             let Some(&rect) = solved.rects.get(&area.ch) else { continue };
-            let name = if area.source == "map" || area.source == "hover" { area.source.clone() } else { area.source.split('(').next().unwrap_or("").to_string() };
+            let name = match (area.source.as_str(), &area.menu) {
+                ("menu", Some(m)) => world.m.resolve(None, m).map(|d| d.full.clone()).unwrap_or_else(|_| m.clone()),
+                ("map" | "hover" | "sentence", _) => area.source.clone(),
+                _ => area.source.split('(').next().unwrap_or("").to_string(),
+            };
             frame.set_area(vec![name.clone()]);
             let (mut border, style) = panel_style(world, &name);
             // a written cell size is the map's view (M 7.1): the area may be
@@ -290,6 +326,17 @@ impl View {
                 "hover" => {
                     if let Some(t) = &self.hover {
                         frame.text(inner.x, inner.y, inner.w, t, Role::Normal);
+                    }
+                }
+                "sentence" => {
+                    if let Some(t) = &self.sentence {
+                        frame.text(inner.x, inner.y, inner.w, t, Role::Normal);
+                    }
+                }
+                "menu" => {
+                    self.docked_rects.insert(name.clone(), inner);
+                    if let Some(d) = self.docked.get(&name) {
+                        draw_docked(&mut frame, d, inner);
                     }
                 }
                 _ => {
@@ -321,7 +368,7 @@ impl View {
             if sx >= 0 && sy >= 0 && (sx as usize) < r.w && (sy as usize) < r.h {
                 let i = (r.y + sy as usize) * frame.width + r.x + sx as usize;
                 if let Some(cell) = frame.cells.get_mut(i) {
-                    let mut style = cell.style.clone().unwrap_or_default();
+                    let mut style = cell.style.unwrap_or_default();
                     style.attrs.underline = true;
                     cell.style = Some(style);
                 }
@@ -341,6 +388,33 @@ impl View {
             }
         }
     }
+}
+
+/// A docked menu: a row each, the shortcut at the right (M 7.1, M 8.1).
+/// The chosen verb is in reverse video, the focused row bold and the row
+/// under the pointer underlined; a disabled row is dim.
+fn draw_docked(frame: &mut Frame, d: &Docked, r: Rect) {
+    for (i, row) in d.rows.iter().enumerate().take(r.h) {
+        let y = r.y + i;
+        frame.text(r.x, y, r.w, &row.label, Role::Normal);
+        let kw = termplate_core::frame::str_width(&row.key);
+        if kw > 0 && kw + 1 < r.w {
+            frame.text(r.x + r.w - kw, y, kw, &row.key, Role::Normal);
+        }
+        let mut style = Style::default();
+        style.attrs.reverse = d.chosen == Some(i);
+        style.attrs.bold = d.focused == Some(i);
+        style.attrs.underline = d.pointed == Some(i);
+        style.attrs.dim = !row.enabled;
+        if style != Style::default() {
+            paint(frame, Rect::new(r.x, y, r.w, 1), style);
+        }
+    }
+}
+
+/// The docked menu row under screen cell (x, y), from the last frame.
+pub fn docked_at(view: &View, x: usize, y: usize) -> Option<(String, usize)> {
+    view.docked_rects.iter().find(|(_, r)| r.contains(x, y)).map(|(m, r)| (m.clone(), y - r.y)).filter(|(m, i)| view.docked.get(m).is_some_and(|d| *i < d.rows.len()))
 }
 
 /// The log's newest messages that fit, wrapped at word gaps, each in its

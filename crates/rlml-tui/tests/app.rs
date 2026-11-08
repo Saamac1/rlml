@@ -247,7 +247,7 @@ fn ryhma() -> MemFiles {
 fn the_turn_marker_flashes_and_blinks() {
     let f = ryhma();
     let m = model(&f);
-    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    let mut app = App::new(&m, 7, (40, 14)).unwrap();
     assert!(app.players_turn());
     let p = app.r.w.s.player.unwrap();
     let reversed = |app: &mut App| {
@@ -319,14 +319,15 @@ fn the_camera_follows_the_group_and_falls_back_to_the_player() {
 fn the_map_shows_its_written_size_in_a_wide_window() {
     let f = ryhma();
     let m = model(&f);
-    for size in [(20, 12), (80, 24)] {
+    for size in [(34, 13), (80, 24)] {
         let mut app = App::new(&m, 7, size).unwrap();
         let frame = app.draw();
         let r = app.view.map_rect.expect("the map is drawn");
         assert_eq!((r.x, r.y, r.w, r.h), (0, 0, 20, 8), "the written 20x8 in {size:?}: what the leash measures (M 7.1)");
         assert_eq!(app.r.w.view_dims(), (20, 8));
         let rows = frame.rows();
-        assert!(rows[..8].iter().all(|row| row.chars().skip(20).all(|c| c == ' ')), "nothing drawn beside the map");
+        assert!(rows[0].chars().skip(20).collect::<String>().starts_with("Tutki"), "beside the map is the verbs menu: {:?}", rows[0]);
+        assert!(rows[4..8].iter().all(|row| row.chars().skip(20).all(|c| c == ' ')), "and below its rows nothing");
         let (cx, cy) = app.view.camera[&0];
         assert!((0..=20).contains(&cx), "the camera has a place on the 40-wide cave: {cx}");
         // the map is drawn: the player shows where `cell_at` finds it
@@ -655,4 +656,129 @@ fn seat_2_moves_its_cursor_from_its_keyboard_part_on_seat_1s_turn() {
     assert!(app.view.hover.is_some(), "the hover shows the cursor moved last");
     press(&mut app, "x");
     assert_eq!(cursor_of(&app, 2), None);
+}
+
+// ---- the verbs menu (M 8.1) ----
+
+/// The screen cell of the docked menu's row `i`.
+fn verb_row(app: &App, i: usize) -> (usize, usize) {
+    let r = app.view.docked_rects["VERBS"];
+    (r.x + 1, r.y + i)
+}
+
+fn rclick() -> Binding {
+    Binding::mouse(termplate_core::keys::Mouse::RightClick)
+}
+
+fn robin(app: &App) -> (usize, rlml_core::rt::value::Pos) {
+    let e = app.r.w.s.entities_on(0).into_iter().find(|&e| app.r.w.s.get(e).kind == "ROBIN").unwrap();
+    (e, app.r.w.s.at(e).unwrap())
+}
+
+fn examined(app: &App) -> usize {
+    app.r.w.log.iter().filter(|l| l.key == "MESSAGE.EXAMINE").count()
+}
+
+#[test]
+fn the_verbs_menu_shows_the_turns_shortcuts() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let rows = screen(&mut app);
+    let row = |rows: &str, label: &str| rows.lines().find(|l| l.contains(label)).unwrap().trim_end().to_string();
+    assert!(row(&rows, "Odota").ends_with('.'), "seat 1 waits with `.`: {rows}");
+    assert!(row(&rows, "Vaihda").ends_with("tab"));
+    assert!(row(&rows, "Tutki").ends_with("Tutki"), "no key for EXAMINE");
+    press(&mut app, ".");
+    assert_eq!(app.r.awaiting(), Some(2));
+    let rows = screen(&mut app);
+    assert!(row(&rows, "Odota").ends_with('q'), "seat 2's turn: its key `q` (M 8.1)");
+}
+
+#[test]
+fn a_verb_without_targets_runs_at_once() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    app.draw();
+    let (x, y) = verb_row(&app, 2);
+    app.mouse_press(click(), x, y, ms(10)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(2), "Odota waited for seat 1");
+    assert!(app.verb.is_none());
+}
+
+#[test]
+fn a_verb_takes_its_target_from_a_click() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    app.draw();
+    let (x, y) = verb_row(&app, 0);
+    app.mouse_press(click(), x, y, ms(10)).unwrap();
+    assert_eq!(app.verb.as_ref().map(|v| v.command.as_str()), Some("EXAMINE"));
+    // the sentence names the target under the pointer
+    let (_, rp) = robin(&app);
+    let (sx, sy) = screen_of(&app, rp.x, rp.y);
+    app.pointer_at(sx, sy);
+    app.draw();
+    assert_eq!(app.view.sentence.as_deref(), Some("Tutki Robin"));
+    assert_eq!(app.view.docked["VERBS"].chosen, Some(0), "the chosen verb is marked");
+    // a wall fits no target: the hover says so, and no time goes
+    let (wx, wy) = screen_of(&app, 0, 0);
+    app.mouse_press(click(), wx, wy, ms(20)).unwrap();
+    app.draw();
+    assert_eq!(app.view.hover.as_deref(), Some("Siinä ei ole mitään tutkittavaa."));
+    assert!(app.verb.is_some());
+    // Robin fits
+    app.mouse_press(click(), sx, sy, ms(30)).unwrap();
+    assert_eq!(examined(&app), 1);
+    assert!(app.verb.is_none(), "the command ran");
+    assert_eq!(app.r.awaiting(), Some(1), "EXAMINE is free: still seat 1's turn");
+    assert_eq!(app.r.w.text("fi", &app.r.w.log.last().unwrap().key, &app.r.w.log.last().unwrap().args), "Robin: Robin, uskollinen seuralainen.");
+}
+
+#[test]
+fn a_right_click_drops_the_verb() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    app.draw();
+    let (x, y) = verb_row(&app, 0);
+    app.mouse_press(click(), x, y, ms(10)).unwrap();
+    assert!(app.verb.is_some());
+    app.mouse_press(rclick(), x, y, ms(20)).unwrap();
+    assert!(app.verb.is_none());
+}
+
+#[test]
+fn the_verbs_menu_from_the_keys() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    press(&mut app, "v");
+    app.draw();
+    assert_eq!(app.view.docked["VERBS"].focused, Some(0), "`focus VERBS` gives the menu the keys");
+    press(&mut app, "j k enter");
+    assert_eq!(app.verb.as_ref().map(|v| v.command.as_str()), Some("EXAMINE"));
+    assert!(app.focus.is_none(), "choosing gives the keys back");
+    let hero = seat_at(&app, 1);
+    assert_eq!(cursor_of(&app, 1), Some(hero), "the look cursor chooses the target");
+    let (_, rp) = robin(&app);
+    let step = if rp.x > hero.0 { "l" } else { "h" };
+    press(&mut app, step);
+    assert_eq!(cursor_of(&app, 1), Some((rp.x, rp.y)));
+    press(&mut app, "enter");
+    assert_eq!(examined(&app), 1);
+    assert_eq!(cursor_of(&app, 1), None, "the look cursor closed with the verb");
+    // `back` in the focused menu gives the keys back without a verb
+    press(&mut app, "v backspace");
+    assert!(app.focus.is_none() && app.verb.is_none());
+}
+
+#[test]
+fn the_verb_belongs_to_the_turn() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    app.draw();
+    let (x, y) = verb_row(&app, 0);
+    app.mouse_press(click(), x, y, ms(10)).unwrap();
+    assert!(app.verb.is_some());
+    press(&mut app, ".");
+    app.draw();
+    assert!(app.verb.is_none(), "seat 1's turn ended");
 }

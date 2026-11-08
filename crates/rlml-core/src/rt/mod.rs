@@ -8,6 +8,7 @@ pub mod run;
 pub mod senses;
 pub mod state;
 pub mod travel;
+pub mod verbs;
 pub mod value;
 pub mod view;
 pub mod world;

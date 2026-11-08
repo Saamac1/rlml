@@ -9,20 +9,30 @@
 layout MAIN
 
 ```
-m
-h
-l
+mv
+hh
+ee
+ll
 ```
 
 legend:
 - m map size 20x8
+- v menu VERBS size.width 14
 - h hover size.height 1
+- e sentence size.height 1
 - l LOG size.height 3
 
 log LOG history 50
 - STD.MESSAGE.COMBAT
 - STD.MESSAGE.SENSE
 - MESSAGE.WALL
+- MESSAGE.EXAMINE
+
+menu VERBS verbs
+- EXAMINE
+- STRIKE_AT
+- WAIT STD.WAIT
+- SWITCH STD.SWITCH
 
 menu PAUSE
 - RESUME
@@ -50,6 +60,7 @@ keys GAME
 - SWITCH.PREV shift+tab
 - follow f
 - cursor c
+- focus VERBS v
 - pass z
 
 keys GAME keyboard 2
@@ -60,6 +71,7 @@ keys GAME keyboard 2
 - WAIT q
 - follow r
 - cursor x
+- focus VERBS g
 - join e
 
 pad GAME deadzone 40%
@@ -72,6 +84,7 @@ pad GAME deadzone 40%
 - SWITCH.PREV lb
 - follow north
 - cursor select
+- focus VERBS lt
 - pass west
 
 keys LOOK

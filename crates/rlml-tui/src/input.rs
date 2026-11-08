@@ -27,6 +27,8 @@ pub enum Action {
     Open { menu: String, stack: bool },
     /// `toggle PANEL` (D 11.3).
     Toggle(String),
+    /// `focus MENU`: the keys go to a docked menu (D 11.3).
+    Focus(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -214,6 +216,7 @@ impl Keys {
                     let (action, n) = match row.key() {
                         "open" => (Action::Open { menu: row.word(1).and_then(|w| m.resolve(row.namespace.as_deref(), w).ok()).map(|d| d.full.clone()).unwrap_or_default(), stack: row.word(2) == Some("stack") }, if row.word(2) == Some("stack") { 3 } else { 2 }),
                         "toggle" => (Action::Toggle(row.word(1).unwrap_or("").to_string()), 2),
+                        "focus" => (Action::Focus(row.word(1).and_then(|w| m.resolve(row.namespace.as_deref(), w).ok()).map(|d| d.full.clone()).unwrap_or_default()), 2),
                         w if names::is_vocabulary(w) => (Action::Engine(w.to_string()), 1),
                         w => match m.resolve_kind(row.namespace.as_deref(), w, &[Kind::Command]) {
                             Ok(d) => (Action::Command(d.full.clone()), 1),
@@ -317,6 +320,24 @@ impl Keys {
         self.contexts.get("ALWAYS").is_some_and(|c| c.find(device, press).is_some())
     }
 
+    /// The first key or button that runs `command` from `device` in a
+    /// context stack, as written in a `keys` or `pad` row (M 7.3: a verb's
+    /// shortcut). `None` when it is not bound.
+    pub fn shortcut(&self, stack: &[String], device: Device, command: &str) -> Option<String> {
+        let want = Action::Command(command.to_string());
+        for name in stack.iter().rev() {
+            let Some(c) = self.contexts.get(name) else { continue };
+            let found = match device {
+                Device::Keyboard(p) => c.parts.get(&p).unwrap_or(&c.rows).iter().find(|(_, a)| *a == want).map(|(b, _)| b.name()),
+                Device::Pad(_) => c.pad.iter().find(|(_, a)| *a == want).map(|(p, _)| p.held.iter().cloned().chain([p.button.clone()]).collect::<Vec<_>>().join("+")),
+            };
+            if found.is_some() {
+                return found;
+            }
+        }
+        None
+    }
+
     /// The action of a key in a context stack, for the key's own keyboard
     /// part.
     pub fn lookup(&self, stack: &[String], b: &Binding) -> Option<&Action> {
@@ -333,6 +354,7 @@ pub enum Effect {
     /// closes the menu it opened (M 8).
     Open { menu: String, stack: bool, always: bool },
     Toggle(String),
+    Focus(String),
     /// The repeat count is being typed (D 11.3).
     Counting(String),
     /// The press is not bound here.
@@ -410,6 +432,7 @@ impl Input {
             Action::Engine(e) => Effect::Engine(e),
             Action::Open { menu, stack } => Effect::Open { menu, stack, always: self.keys.is_always(device, press) },
             Action::Toggle(p) => Effect::Toggle(p),
+            Action::Focus(m) => Effect::Focus(m),
         }
     }
 }
