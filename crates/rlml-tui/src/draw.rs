@@ -45,6 +45,8 @@ pub struct View {
     /// The `hover` area's text: what is under the pointer (M 8.1); the app
     /// sets it.
     pub hover: Option<String>,
+    /// Cells to mark on the map: open cursors and orders' targets (M 7.1).
+    pub cursors: Vec<rlml_core::rt::value::Pos>,
 }
 
 /// A style color for the terminal: 24-bit when the terminal says it takes
@@ -310,6 +312,18 @@ impl View {
                 let (mx, my) = (x0 + sx as i32, y0 + sy as i32);
                 if let Some(look) = (my >= 0 && mx >= 0).then(|| cells.get(my as usize).and_then(|row| row.get(mx as usize))).flatten() {
                     put_look(frame, r.x + sx, r.y + sy, look);
+                }
+            }
+        }
+        // cursors and orders: underlined (M 7.1)
+        for p in self.cursors.iter().filter(|p| p.map == map) {
+            let (sx, sy) = (p.x - x0, p.y - y0);
+            if sx >= 0 && sy >= 0 && (sx as usize) < r.w && (sy as usize) < r.h {
+                let i = (r.y + sy as usize) * frame.width + r.x + sx as usize;
+                if let Some(cell) = frame.cells.get_mut(i) {
+                    let mut style = cell.style.clone().unwrap_or_default();
+                    style.attrs.underline = true;
+                    cell.style = Some(style);
                 }
             }
         }

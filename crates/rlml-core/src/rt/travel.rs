@@ -153,6 +153,11 @@ impl<'m> Runner<'m> {
         self.travels.contains_key(&n) || self.orders.contains_key(&n)
     }
 
+    /// Cancels seat `n`'s order, if it has one (`back`, M 8.1).
+    pub fn cancel_order(&mut self, n: SeatId) -> bool {
+        self.orders.remove(&n).is_some()
+    }
+
     /// Ends seat `n`'s travel and order: any press does (M 8.1).
     pub fn stop_travel(&mut self, n: SeatId) {
         self.travels.remove(&n);
