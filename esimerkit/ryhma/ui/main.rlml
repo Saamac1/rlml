@@ -60,6 +60,7 @@ keys GAME
 - SWITCH.PREV shift+tab
 - follow f
 - cursor c
+- EXAMINE i
 - focus VERBS v
 - pass z
 
@@ -105,3 +106,18 @@ keys LOOK keyboard 2
 pad LOOK
 - follow north
 - verbs west
+
+keys AIM keyboard 2
+- cursor.north w
+- cursor.south s
+- cursor.west a
+- cursor.east d
+- confirm q
+- back x
+
+keys DIRECTION keyboard 2
+- cursor.north w
+- cursor.south s
+- cursor.west a
+- cursor.east d
+- back x

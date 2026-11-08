@@ -382,6 +382,8 @@ fn a_pad_takes_the_first_seat_without_a_device() {
         let i = ui.find("keys LOOK keyboard 2").unwrap();
         let j = ui[i..].find("\npad LOOK").unwrap() + i;
         ui.replace_range(i..j, "");
+        let i = ui.find("keys AIM keyboard 2").unwrap();
+        ui.truncate(i);
         f
     };
     let m = model(&f);
@@ -687,7 +689,8 @@ fn the_verbs_menu_shows_the_turns_shortcuts() {
     let row = |rows: &str, label: &str| rows.lines().find(|l| l.contains(label)).unwrap().trim_end().to_string();
     assert!(row(&rows, "Odota").ends_with('.'), "seat 1 waits with `.`: {rows}");
     assert!(row(&rows, "Vaihda").ends_with("tab"));
-    assert!(row(&rows, "Tutki").ends_with("Tutki"), "no key for EXAMINE");
+    assert!(row(&rows, "Tutki").ends_with('i'), "EXAMINE on `i`");
+    assert!(row(&rows, "Lyö").ends_with("Lyö"), "no key for STRIKE_AT");
     press(&mut app, ".");
     assert_eq!(app.r.awaiting(), Some(2));
     let rows = screen(&mut app);
@@ -754,17 +757,18 @@ fn the_verbs_menu_from_the_keys() {
     app.draw();
     assert_eq!(app.view.docked["VERBS"].focused, Some(0), "`focus VERBS` gives the menu the keys");
     press(&mut app, "j k enter");
-    assert_eq!(app.verb.as_ref().map(|v| v.command.as_str()), Some("EXAMINE"));
     assert!(app.focus.is_none(), "choosing gives the keys back");
-    let hero = seat_at(&app, 1);
-    assert_eq!(cursor_of(&app, 1), Some(hero), "the look cursor chooses the target");
-    let (_, rp) = robin(&app);
-    let step = if rp.x > hero.0 { "l" } else { "h" };
-    press(&mut app, step);
-    assert_eq!(cursor_of(&app, 1), Some((rp.x, rp.y)));
-    press(&mut app, "enter");
-    assert_eq!(examined(&app), 1);
-    assert_eq!(cursor_of(&app, 1), None, "the look cursor closed with the verb");
+    // from the keys, EXAMINE asks its target in a list (M 8)
+    assert!(app.menus.layers.last().is_some_and(|l| l.menu.full == rlml_tui::app::ASK_MENU), "the list of what to examine");
+    let (rob, _) = robin(&app);
+    let i = match &app.asking.as_ref().unwrap().ui {
+        rlml_tui::app::AskUi::List { choices, .. } => choices.iter().position(|v| *v == rlml_core::rt::value::Value::Entity(rob)).unwrap(),
+        other => panic!("{other:?}"),
+    };
+    let letter = (b'a' + i as u8) as char;
+    press(&mut app, &letter.to_string());
+    assert_eq!(examined(&app), 1, "Robin's letter chose Robin");
+    assert!(app.asking.is_none() && !app.menus.is_open());
     // `back` in the focused menu gives the keys back without a verb
     press(&mut app, "v backspace");
     assert!(app.focus.is_none() && app.verb.is_none());
@@ -799,7 +803,7 @@ fn a_right_click_opens_the_verbs_that_fit_the_cell() {
     app.mouse_press(rclick(), sx, sy, ms(10)).unwrap();
     assert!(coin_open(&app), "the coin opened");
     let labels: Vec<String> = app.menus.layers.last().unwrap().menu.items.iter().map(|it| it.label.clone().unwrap()).collect();
-    assert_eq!(labels, ["Tutki"], "EXAMINE fits Robin; Robin is no foe, so no Lyö");
+    assert_eq!(labels, ["Tutki  i"], "EXAMINE fits Robin, with its key; Robin is no foe, so no Lyö");
     // the coin opens next to the cell
     app.draw();
     let w = app.menu_drawn_window().unwrap();
@@ -855,4 +859,116 @@ fn menus_take_the_mouse() {
     let w = app.menu_drawn_window().unwrap();
     app.mouse_press(click(), w.x + 2, w.y + 1, ms(20)).unwrap();
     assert!(!app.menus.is_open(), "`resume`");
+}
+
+// ---- asking the parameters (M 8) ----
+
+/// The group example with commands that ask, bound to keys of part 1:
+/// `i` EXAMINE (from), `p` PEEK (aim 3), `o` SHOVE (a direction), `u`
+/// POINT (aim at the other members).
+fn ryhma_asking(targeting: &str) -> MemFiles {
+    let mut f = ryhma_walking();
+    let g = f.game.get_mut("game.rlml").unwrap();
+    g.push_str(
+        "\n```roguescript\ncommand PEEK(to: pos aim 3) cost 0:\n    log(MESSAGE.EXAMINE, WHAT: actor)\n\ncommand SHOVE(dir: dir ask) cost 0:\n    log(MESSAGE.EXAMINE, WHAT: actor)\n\ncommand POINT(to: pos aim 9 at players where it != actor) cost 0:\n    log(MESSAGE.EXAMINE, WHAT: actor)\n```\n",
+    );
+    if !targeting.is_empty() {
+        *g = g.replace("- round 250ms\n", &format!("- round 250ms\n- targeting {targeting}\n"));
+    }
+    let ui = f.game.get_mut("ui/main.rlml").unwrap();
+    *ui = ui.replace("- cursor c\n", "- cursor c\n- PEEK p\n- SHOVE o\n- POINT u\n");
+    f
+}
+
+fn asked(app: &App) -> Option<String> {
+    app.asking.as_ref().map(|a| match &a.ui {
+        rlml_tui::app::AskUi::None => "none".to_string(),
+        rlml_tui::app::AskUi::List { .. } => "list".to_string(),
+        rlml_tui::app::AskUi::Aim { .. } => "aim".to_string(),
+        rlml_tui::app::AskUi::Direction { .. } => "direction".to_string(),
+    })
+}
+
+fn aim_at(app: &App) -> Option<(i32, i32)> {
+    match app.asking.as_ref().map(|a| &a.ui) {
+        Some(rlml_tui::app::AskUi::Aim { pos, .. }) => Some((pos.x, pos.y)),
+        _ => None,
+    }
+}
+
+#[test]
+fn a_key_bound_command_asks_its_from_parameter() {
+    let m = model(&ryhma_asking(""));
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    press(&mut app, "i");
+    assert_eq!(asked(&app).as_deref(), Some("list"), "a list of what to examine, no runtime error");
+    press(&mut app, "backspace");
+    assert_eq!(asked(&app), None, "`back` drops the command");
+    assert!(!app.menus.is_open());
+    assert_eq!((app.r.awaiting(), app.r.w.s.game.time, examined(&app)), (Some(1), 0, 0), "and takes no time");
+}
+
+#[test]
+fn the_aiming_cursor_stays_in_range() {
+    let m = model(&ryhma_asking(""));
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let (x, y) = seat_at(&app, 1);
+    press(&mut app, "p");
+    assert_eq!(aim_at(&app), Some((x, y)), "no candidates: the cursor starts at the player");
+    press(&mut app, "j j j j");
+    assert!(aim_at(&app).is_some_and(|(_, ay)| ay - y <= 3), "`aim 3`: {:?}", aim_at(&app));
+    app.draw();
+    assert!(app.view.cursors.iter().any(|p| Some((p.x, p.y)) == aim_at(&app)), "the aim is marked");
+    press(&mut app, "enter");
+    assert_eq!((asked(&app), examined(&app)), (None, 1));
+}
+
+#[test]
+fn a_direction_is_one_key() {
+    let m = model(&ryhma_asking(""));
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    press(&mut app, "o");
+    assert_eq!(asked(&app).as_deref(), Some("direction"));
+    press(&mut app, "l");
+    assert_eq!((asked(&app), examined(&app)), (None, 1));
+}
+
+#[test]
+fn targeting_auto_and_list() {
+    let m = model(&ryhma_asking("auto"));
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    press(&mut app, "u");
+    assert_eq!((asked(&app), examined(&app)), (None, 1), "`auto` takes the nearest candidate without asking");
+    let m = model(&ryhma_asking("list"));
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    press(&mut app, "u");
+    assert_eq!(asked(&app).as_deref(), Some("list"), "`list` shows the candidates");
+    press(&mut app, "enter");
+    assert_eq!((asked(&app), examined(&app)), (None, 1));
+    // `cursor` starts at the nearest candidate
+    let m = model(&ryhma_asking("cursor"));
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let (_, rp) = robin(&app);
+    press(&mut app, "u");
+    assert_eq!(aim_at(&app), Some((rp.x, rp.y)), "Robin is the nearest other member");
+}
+
+#[test]
+fn the_mouse_aims_and_gives_directions() {
+    let m = model(&ryhma_asking(""));
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    app.draw();
+    let (x, y) = seat_at(&app, 1);
+    press(&mut app, "p");
+    let (sx, sy) = screen_of(&app, x, y + 2);
+    app.pointer_at(sx, sy);
+    assert_eq!(aim_at(&app), Some((x, y + 2)), "the pointer aims");
+    app.mouse_press(click(), sx, sy, ms(10)).unwrap();
+    assert_eq!((asked(&app), examined(&app)), (None, 1));
+    press(&mut app, "o");
+    app.mouse_press(rclick(), sx, sy, ms(20)).unwrap();
+    assert_eq!(asked(&app), None, "rclick goes back");
+    press(&mut app, "o");
+    app.mouse_press(click(), sx, sy, ms(30)).unwrap();
+    assert_eq!((asked(&app), examined(&app)), (None, 2), "a click gives the direction towards it");
 }

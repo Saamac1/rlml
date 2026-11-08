@@ -184,3 +184,28 @@ fn the_coin_offers_the_verbs_a_cell_fits() {
     assert_eq!(names(&w.coin(p, &all, Target::Cell(kp)).unwrap()), ["SPOT", "UNLOCK", "TOSS", "PUSH"]);
     assert!(w.is_noverb("SPOT") && !w.is_noverb("UNLOCK"), "`noverb` (RS 7.1)");
 }
+
+#[test]
+fn the_parameters_are_asked_in_order() {
+    use rlml_core::rt::verbs::Ask;
+    let src = ROOM.replace(
+        "command SPOT(to: pos aim 3)",
+        "command DIG(times: number count) cost 0:\n    return\n\ncommand NOTHING(x: entity from entities(in: near(actor.at, 9)) where it has HP) cost 0:\n    return\n\ncommand SPOT(to: pos aim 3)",
+    );
+    let m = model(&src);
+    let mut w = world(&m);
+    let p = w.s.player.unwrap();
+    let (key, _) = kind_at(&w, "KEYCARD");
+    let (gate, _) = kind_at(&w, "GATE");
+    assert_eq!(w.next_ask(p, "UNLOCK", &[]).unwrap(), Ask::From { name: "key".into(), members: vec![key] });
+    let given = [(Some("key".to_string()), Value::Entity(key))];
+    assert_eq!(w.next_ask(p, "UNLOCK", &given).unwrap(), Ask::From { name: "door".into(), members: vec![gate] });
+    let given = [(None, Value::Entity(key)), (None, Value::Entity(gate))];
+    assert_eq!(w.next_ask(p, "UNLOCK", &given).unwrap(), Ask::Ready, "by position too");
+    let given = [(Some("item".to_string()), Value::Entity(key))];
+    assert_eq!(w.next_ask(p, "TOSS", &given).unwrap(), Ask::Aim { name: "to".into(), range: 2, candidates: vec![] }, "the range from the item");
+    assert_eq!(w.next_ask(p, "PUSH", &[]).unwrap(), Ask::Direction { name: "dir".into(), pos: false });
+    assert_eq!(w.next_ask(p, "DIG", &[]).unwrap(), Ask::Given("times".into(), Value::Number(1)), "`count` is 1 without the repeat count");
+    assert_eq!(w.next_ask(p, "NOTHING", &[]).unwrap(), Ask::Fails, "an empty `from` fails before asking");
+    assert_eq!(w.next_ask(p, "STD.WAIT", &[]).unwrap(), Ask::Ready);
+}

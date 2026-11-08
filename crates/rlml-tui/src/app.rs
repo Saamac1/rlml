@@ -19,7 +19,7 @@ use rlml_core::model::Model;
 use rlml_core::rt::run::{Runner, Status};
 use rlml_core::rt::state::SeatId;
 use rlml_core::rt::travel::OrderGoal;
-use rlml_core::rt::verbs::Target;
+use rlml_core::rt::verbs::{Ask, Target};
 use rlml_core::rt::value::{CommandValue, Value};
 use rlml_core::rt::world::{RtResult, World};
 use termplate_core::frame::Frame;
@@ -141,6 +141,35 @@ pub struct App<'m> {
     /// The open verb coin's verbs (M 8.1), and where the top menu was drawn.
     coin: Option<Coin>,
     menu_drawn: crate::menu::Drawn,
+    /// The player's command whose parameters are being asked (M 8).
+    pub asking: Option<Asking>,
+    /// `settings - targeting cursor|list|auto` (D 3.2), `cursor` by default.
+    targeting: String,
+}
+
+/// The asked parameters' list menu as a layer.
+pub const ASK_MENU: &str = "<ask>";
+
+/// A player's command being asked for its parameters (M 8): presentation,
+/// not state; the command runs when all are given.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Asking {
+    pub seat: SeatId,
+    pub command: String,
+    pub args: Vec<(Option<String>, Value)>,
+    pub ui: AskUi,
+}
+
+/// How the parameter is being asked.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AskUi {
+    None,
+    /// A list menu (`from`, or `aim` with `targeting list`): the choices.
+    List { name: String, choices: Vec<Value> },
+    /// The aiming cursor, context `AIM`.
+    Aim { name: String, pos: rlml_core::rt::value::Pos, range: i64, candidates: Vec<rlml_core::rt::value::Pos> },
+    /// A direction, context `DIRECTION`.
+    Direction { name: String, pos: bool },
 }
 
 /// The verb coin's name as a menu layer.
@@ -235,6 +264,8 @@ impl<'m> App<'m> {
             verb_hint: None,
             coin: None,
             menu_drawn: Default::default(),
+            asking: None,
+            targeting: setting("targeting").unwrap_or_else(|| "cursor".into()),
         };
         match app.title() {
             Some(title) => {
@@ -441,6 +472,27 @@ impl<'m> App<'m> {
         // a seat's own cursor goes before the turn's routing: it works on
         // other seats' turns too (M 8.2)
         let travelling_seat = self.r.awaiting().filter(|&n| self.players_turn() && self.r.travelling(n) && self.drives(device, n));
+        if !always && !self.menus.is_open() && self.ask_press(device, &press)? {
+            return Ok(());
+        }
+        // a list's letter chooses its row (M 7.5)
+        if !always
+            && self.menus.layers.last().is_some_and(|l| l.menu.full == ASK_MENU)
+            // in a menu the keyboard's parts count as one (M 8.2)
+            && self.asking.as_ref().is_some_and(|a| self.drives(device, a.seat) || matches!((device, self.menu_owner), (Device::Keyboard(_), Some(Device::Keyboard(_)))))
+            && let Press::Key(Binding::Key(KeyCode::Char(c), _)) = &press
+            && let Some(AskUi::List { choices, .. }) = self.asking.as_ref().map(|a| &a.ui)
+        {
+            let letters = self.letters(choices);
+            if let Some(i) = letters.iter().position(|l| l == c) {
+                if let Some(top) = self.menus.top()
+                    && let Some(r) = top.rows.iter().position(|r| r.item == i)
+                {
+                    top.cursor = r;
+                }
+                return self.choose(now);
+            }
+        }
         if !always && travelling_seat.is_none() && !self.menus.is_open() && self.focus_press(device, &press, now)? {
             return Ok(());
         }
@@ -533,6 +585,7 @@ impl<'m> App<'m> {
                 self.advance(1)?;
             }
             "pass" => {}
+            "back" if self.menus.layers.last().is_some_and(|l| l.menu.full == ASK_MENU) => self.cancel_ask(),
             "back" => self.menus.back(),
             "close" => self.menus.close(),
             "resume" => self.menus.close(),
@@ -581,6 +634,21 @@ impl<'m> App<'m> {
         if self.menus.layers.last().is_some_and(|l| l.menu.full == COIN_MENU) {
             return self.choose_coin(now);
         }
+        if self.menus.layers.last().is_some_and(|l| l.menu.full == ASK_MENU) {
+            let i = self.menus.layers.last().and_then(|l| l.rows.get(l.cursor)).map(|r| r.item);
+            self.menus.layers.pop();
+            let choice = match (&self.asking, i) {
+                (Some(Asking { ui: AskUi::List { choices, .. }, .. }), Some(i)) => choices.get(i).cloned(),
+                _ => None,
+            };
+            return match choice {
+                Some(v) => self.answer(v),
+                None => {
+                    self.cancel_ask();
+                    Ok(())
+                }
+            };
+        }
         let Some(item) = self.menus.top().and_then(|l| l.chosen().cloned()) else { return Ok(()) };
         match item.action {
             ItemAction::Open { menu, stack } => self.open(&menu, stack),
@@ -602,8 +670,205 @@ impl<'m> App<'m> {
         if !self.players_turn() {
             return Ok(());
         }
-        self.r.player(&cmd)?;
-        self.advance(0)
+        let Some(n) = self.r.awaiting() else { return Ok(()) };
+        self.asking = Some(Asking { seat: n, command: cmd.name, args: cmd.args, ui: AskUi::None });
+        self.ask_next()
+    }
+
+    /// Asks the command's next parameter, or runs it when all are given
+    /// (M 8): `from` in a list menu, `aim` by `targeting`, `ask` as a
+    /// direction. A command that fails before asking takes no time.
+    fn ask_next(&mut self) -> RtResult<()> {
+        loop {
+            let (Some(a), Some(actor)) = (self.asking.clone(), self.r.w.s.player) else { return Ok(()) };
+            if !self.players_turn() || self.r.awaiting() != Some(a.seat) {
+                self.asking = None;
+                return Ok(());
+            }
+            match self.r.w.next_ask(actor, &a.command, &a.args)? {
+                Ask::Ready => {
+                    self.asking = None;
+                    self.r.player(&CommandValue { name: a.command, args: a.args })?;
+                    return self.advance(0);
+                }
+                Ask::Fails => {
+                    self.asking = None;
+                    return Ok(());
+                }
+                Ask::Given(name, v) => self.asking.as_mut().unwrap().args.push((Some(name), v)),
+                Ask::From { name, members } => {
+                    let choices = members.into_iter().map(Value::Entity).collect();
+                    return self.ask_list(name, choices);
+                }
+                Ask::Aim { name, range, candidates } => {
+                    if self.targeting == "auto" && !candidates.is_empty() {
+                        self.asking.as_mut().unwrap().args.push((Some(name), Value::Pos(candidates[0])));
+                        continue;
+                    }
+                    if self.targeting == "list" && !candidates.is_empty() {
+                        return self.ask_list(name, candidates.into_iter().map(Value::Pos).collect());
+                    }
+                    let pos = candidates.first().copied().or_else(|| self.r.w.s.at(actor)).unwrap();
+                    self.asking.as_mut().unwrap().ui = AskUi::Aim { name, pos, range, candidates };
+                    return Ok(());
+                }
+                Ask::Direction { name, pos } => {
+                    self.asking.as_mut().unwrap().ui = AskUi::Direction { name, pos };
+                    return Ok(());
+                }
+                Ask::Field { .. } => {
+                    self.asking = None;
+                    self.note = Some("number and text fields are not supported yet".into());
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    /// The asked parameter's list menu (M 7.5): entities by name and their
+    /// letters, cells by what is seen there.
+    fn ask_list(&mut self, name: String, choices: Vec<Value>) -> RtResult<()> {
+        let letters = self.letters(&choices);
+        let items = choices
+            .iter()
+            .zip(&letters)
+            .enumerate()
+            .map(|(i, (v, l))| {
+                let text = match v {
+                    Value::Pos(p) => self.r.w.hover_text(&self.lang, *p).unwrap_or_else(|| format!("{},{}", p.x, p.y)),
+                    v => self.r.w.name_text(&self.lang, v),
+                };
+                Item { key: i.to_string(), action: ItemAction::Engine("confirm".into()), hide: None, disabled: None, label: Some(format!("{l}) {text}")) }
+            })
+            .collect();
+        let menu = Menu { full: ASK_MENU.into(), ns: None, context: "MENU".into(), is_final: false, width: None, height: None, items, verbs: false };
+        let layer = menu::Layer::open(&mut self.r.w, menu);
+        self.menus.layers.push(layer);
+        let seat = self.asking.as_ref().map(|a| a.seat).unwrap_or(1);
+        self.menu_owner = Some(self.seat_devices.get(&seat).copied().unwrap_or(Device::Keyboard(1)));
+        if let Some(a) = self.asking.as_mut() {
+            a.ui = AskUi::List { name, choices };
+        }
+        Ok(())
+    }
+
+    /// A list's letters (M 7.5): the members' slot letters when all are in
+    /// the same collection, else a–z as shown.
+    fn letters(&self, choices: &[Value]) -> Vec<char> {
+        use rlml_core::rt::state::Place;
+        let places: Vec<Option<(usize, String, String, usize)>> = choices
+            .iter()
+            .map(|v| match v.as_entity().map(|e| &self.r.w.s.get(e).place) {
+                Some(Place::In { holder, component, field, slot }) => Some((*holder, component.clone(), field.clone(), *slot)),
+                _ => None,
+            })
+            .collect();
+        let same = places.iter().all(|p| p.is_some()) && places.windows(2).all(|w| w[0].as_ref().map(|p| (&p.0, &p.1, &p.2)) == w[1].as_ref().map(|p| (&p.0, &p.1, &p.2)));
+        if same && !places.is_empty() {
+            return places.iter().map(|p| (b'a' + (p.as_ref().unwrap().3 % 26) as u8) as char).collect();
+        }
+        (0..choices.len()).map(|i| (b'a' + (i % 26) as u8) as char).collect()
+    }
+
+    /// The asked parameter's answer: the next one is asked.
+    fn answer(&mut self, v: Value) -> RtResult<()> {
+        let Some(a) = self.asking.as_mut() else { return Ok(()) };
+        let name = match std::mem::replace(&mut a.ui, AskUi::None) {
+            AskUi::List { name, .. } | AskUi::Aim { name, .. } | AskUi::Direction { name, .. } => name,
+            AskUi::None => return Ok(()),
+        };
+        a.args.push((Some(name), v));
+        self.ask_next()
+    }
+
+    /// `back` while asking: the command goes without taking time (M 8).
+    fn cancel_ask(&mut self) {
+        self.asking = None;
+        if self.menus.layers.last().is_some_and(|l| l.menu.full == ASK_MENU) {
+            self.menus.layers.pop();
+        }
+    }
+
+    /// A press while aiming or choosing a direction (M 8): the `AIM` or
+    /// `DIRECTION` context of the asking seat's device takes it.
+    fn ask_press(&mut self, device: Device, press: &Press) -> RtResult<bool> {
+        let Some(a) = self.asking.clone() else { return Ok(false) };
+        if !self.drives(device, a.seat) {
+            return Ok(false);
+        }
+        let ctx = match a.ui {
+            AskUi::Aim { .. } => "AIM",
+            AskUi::Direction { .. } => "DIRECTION",
+            _ => return Ok(false),
+        };
+        let Some(Action::Engine(act)) = self.input.keys.lookup_on(&[ctx.to_string()], device, press).cloned() else { return Ok(true) };
+        self.ask_action(&act)?;
+        Ok(true)
+    }
+
+    fn ask_action(&mut self, act: &str) -> RtResult<()> {
+        let Some(a) = self.asking.clone() else { return Ok(()) };
+        let Some(at) = self.r.w.s.player.and_then(|p| self.r.w.s.at(p)) else { return Ok(()) };
+        match (&a.ui, act) {
+            (_, "back") => self.cancel_ask(),
+            (AskUi::Aim { pos, range, candidates, name }, _) => match act {
+                "confirm" => self.answer(Value::Pos(*pos))?,
+                "next" | "prev" if !candidates.is_empty() => {
+                    let i = candidates.iter().position(|c| c == pos);
+                    let k = match (act, i) {
+                        ("next", Some(i)) => (i + 1) % candidates.len(),
+                        ("prev", Some(i)) => (i + candidates.len() - 1) % candidates.len(),
+                        ("prev", None) => candidates.len() - 1,
+                        _ => 0,
+                    };
+                    self.asking.as_mut().unwrap().ui = AskUi::Aim { name: name.clone(), pos: candidates[k], range: *range, candidates: candidates.clone() };
+                }
+                _ => {
+                    if let Some(d) = cursor::dir_of(act) {
+                        let p = cursor::moved(&self.r.w, *pos, d);
+                        // the aiming cursor stays in range (M 8)
+                        if at.distance(p) <= *range {
+                            self.asking.as_mut().unwrap().ui = AskUi::Aim { name: name.clone(), pos: p, range: *range, candidates: candidates.clone() };
+                        }
+                    }
+                }
+            },
+            (AskUi::Direction { pos, .. }, _) => {
+                if let Some(d) = cursor::dir_of(act) {
+                    let pos = *pos;
+                    self.answer(if pos { Value::Pos(at.step(d)) } else { Value::Dir(d) })?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// A mouse press while asking (M 8.1): a click aims at its cell or
+    /// gives the direction towards it; `rclick` goes back.
+    fn ask_mouse(&mut self, b: &Binding) -> RtResult<bool> {
+        let Some(a) = self.asking.clone() else { return Ok(false) };
+        if !matches!(a.ui, AskUi::Aim { .. } | AskUi::Direction { .. }) {
+            return Ok(false);
+        }
+        if *b == Binding::mouse(termplate_core::keys::Mouse::RightClick) {
+            self.cancel_ask();
+            return Ok(true);
+        }
+        if *b != Binding::mouse(termplate_core::keys::Mouse::Click) {
+            return Ok(true);
+        }
+        let (Some(cell), Some(at)) = (self.pointer_cell(), self.r.w.s.player.and_then(|p| self.r.w.s.at(p))) else { return Ok(true) };
+        match a.ui {
+            AskUi::Aim { range, .. } if at.distance(cell) <= range => self.answer(Value::Pos(cell))?,
+            AskUi::Direction { pos, .. } => {
+                if let Some(d) = rlml_core::rt::verbs::toward(at, cell) {
+                    self.answer(if pos { Value::Pos(at.step(d)) } else { Value::Dir(d) })?;
+                }
+            }
+            _ => {}
+        }
+        Ok(true)
     }
 
     /// The clock at `now`: rounds without the player's turn and `idle`.
@@ -696,6 +961,14 @@ impl<'m> App<'m> {
             {
                 top.cursor = i;
             }
+            return;
+        }
+        // the pointer aims, in range (M 8.1)
+        if let (Some(cell), Some(at)) = (self.pointer_cell(), self.r.w.s.player.and_then(|p| self.r.w.s.at(p)))
+            && let Some(Asking { ui: AskUi::Aim { pos, range, .. }, .. }) = self.asking.as_mut()
+            && at.distance(cell) <= *range
+        {
+            *pos = cell;
             return;
         }
         // with the awaited seat's cursor open, the pointer is that cursor (M 8.1)
@@ -915,10 +1188,11 @@ impl<'m> App<'m> {
                 .filter(|d| d.verbs)
                 .find_map(|d| d.items.iter().position(|it| it.action == ItemAction::Command(command.clone())).map(|k| (d.full.clone(), k)))
                 .unwrap_or_default();
-            self.verb = Some(Verb { seat: coin.seat, command, menu, item, filled });
-            if coin.keys && !self.cursors.contains_key(&coin.seat) {
-                self.open_cursor(coin.seat, false);
+            if coin.keys {
+                let args = filled.into_iter().map(|(n, v)| (Some(n), v)).collect();
+                return self.command(CommandValue { name: command, args });
             }
+            self.verb = Some(Verb { seat: coin.seat, command, menu, item, filled });
             return Ok(());
         }
         let _ = now;
@@ -983,10 +1257,12 @@ impl<'m> App<'m> {
             self.verb = None;
             return self.command(CommandValue { name: command, args: vec![] });
         }
-        self.verb = Some(Verb { seat: n, command, menu: menu.to_string(), item: row, filled: vec![] });
-        if keys && !self.cursors.contains_key(&n) {
-            self.open_cursor(n, false);
+        // from the keys, the parameters are asked as for a key (M 8.1)
+        if keys {
+            self.verb = None;
+            return self.command(CommandValue { name: command, args: vec![] });
         }
+        self.verb = Some(Verb { seat: n, command, menu: menu.to_string(), item: row, filled: vec![] });
         Ok(())
     }
 
@@ -1109,6 +1385,9 @@ impl<'m> App<'m> {
     /// The cell the hover describes: the awaited seat's cursor, else the
     /// cursor moved last, else the pointer's cell (M 8.1).
     fn hover_cell(&self) -> Option<rlml_core::rt::value::Pos> {
+        if let Some(Asking { ui: AskUi::Aim { pos, .. }, .. }) = &self.asking {
+            return Some(*pos);
+        }
         let awaited = self.r.awaiting().filter(|_| self.players_turn()).and_then(|n| self.cursors.get(&n));
         let last = self.last_cursor.and_then(|n| self.cursors.get(&n));
         awaited.or(last).map(|c| c.pos).or_else(|| self.pointer_cell())
@@ -1118,6 +1397,9 @@ impl<'m> App<'m> {
     /// orders (M 7.1).
     fn cursor_marks(&self) -> Vec<rlml_core::rt::value::Pos> {
         let mut out: Vec<_> = self.cursors.values().map(|c| c.pos).collect();
+        if let Some(Asking { ui: AskUi::Aim { pos, .. }, .. }) = &self.asking {
+            out.push(*pos);
+        }
         for o in self.r.orders.values() {
             match o.goal {
                 OrderGoal::Cell(p) => out.push(p),
@@ -1163,6 +1445,9 @@ impl<'m> App<'m> {
             return Ok(());
         }
         if !always && !self.players_turn() {
+            return Ok(());
+        }
+        if !always && self.ask_mouse(&b)? {
             return Ok(());
         }
         if !always
