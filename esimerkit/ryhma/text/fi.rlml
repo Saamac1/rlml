@@ -15,3 +15,14 @@ RAT.DESC Iso harmaa rotta. Se on nälkäinen.
 PAUSE.TITLE Tauko
 PAUSE.RESUME Jatka
 PAUSE.QUIT Lopeta
+HERO.DESC Ryhmän sankari.
+ROBIN.DESC Robin, uskollinen seuralainen.
+MESSAGE.EXAMINE {WHAT}: {WHAT:DESC}
+VERBS.EXAMINE Tutki
+VERBS.STRIKE_AT Lyö
+VERBS.WAIT Odota
+VERBS.SWITCH Vaihda
+EXAMINE.SENTENCE Tutki {what}
+STRIKE_AT.SENTENCE Lyö {target}
+EXAMINE.NO_TARGET Siinä ei ole mitään tutkittavaa.
+STRIKE_AT.NO_TARGET Siinä ei ole vihollista vieressä.

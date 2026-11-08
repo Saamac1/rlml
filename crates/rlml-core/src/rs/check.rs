@@ -175,6 +175,12 @@ fn check_decl(m: &Model, decl: &Decl, texts: &BTreeSet<String>, tiles: &mut BTre
             for p in counts.iter().filter(|p| p.ty.base != "number") {
                 b.error(p.pos, format!("`count` is only for a `number` parameter, not `{}`", p.ty));
             }
+            // a click fills a parameter after those its source names (M 8.1)
+            if let Some(ring) = crate::rt::verbs::source_ring(params)
+                && let Some(first) = params.iter().find(|p| p.name == ring[0])
+            {
+                b.error(first.pos, format!("the sources of `{}` name each other in a ring (M 2.5)", ring.join("`, `")));
+            }
             b.body(body);
         }),
         ItemKind::CommandAlias(call) => run(Ctx::Command, true, &mut |b| {

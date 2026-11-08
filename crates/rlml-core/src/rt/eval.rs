@@ -110,7 +110,7 @@ impl World<'_> {
         format!("{}:{}: runtime error: column {}: {}", env.file, pos.line, pos.col, msg.into())
     }
 
-    fn decl_of(&self, full: &str) -> Option<(Arc<Item>, Option<String>, String)> {
+    pub(crate) fn decl_of(&self, full: &str) -> Option<(Arc<Item>, Option<String>, String)> {
         match &self.m.defs.get(full)?.source {
             DefSource::Decl(d) => Some((d.item.clone(), d.namespace.clone(), d.file.clone())),
             _ => None,

@@ -789,6 +789,7 @@ impl Checker<'_> {
                 }
             }
             let mut legend = BTreeSet::new();
+            let mut sources: Vec<String> = Vec::new();
             for item in b.sub("legend") {
                 let Ok((c, rest)) = glyph_char(item) else {
                     self.r.push(item.err("a layout legend row starts with the area's character"));
@@ -800,7 +801,21 @@ impl Checker<'_> {
                 }
                 let source = rest.key();
                 let name = source.split('(').next().unwrap_or(source);
-                if !["map", "hover"].contains(&name)
+                if ["hover", "sentence"].contains(&name) && sources.iter().any(|s| s == name) {
+                    self.r.push(item.err(format!("a layout has one `{name}` area (D 11.1)")));
+                }
+                sources.push(name.to_string());
+                if name == "menu" {
+                    // a docked menu (D 11.1)
+                    match rest.word(1) {
+                        Some(menu) => {
+                            if let Err(e) = self.m.resolve_kind(item.namespace.as_deref(), menu, &[Kind::Menu]) {
+                                self.r.push(item.err(format!("area `{c}`: {e}")));
+                            }
+                        }
+                        None => self.r.push(item.err(format!("area `{c}`: `menu` needs the menu's NAME"))),
+                    }
+                } else if !["map", "hover", "sentence"].contains(&name)
                     && let Err(e) = self.m.resolve_kind(item.namespace.as_deref(), name, &[Kind::Log, Kind::Panel])
                 {
                     self.r.push(item.err(format!("area `{c}`: {e}")));
@@ -1003,6 +1018,14 @@ impl Checker<'_> {
                 let rest = row.shift(1);
                 let has_action = !rest.tokens.is_empty() && !["hide", "disabled"].contains(&rest.key());
                 if rest.key() == "adjust" {
+                    continue;
+                }
+                // a verbs menu's items are commands (D 11.2)
+                if b.has_arg("verbs") {
+                    let command = if has_action { rest.key() } else { key };
+                    if self.m.resolve_kind(rest.namespace.as_deref().or(b.namespace.as_deref()), command, &[Kind::Command]).is_err() {
+                        self.r.push(item.err(format!("item `{key}` of a `verbs` menu runs no command (D 11.2)")));
+                    }
                     continue;
                 }
                 if has_action {
