@@ -404,3 +404,139 @@ fn a_pad_takes_the_first_seat_without_a_device() {
     app.pad_disconnected(3);
     assert_eq!(app.seat_devices.get(&2), None);
 }
+
+// ---- the mouse (M 8.1, M 8.2) ----
+
+/// The screen cell of a map cell, from the last drawn frame.
+fn screen_of(app: &App, x: i32, y: i32) -> (usize, usize) {
+    let r = app.view.map_rect.unwrap();
+    let map = app.r.w.s.active_map().unwrap();
+    let (cx, cy) = app.view.camera[&map];
+    (r.x + (x - cx) as usize, r.y + (y - cy) as usize)
+}
+
+fn player_at(app: &App) -> (i32, i32) {
+    let p = app.r.w.s.at(app.r.w.s.player.unwrap()).unwrap();
+    (p.x, p.y)
+}
+
+fn click() -> Binding {
+    Binding::mouse(termplate_core::keys::Mouse::Click)
+}
+
+/// Ticks the clock in 100 ms steps until `until` or `n` ticks.
+fn run_ticks(app: &mut App, from: u64, n: u64) -> u64 {
+    let mut t = from;
+    for _ in 0..n {
+        t += 100;
+        app.tick(ms(t)).unwrap();
+    }
+    t
+}
+
+#[test]
+fn a_click_on_the_map_travels_there() {
+    let f = mini_with(|g| g.push_str("\n"));
+    let f = {
+        let mut f = f;
+        let g = f.game.get_mut("game.rlml").unwrap();
+        *g = g.replace("- PLAYER HERO\n", "- PLAYER HERO\n- walk STD.MOVE\n");
+        f
+    };
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    app.draw();
+    let (x, y) = player_at(&app);
+    let (sx, sy) = screen_of(&app, x + 2, y);
+    app.mouse_press(click(), sx, sy, ms(10)).unwrap();
+    assert!(app.r.travelling(1) || player_at(&app) == (x + 2, y), "the travel started");
+    run_ticks(&mut app, 10, 10);
+    assert_eq!(player_at(&app), (x + 2, y), "two steps east");
+    assert!(!app.r.travelling(1), "arrived");
+    assert_eq!(app.r.w.s.game.time, 240, "each step is a turn of its own");
+}
+
+#[test]
+fn a_key_stops_the_travel_and_does_nothing_else() {
+    let mut f = mini_with(|_| {});
+    let g = f.game.get_mut("game.rlml").unwrap();
+    *g = g.replace("- PLAYER HERO\n", "- PLAYER HERO\n- walk STD.MOVE\n");
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    app.draw();
+    let (x, y) = player_at(&app);
+    let (sx, sy) = screen_of(&app, x, y + 3);
+    app.mouse_press(click(), sx, sy, ms(10)).unwrap();
+    assert!(app.r.travelling(1), "three steps to go");
+    let (_, y1) = player_at(&app);
+    let t = app.r.w.s.game.time;
+    app.key(key("l"), ms(20)).unwrap();
+    assert!(!app.r.travelling(1), "the key stopped it");
+    assert_eq!((player_at(&app).1, app.r.w.s.game.time), (y1, t), "and did not move east");
+}
+
+#[test]
+fn without_walk_a_click_does_nothing() {
+    let f = mini_with(|_| {});
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    app.draw();
+    let (x, y) = player_at(&app);
+    let (sx, sy) = screen_of(&app, x + 1, y);
+    app.mouse_press(click(), sx, sy, ms(10)).unwrap();
+    assert!(!app.r.travelling(1));
+    assert_eq!((player_at(&app), app.r.w.s.game.time), ((x, y), 0));
+}
+
+#[test]
+fn the_hover_describes_what_is_seen() {
+    let f = mini_with(|_| {});
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    app.draw();
+    let view = app.r.w.player_view(0);
+    let rats: Vec<_> = app.r.w.s.entities_on(0).into_iter().filter(|&e| app.r.w.s.get(e).kind.ends_with("RAT")).collect();
+    let (seen, unseen): (Vec<_>, Vec<_>) = rats.into_iter().map(|e| app.r.w.s.at(e).unwrap()).partition(|p| view.contains(&(p.x, p.y)));
+    let (sx, sy) = screen_of(&app, seen[0].x, seen[0].y);
+    app.pointer_at(sx, sy);
+    app.draw();
+    assert_eq!(app.view.hover.as_deref(), Some("Iso harmaa rotta. Se on nälkäinen."), "the rat in the player's room");
+    // a rat behind the wall, on a cell nobody has seen: nothing (M 8.1)
+    let p = unseen[0];
+    assert!(!app.r.w.s.maps[0].remembered.contains(&(p.x, p.y)));
+    let (sx, sy) = screen_of(&app, p.x, p.y);
+    app.pointer_at(sx, sy);
+    app.draw();
+    assert_eq!(app.view.hover, None, "an unseen rat gives nothing away");
+    app.pointer = None;
+    app.draw();
+    assert_eq!(app.view.hover, None, "no pointer, no hover");
+}
+
+#[test]
+fn the_mouse_follows_the_turn() {
+    let mut f = ryhma();
+    let g = f.game.get_mut("game.rlml").unwrap();
+    *g = g.replace("- PLAYER HERO\n", "- PLAYER HERO\n- walk STD.MOVE\n");
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    // seat 1 waits; now it is seat 2's turn, and the mouse is seat 2's
+    app.key(key("."), ms(10)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(2));
+    app.draw();
+    let b = app.r.w.s.active(2).unwrap();
+    let a = app.r.w.s.active(1).unwrap();
+    let pa = app.r.w.s.at(a).unwrap();
+    let pb = app.r.w.s.at(b).unwrap();
+    // one step to a free cell next to seat 2's hero
+    let target = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        .into_iter()
+        .map(|(dx, dy)| rlml_core::rt::value::Pos { x: pb.x + dx, y: pb.y + dy, ..pb })
+        .find(|&p| !app.r.w.blocks_tiles(p, "move", Some(b)) && app.r.w.s.entities_at(p).is_empty())
+        .unwrap();
+    let (sx, sy) = screen_of(&app, target.x, target.y);
+    app.mouse_press(click(), sx, sy, ms(20)).unwrap();
+    run_ticks(&mut app, 20, 5);
+    assert_eq!(app.r.w.s.at(b), Some(target), "seat 2's hero went");
+    assert_eq!(app.r.w.s.at(a), Some(pa), "seat 1's did not");
+}
