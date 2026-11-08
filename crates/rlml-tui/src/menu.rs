@@ -41,6 +41,8 @@ pub struct Item {
     pub action: ItemAction,
     pub hide: Option<Expr>,
     pub disabled: Option<Expr>,
+    /// A text of its own instead of `<MENU>.<ITEM>`: the verb coin's rows.
+    pub label: Option<String>,
 }
 
 /// A `menu` block read for play.
@@ -55,6 +57,8 @@ pub struct Menu {
     pub width: Option<usize>,
     pub height: Option<usize>,
     pub items: Vec<Item>,
+    /// `verbs`: a verbs menu of commands (D 11.2).
+    pub verbs: bool,
 }
 
 /// The words of `when` up to the next `hide` or `disabled` as an
@@ -113,9 +117,9 @@ impl Menu {
             let (_, row) = item.marker();
             let key = row.key().to_string();
             let Some(action) = action(m, ns.as_deref(), &key, &row.shift(1)) else { continue };
-            items.push(Item { key, action, hide: condition(&row, "hide"), disabled: condition(&row, "disabled") });
+            items.push(Item { key, action, hide: condition(&row, "hide"), disabled: condition(&row, "disabled"), label: None });
         }
-        Some(Menu { full: full.to_string(), ns, context, is_final: b.has_arg("final"), width, height, items })
+        Some(Menu { full: full.to_string(), ns, context, is_final: b.has_arg("final"), width, height, items, verbs: b.has_arg("verbs") })
     }
 }
 
@@ -132,6 +136,8 @@ pub struct Layer {
     pub menu: Menu,
     pub rows: Vec<Row>,
     pub cursor: usize,
+    /// The screen cell the window opens next to; `None`: the middle.
+    pub at: Option<(usize, usize)>,
 }
 
 /// A condition's value; one that cannot be evaluated is false, so a
@@ -155,7 +161,7 @@ impl Layer {
             rows.push(Row { item: i, enabled });
         }
         let cursor = rows.iter().position(|r| r.enabled).unwrap_or(0);
-        Layer { menu, rows, cursor }
+        Layer { menu, rows, cursor, at: None }
     }
 
     /// Moves the cursor to the next enabled row up or down, wrapping.
@@ -250,16 +256,35 @@ fn plain(key: &str) -> String {
     c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default()
 }
 
-/// Draws the top layer as a window in the middle of the frame: the title
-/// in its border, the body text and the items, the cursor's row selected
-/// and disabled ones dim.
-pub fn draw(frame: &mut Frame, w: &World, lang: &str, layer: &Layer) {
+/// Where a drawn menu is: its window and each shown row's line with the
+/// row's index, for the mouse (M 8.1).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Drawn {
+    pub window: Option<Rect>,
+    pub rows: Vec<(Rect, usize)>,
+}
+
+impl Drawn {
+    /// The row under screen cell (x, y).
+    pub fn row_at(&self, x: usize, y: usize) -> Option<usize> {
+        self.rows.iter().find(|(r, _)| r.contains(x, y)).map(|(_, i)| *i)
+    }
+
+    pub fn inside(&self, x: usize, y: usize) -> bool {
+        self.window.is_some_and(|r| r.contains(x, y))
+    }
+}
+
+/// Draws the top layer as a window in the middle of the frame, or next to
+/// its cell: the title in its border, the body text and the items, the
+/// cursor's row selected and disabled ones dim.
+pub fn draw(frame: &mut Frame, w: &World, lang: &str, layer: &Layer) -> Drawn {
     let full = &layer.menu.full;
     let title = text_of(w, lang, &format!("{full}.TITLE"));
     let body = text_of(w, lang, &format!("{full}.TEXT"));
     let items: Vec<String> = layer.rows.iter().map(|r| {
-        let key = &layer.menu.items[r.item].key;
-        text_of(w, lang, &format!("{full}.{key}")).unwrap_or_else(|| plain(key))
+        let item = &layer.menu.items[r.item];
+        item.label.clone().unwrap_or_else(|| text_of(w, lang, &format!("{full}.{}", item.key)).unwrap_or_else(|| plain(&item.key)))
     }).collect();
     let fit = items.iter().map(|s| str_width(s) + 2).chain(title.iter().map(|t| str_width(t) + 2)).max().unwrap_or(0).max(12);
     let width = layer.menu.width.unwrap_or(fit + 2).min(frame.width).max(4);
@@ -267,7 +292,13 @@ pub fn draw(frame: &mut Frame, w: &World, lang: &str, layer: &Layer) {
     let body_lines = body.as_deref().map(|b| wrap(b, inner)).unwrap_or_default();
     let gap = usize::from(!body_lines.is_empty());
     let height = layer.menu.height.unwrap_or(body_lines.len() + gap + items.len() + 2).min(frame.height).max(3);
-    let r = Rect::new((frame.width - width) / 2, (frame.height - height) / 2, width, height);
+    let (x, y) = match layer.at {
+        // next to the cell, kept on the screen (M 8.1: the verb coin)
+        Some((cx, cy)) => ((cx + 1).min(frame.width - width), cy.min(frame.height - height)),
+        None => ((frame.width - width) / 2, (frame.height - height) / 2),
+    };
+    let r = Rect::new(x, y, width, height);
+    let mut drawn = Drawn { window: Some(r), rows: vec![] };
     frame.set_area(vec!["MENU".into(), full.clone()]);
     frame.fill(r, ' ', Role::Normal);
     frame.border(r, Border::Single, Role::Border);
@@ -298,6 +329,8 @@ pub fn draw(frame: &mut Frame, w: &World, lang: &str, layer: &Layer) {
         };
         let line = termplate_core::frame::fit(&format!(" {text}"), inner, termplate_core::model::Align::Left);
         frame.text(r.x + 1, y, inner, &line, role);
+        drawn.rows.push((Rect::new(r.x + 1, y, inner, 1), i));
         y += 1;
     }
+    drawn
 }

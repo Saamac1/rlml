@@ -264,6 +264,12 @@ impl Keys {
             if !ctx.rows.iter().any(|(b, a)| *a == travel || *b == click) {
                 ctx.rows.push((click, travel));
             }
+            // and `verbs rclick`, the verb coin
+            let rclick = Binding::mouse(termplate_core::keys::Mouse::RightClick);
+            let verbs = Action::Engine("verbs".into());
+            if !ctx.rows.iter().any(|(b, a)| *a == verbs || *b == rclick) {
+                ctx.rows.push((rclick, verbs));
+            }
         }
         keys
     }

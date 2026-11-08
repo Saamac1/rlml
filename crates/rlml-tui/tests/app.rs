@@ -782,3 +782,77 @@ fn the_verb_belongs_to_the_turn() {
     app.draw();
     assert!(app.verb.is_none(), "seat 1's turn ended");
 }
+
+// ---- the verb coin and the mouse in menus (M 8.1) ----
+
+fn coin_open(app: &App) -> bool {
+    app.menus.layers.last().is_some_and(|l| l.menu.full == rlml_tui::app::COIN_MENU)
+}
+
+#[test]
+fn a_right_click_opens_the_verbs_that_fit_the_cell() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    app.draw();
+    let (_, rp) = robin(&app);
+    let (sx, sy) = screen_of(&app, rp.x, rp.y);
+    app.mouse_press(rclick(), sx, sy, ms(10)).unwrap();
+    assert!(coin_open(&app), "the coin opened");
+    let labels: Vec<String> = app.menus.layers.last().unwrap().menu.items.iter().map(|it| it.label.clone().unwrap()).collect();
+    assert_eq!(labels, ["Tutki"], "EXAMINE fits Robin; Robin is no foe, so no Lyö");
+    // the coin opens next to the cell
+    app.draw();
+    let w = app.menu_drawn_window().unwrap();
+    assert_eq!((w.x, w.y), (sx + 1, sy), "next to the cell");
+    // a click on its row runs the verb on Robin
+    let (rx, ry) = (w.x + 2, w.y + 1);
+    app.mouse_press(click(), rx, ry, ms(20)).unwrap();
+    assert!(!coin_open(&app));
+    assert_eq!(examined(&app), 1);
+}
+
+#[test]
+fn nothing_opens_where_no_verb_fits() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    app.draw();
+    let (sx, sy) = screen_of(&app, 0, 0);
+    app.mouse_press(rclick(), sx, sy, ms(10)).unwrap();
+    assert!(!app.menus.is_open(), "a wall fits no verb");
+}
+
+#[test]
+fn the_coin_from_the_look_cursor() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let hero = seat_at(&app, 1);
+    let (_, rp) = robin(&app);
+    let step = if rp.x > hero.0 { "l" } else { "h" };
+    press(&mut app, &format!("c {step} v"));
+    assert!(coin_open(&app), "`verbs` on the cursor's cell");
+    press(&mut app, "enter");
+    assert_eq!(examined(&app), 1);
+    assert!(cursor_of(&app, 1).is_some(), "the staying cursor stays");
+}
+
+#[test]
+fn menus_take_the_mouse() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    press(&mut app, "esc");
+    assert!(app.menus.is_open(), "the pause menu");
+    app.draw();
+    let w = app.menu_drawn_window().unwrap();
+    // the pointer highlights the second row
+    app.pointer_at(w.x + 2, w.y + 2);
+    assert_eq!(app.menus.layers.last().unwrap().cursor, 1);
+    // a click outside the window is `back`
+    app.mouse_press(click(), 0, 0, ms(10)).unwrap();
+    assert!(!app.menus.is_open());
+    // a click on a row chooses it: Jatka closes the menu
+    press(&mut app, "esc");
+    app.draw();
+    let w = app.menu_drawn_window().unwrap();
+    app.mouse_press(click(), w.x + 2, w.y + 1, ms(20)).unwrap();
+    assert!(!app.menus.is_open(), "`resume`");
+}

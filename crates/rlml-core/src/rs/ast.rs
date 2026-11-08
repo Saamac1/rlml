@@ -260,7 +260,8 @@ pub enum ItemKind {
     Event { params: Vec<Param> },
     Handler(Handler),
     Function { present: bool, query: bool, params: Vec<Param>, ret: Option<ReturnType>, body: Vec<Stmt> },
-    Command { params: Vec<Param>, cost: Option<i64>, body: Vec<Stmt> },
+    /// `noverb` hides the command from the verb coin (RS 7.1).
+    Command { params: Vec<Param>, cost: Option<i64>, noverb: bool, body: Vec<Stmt> },
     /// `command NAME = CALL`.
     CommandAlias(Expr),
     Ai { body: Vec<Stmt> },
