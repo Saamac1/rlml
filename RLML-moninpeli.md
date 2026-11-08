@@ -91,7 +91,7 @@ keys GAME keyboard 2
 - **Osa 1** on osio ilman `keyboard`-määrettä, eli nykyiset sidonnat. `keyboard N` on lisäosa.
 - **Ristiriita.** Sama näppäin kahdessa näppäimistöosassa samassa kontekstissa on latausvirhe, koska moottori ei tietäisi, kenen painallus se on.
 - **Peliohjaimet** käyttävät samaa `pad`-osiota (D 11.3). Laite erottaa istuimet, joten ohjainkohtaisia osioita ei tarvita.
-- **Hiiri** kuuluu näppäimistöosan 1 istuimelle. Jos osaa 1 ei ole liitetty, hover toimii kaikille, mutta hiiren toiminnot ovat sitomattomia.
+- **Hiiri** on yhteinen laite, jota käytetään vuorotellen: sen painallukset menevät istuimelle, jonka vuoro on (luku 6.5). Hiiren nimet sidotaan osan 1 osiossa, ja hiiren nimi `keyboard N` -osiossa on latausvirhe. (Muutettu 8.11.2026, luku 6.7.)
 - **`join`** on uusi moottorin toiminto. Moottori antaa sille oletussidonnat vain kontekstissa `JOIN` (luku 4.1): `enter` näppäimistöllä ja `start` peliohjaimella. Pelin peruskontekstissa peli sitoo `join`in itse jokaiseen osaan, josta liittyminen kesken pelin on mahdollista. Lisäosa ilman `join`-sidontaa saa latausvaroituksen.
 - **Muut kontekstit.** Konteksti, jolla ei ole `keyboard N` -osioita, käyttää osan 1 sidontoja kaikille näppäimistön istuimille. Tämä koskee esimerkiksi moottorin oletuksia kontekstissa `MENU`. Näppäimistö on silloin yksi laite, ja reititys (luku 6.5) rajaa ohjaajaksi avaajan istuimen. Lisäosan voi antaa mille tahansa kontekstille (`keys MENU keyboard 2`).
 - **Tunniste.** Osio tunnistetaan kontekstin nimestä ja osan numerosta, joten `keys GAME` ja `keys GAME keyboard 2` ovat eri lohkoja yhdistämisessä ja korvaamisessa. `modal` ja `passthrough` ovat kontekstin ominaisuuksia, ja ne annetaan osassa 1. Lisäosan eri arvo on latausvirhe.
@@ -223,12 +223,32 @@ Kun `players`-jäseniä on useampi ja moottori odottaa syötettä, moottori koro
 - **Näppäinkehotteet.** `{^TOIMINTO}` (M 7.3) näyttää osan 1 ensimmäisen näppäimen, sillä teksti on yhteinen.
 - **`join`** toimii vapailta laitteilta.
 - **Muiden istuinten painallukset** hylätään eivätkä jonoudu.
-- **Hiiri.** Hover toimii aina. Hiiren toiminnot (`travel_to`, valinnat) toimivat vain hiiren istuimen vuorolla.
+- **Hiiri.** Hover toimii aina. Hiiren painallukset (`travel_to`, verbit, valinnat) menevät istuimelle, jonka syötettä odotetaan, ja valikossa sille, joka sitä ohjaa (luku 6.7).
+- **Pysyvä kursori** on poikkeus hylkäämiseen: istuin liikuttaa omaa kursoriaan muiden vuorolla ja antaa ennakkokäskyn (luku 6.7).
 - **Klikkausmatka** (M 8.1) etenee vain matkaajan omilla vuoroilla, ja muiden istuinten vuorot kulkevat välissä. Vain matkaajan istuimen painallus pysäyttää sen. Uusi toimija yhteisessä näkökentässä pysäyttää sen kuten ennen. Muiden istuinten odotukset lasketaan `on input every N` -tallennukseen.
 
 ### 6.6 Ääni
 
 Moottori soittaa lajin `effect`-äänen (M 6.8) kerran, kun yksikin jäsen kuulee äänen. Voimakkuus on kovin jäsenten kuulema taso.
+
+### 6.7 Ohjaus lyhyillä vuoroilla
+
+Lisätty 8.11.2026. Moninpelissä jokainen istuin saa yhden askeleen kerrallaan, ja muiden vuorot kulkevat välissä. Pitkä matka vaatii siksi kymmeniä painalluksia, ja jokaisen välissä odotetaan muita. Luku ratkaisee tämän kolmella keinolla. Speksi on M 8.1–8.2 ja D 3.3, 11.1–11.3.
+
+- **Pysyvä kursori ja ennakkokäsky.** `cursor` avaa istuimen oman katselukursorin, joka pysyy vuorojen yli. Istuin liikuttaa sitä myös muiden vuorolla, ja `confirm` tai `follow` tallentaa ennakkokäskyn, jonka moottori ajaa istuimen seuraavalla vuorolla. Käsky on käyttöliittymän tilaa, ja syöteloki kirjaa sen vasta ajohetkellä, joten toisto ja tallennus eivät muutu. Jos näkyviin on käskyn antamisen jälkeen tullut uusi toimija, käsky perutaan ennen toista askelta.
+- **Seuraaminen.** `follow` on matka, jonka kohde liikkuu. Se käyttää klikkausmatkan koneistoa (`walk`, `walk_stop` ja pysähtymisehdot) ja kenttiä `leader`, `rest` ja `follow_distance`. `follow_ai` antaa askeleet tekoälylle, esimerkiksi `STD.FOLLOWER`, jolloin seuraaja puolustautuu kuin lemmikki eikä uusi toimija pysäytä sitä. Seuraaminen ei tallennu, koska tallennus tapahtuu syötteen odotuksessa ja odotus katkaisee seuraamisen.
+- **Verbivalikko ja verbikolikko.** Telakoitu `verbs`-valikko näyttää komennot verbeinä seikkailupelien tapaan, ja `sentence` näyttää lauseen. Verbi saa klikattavat parametrinsa klikkauksista missä järjestyksessä tahansa kohdesäännöllä, ja `rclick` (`verbs`) näyttää ruutuun kelpaavat verbit, myös ne, joiden toisen parametrin ruutu täyttää. Valikkoa käyttää vuorossa oleva istuin hiirellä tai näppäimillä (`focus VERBS`). Rivit näyttävät vuorossa olevan istuimen pikanäppäimet, joten valikko on päätteessä myös näppäinten opas.
+
+**Punninta.**
+
+- **Pelkkä kursoriohjaus moninpelissä hylättiin.** Yksittäinen askel ja törmäyshyökkäys hidastuisivat, ja moninpeli poikkeaisi yksinpelistä. Pysyvä kursori antaa saman hyödyn suoran ohjauksen rinnalla.
+- **Ennakkosuunnittelu on varsinainen hyöty.** Lyhyt vuoro ei haittaa, kun seuraava käsky on valmiina. Siksi kursori toimii muiden vuorolla, mutta verbit ja hiiri eivät: ne vaativat ruudun, joka on kaikille yhteinen.
+- **Hiiri vuorottain.** Hiiren sitominen osan 1 istuimelle olisi jättänyt peliohjainpelaajat ilman hiirtä. Yhteinen laite, joka seuraa vuoroa, on luonteva vuoropohjaisessa pelissä.
+- **Seuraaminen ilman uutta tilaa.** Tekoälyn ohjaama jäsen pelin tilassa olisi tallentunut ja jatkunut latauksen jälkeen kysymättä. Matkan kaltainen seuraaminen katkeaa aina pelaajan painallukseen, ja `follow_ai` vaihtaa vain askeleen lähteen.
+- **Verbipalkki ensin, kolikko samalla säännöllä.** Kohdesääntö kirjoitetaan kerran, ja se palvelee molempia.
+- **Vapaa klikkausjärjestys.** Järjestyssidottu täyttö olisi ollut yksinkertaisempi, mutta "klikkaa ovea → Avaa" vaatii, että kohde voi täyttää myöhemmänkin parametrin. Lähteiden riippuvuudet lasketaan latauksessa, joten riippuva parametri odottaa riippuvuuttaan.
+
+**Termplate.** Päätteen kirjasto tukee jo hiiren kaappausta, painikkeita ja rullaa muuntimineen, osoittimen liikettä, upotettua valikkoa ja alueiden fokusta (`focus N`, `next_area`). RLML:n `focus NIMI` toteutetaan sen päälle (rev `bebd8e3`).
 
 ## 7. Vakiokirjasto
 
@@ -462,7 +482,7 @@ Vaiheet 0–2 tehdään nyt. Vaiheet 3–8 odottavat tallennusta, syötelokia, k
 
 ### Vaihe 3: istuimet ja syöte (odottaa tallennusta ja syötelokia)
 
-- Käyttöliittymän puolella `DeviceId`: näppäimistöosa, peliohjain tai hiiri. Reititin kuvaa laitteen istuimeksi ja hylkää muiden istuinten painallukset (luku 6.5).
+- Käyttöliittymän puolella `DeviceId`: näppäimistöosa tai peliohjain. Reititin kuvaa laitteen istuimeksi ja hylkää muiden istuinten painallukset (luku 6.5). Hiiri reititetään odotetulle istuimelle.
 - Liittymisruutu (konteksti `JOIN`), `join` kesken pelin, `leave_seat` ja latauksen uudelleenliittyminen.
 - Tallennukseen istuintaulu, ja syötelokiin rivit muodossa (istuin, toiminto).
 - `idle` istuimen vuorokohtaisena.
@@ -484,6 +504,14 @@ Vaiheet 0–2 tehdään nyt. Vaiheet 3–8 odottavat tallennusta, syötelokia, k
 - crossterm ei tue peliohjaimia, joten peliohjaimet luetaan gilrs-kirjastolla omassa säikeessään, ja tapahtumat yhdistetään samaan syötekanavaan näppäimistön kanssa.
 - Näppäimistöosat toimivat päätteessä sellaisenaan, koska vuoropohjainen peli tarvitsee vain painallukset eikä näppäinten vapautuksia tai samanaikaisuutta.
 - **Valmis, kun** kaksi peliohjainta ja kaksi näppäimistöosaa pelaavat samaa peliä.
+
+### Vaihe 6b: ohjaus lyhyillä vuoroilla (luku 6.7)
+
+- Ytimeen matkakone ajon puolelle (ei tilaan): `travel_to(pos)`, `follow` ja `follow.step` syötelokiin, `walk`, `rest` ja `follow_ai` askeleina sekä pysähtymisehdot. Reitti tulee nykyisestä `path`-funktiosta.
+- Kohdesääntö kyselynä: komento, jo täytetyt parametrit ja ruutu antavat seuraavan täytetyn parametrin tai syyn. Parametrien riippuvuudet ja kehätarkistus latauksessa.
+- Tarkistukset: uudet `game`-kentät, `sentence`, `menu`-alue, `verbs`-kohdat ja hiiren nimet lisäosissa.
+- Pääte: hiiren kaappaus asetuksen `mouse` mukaan, osoitin ruuduksi `draw::cell_at`-funktiolla, reititys odotetulle istuimelle, istuinkohtaiset kursorit ja ennakkokäskyt sekä telakoitu valikko pikanäppäimineen Termplaten fokuskoneistolla.
+- **Valmis, kun** golden-testit kattavat matkan pysähtymisen, kahden istuimen seuraamisen, `follow_ai`-puolustuksen, kehän hylkäyksen ja verbillä heiton klikkauksesta, ja nykyiset transkriptit eivät muutu.
 
 ### Vaihe 7: toteutustesti
 

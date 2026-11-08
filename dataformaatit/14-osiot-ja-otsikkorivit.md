@@ -4,7 +4,7 @@
 
 | Otsikko | Muoto | Luku |
 | --- | --- | --- |
-| `game` | `game NIMI`, rivit `- start KARTTA \| NOSTO`, `- at HAKU`, `- seed N`, `- call_depth N`, `- loop_steps N`, `- keys KONTEKSTI`, `- title VALIKKO`, `- layout ASETTELU`, `- naming KYSELY`, `- walk KOMENTO`, `- walk_stop KYSELY`, `- masking N`, `- seats a..b`, `- party switch \| each`, `- leash on \| off` ja `- KOMPONENTTI kentät`; lyhyt muoto `game NIMI start … at …` | 3.3, 5.5 |
+| `game` | `game NIMI`, rivit `- start KARTTA \| NOSTO`, `- at HAKU`, `- seed N`, `- call_depth N`, `- loop_steps N`, `- keys KONTEKSTI`, `- title VALIKKO`, `- layout ASETTELU`, `- naming KYSELY`, `- walk KOMENTO`, `- walk_stop KYSELY`, `- leader KYSELY`, `- rest KOMENTO`, `- follow_distance N`, `- follow_ai TEKOÄLY`, `- masking N`, `- seats a..b`, `- party switch \| each`, `- leash on \| off` ja `- KOMPONENTTI kentät`; lyhyt muoto `game NIMI start … at …` | 3.3, 5.5 |
 | `profile` | `profile NIMI`, rivit `- KOMPONENTTI kentät` | 3.5 |
 | `include` | `include POLKU.PÄÄTE` (jokerit `*`, `**`) | 3 |
 | `namespace` | `namespace NIMI` tiedoston alussa | 4.2 |
@@ -30,8 +30,8 @@
 | `panels`, `logs`, `presentation` | tyylin rivit | 9.3 |
 | `layers` | `- NIMI LÄHDE [where ehto] [remember] [smooth AIKA]` | 9.5 |
 | `language` | `language KIELI` tiedoston alussa, rivit `AVAIN teksti` ilman `-`-merkkejä | 10 |
-| `layout` | piirros ja `legend:`; kartta-alueen rivi `- m map [follow center \| follow margin N] [turn TYYLI]`, hover-alueen rivi `- h hover`, paneelin rivi `- s PANEELI[(argumentit)]` | 11.1 |
-| `menu` | `menu NIMI [(parametrit)] [list] [size LxK] [context K] [final]`, kohdat `- AVAIN [TOIMINTO] [hide when ehto] [disabled when ehto]` tai `- AVAIN adjust KENTTÄ a..b [pool NIMI]`; listavalikolla rivit `source`, `row`, `sort`, `hide when`, `disabled when`, `then`, `keep` | 11.2 |
+| `layout` | piirros ja `legend:`; kartta-alueen rivi `- m map [follow center \| follow margin N] [turn TYYLI] [cursor TYYLI]`, hover- ja lauserivin alueet `- h hover` ja `- e sentence`, telakoitu valikko `- v menu NIMI`, paneelin rivi `- s PANEELI[(argumentit)]` | 11.1 |
+| `menu` | `menu NIMI [(parametrit)] [list] [size LxK] [context K] [final] [verbs]`, kohdat `- AVAIN [TOIMINTO] [hide when ehto] [disabled when ehto]` tai `- AVAIN adjust KENTTÄ a..b [pool NIMI]`; listavalikolla rivit `source`, `row`, `sort`, `hide when`, `disabled when`, `then`, `keep` | 11.2 |
 | `keys`, `pad` | `keys KONTEKSTI [modal \| passthrough] [keyboard N]`, `pad KONTEKSTI [deadzone P%]`; rivit `- TOIMINTO näppäimet` (keys-riveillä myös hiiren nimet `click`, `rclick`, `mclick`, `wheel.up`, `wheel.down`) | 11.3 |
 | `messages`, `log` | `- AVAIN [PARAMETRIT]`, `log ALUE [history N] [merge] [more]` | 11.4 |
 | `panel` | `panel NIMI [(parametrit)]`, piirros ja `legend:` riveillä `- M text AVAIN`, `- M value LAUSEKE` ja `- M param NIMI`, kukin valinnaisella tasauksella `left`, `right` tai `center` | 11.5 |

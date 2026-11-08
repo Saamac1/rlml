@@ -80,7 +80,7 @@ fn spec_key_names_read() {
                     words.remove(0);
                 }
                 let skip = match words.first() {
-                    Some(&"open") | Some(&"toggle") => 2 + usize::from(words.get(2) == Some(&"stack")),
+                    Some(&"open") | Some(&"toggle") | Some(&"focus") => 2 + usize::from(words.get(2) == Some(&"stack")),
                     _ => 1,
                 };
                 for k in &words[skip.min(words.len())..] {

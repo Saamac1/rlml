@@ -100,6 +100,21 @@ on part(seat) as PART_PLAYER:
 
 - **Johtaja poissa.** Kuollut johtaja tai johtaja toisella kartalla jättää seuraajan vaeltamaan. Kartalta toiselle seuraaja siirtyy logiikan `travel`-kutsulla tai jäsenen mukana, kun jäsenet käyttävät uloskäyntiä ryhmänä (`TAKE_EXIT`, luku [5](05-komennot.md)).
 - **Paikanvaihto.** Pelaajan ja seuraajan suhde on tyypillisesti ystävällinen, joten `STEP` vaihtaa niiden paikkaa törmäyksessä (luku [5](05-komennot.md)).
+- **Pelaajan seuraaminen.** Moottorin toiminto `follow` kuljettaa ohjattavaa johtajan perässä, kunnes pelaaja painaa jotakin (moottoridokumentti, luku [8.1](../moottori/08-syote.md#81-hiiri)). STD:n nimet sopivat sen kenttiin sellaisinaan: `LEADER_OF` antaa johtajan, `WAIT` levon ja `FOLLOWER` lemmikin tapaisen askeleen, joka puolustautuu viereiseltä viholliselta. STD ei sido näppäimiä, joten peli sitoo toiminnon itse:
+
+```
+game KNIGHTS
+- seats 1..4
+- walk STD.MOVE
+- leader STD.LEADER_OF
+- rest STD.WAIT
+- follow_ai STD.FOLLOWER
+
+keys GAME
+- follow f
+```
+
+  Tekoälyaskeleessa `self` on seuraaja, joten `LEADER_OF(self)` palauttaa lähimmän muun jäsenen, ellei `FOLLOW.target` nimeä toista. Katselukursorilla valittu kohde ei siksi ohjaa `FOLLOWER`-askelta. Pelin oma tekoäly voi käyttää kontekstinimeä `it`, joka on seurattava.
 
 ---
 

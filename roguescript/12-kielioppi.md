@@ -40,7 +40,7 @@ evname      = QNAME | name ;              (* pieni nimi = moottorin tapahtuma *)
 function    = [ "present" ] "fn" QNAME "(" [ params ] ")" [ "->" rtype ] ":" block
             | "query" QNAME "(" [ params ] ")" "->" rtype ":" block ;
 rtype       = type | "name" "|" "text" ;  (* name|text vain naming-kyselylle *)
-command     = "command" QNAME "(" [ params ] ")" [ "cost" INT ] ":" block
+command     = "command" QNAME "(" [ params ] ")" [ "cost" INT ] [ "noverb" ] ":" block
             | "command" QNAME "=" call NL ;
 ai          = "ai" QNAME ":" block ;      (* self kontekstista, paluuarvo command *)
 generator   = "generator" QNAME "(" [ params ] ")" [ "size" SIZE ] ":" block ;
