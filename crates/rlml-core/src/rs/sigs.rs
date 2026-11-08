@@ -340,9 +340,9 @@ pub fn field(of: &Ty, name: &str) -> Option<Ty> {
 pub fn game_field(name: &str) -> Option<Ty> {
     use Ty::*;
     Some(match name {
-        "start" | "keys" | "title" | "layout" | "naming" | "walk" | "walk_stop" => Name,
+        "start" | "keys" | "title" | "layout" | "naming" | "walk" | "walk_stop" | "leader" | "rest" | "follow_ai" => Name,
         "at" => Area,
-        "seed" | "turn" | "time" | "call_depth" | "loop_steps" | "masking" => Number,
+        "seed" | "turn" | "time" | "call_depth" | "loop_steps" | "masking" | "follow_distance" => Number,
         "party" => Name,
         "leash" => Bool,
         "seats" => Range,

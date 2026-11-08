@@ -1085,11 +1085,18 @@ impl World<'_> {
     /// Runs an ai for `me` and gives the command it chose, or `none`
     /// (RS 7.2).
     pub fn run_ai(&mut self, full: &str, me: EntityId) -> RtResult<Value> {
+        self.run_ai_with(full, me, vec![])
+    }
+
+    /// `run_ai` with `it` bound: a follower's ai sees whom it follows
+    /// (M 8.1).
+    pub fn run_ai_with(&mut self, full: &str, me: EntityId, it: Vec<Value>) -> RtResult<Value> {
         let (item, ns, file) = self.decl_of(full).ok_or_else(|| format!("no ai `{full}`"))?;
         let ItemKind::Ai { body } = &item.kind else { return Err(format!("`{full}` is not an ai")) };
         let mut env = Env::new(BodyKind::Ai, full, ns, &file);
         env.self_ = Some(me);
         env.actor = Some(me);
+        env.it = it;
         env.map = self.s.at(me).map(|p| p.map);
         self.enter(&env)?;
         let flow = self.run_to_end(body, &mut env);
