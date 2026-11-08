@@ -49,6 +49,7 @@ keys GAME
 - SWITCH tab
 - SWITCH.PREV shift+tab
 - follow f
+- cursor c
 - pass z
 
 keys GAME keyboard 2
@@ -58,6 +59,7 @@ keys GAME keyboard 2
 - WALK.EAST d
 - WAIT q
 - follow r
+- cursor x
 - join e
 
 pad GAME deadzone 40%
@@ -69,4 +71,21 @@ pad GAME deadzone 40%
 - SWITCH rb
 - SWITCH.PREV lb
 - follow north
+- cursor select
 - pass west
+
+keys LOOK
+- follow f
+- back backspace
+
+keys LOOK keyboard 2
+- cursor.north w
+- cursor.south s
+- cursor.west a
+- cursor.east d
+- confirm q
+- follow r
+- back x
+
+pad LOOK
+- follow north

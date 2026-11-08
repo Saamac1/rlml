@@ -378,6 +378,9 @@ fn a_pad_takes_the_first_seat_without_a_device() {
         let i = ui.find("keys GAME keyboard 2").unwrap();
         let j = ui[i..].find("\npad GAME").unwrap() + i;
         ui.replace_range(i..j, "");
+        let i = ui.find("keys LOOK keyboard 2").unwrap();
+        let j = ui[i..].find("\npad LOOK").unwrap() + i;
+        ui.replace_range(i..j, "");
         f
     };
     let m = model(&f);
@@ -539,4 +542,117 @@ fn the_mouse_follows_the_turn() {
     run_ticks(&mut app, 20, 5);
     assert_eq!(app.r.w.s.at(b), Some(target), "seat 2's hero went");
     assert_eq!(app.r.w.s.at(a), Some(pa), "seat 1's did not");
+}
+
+// ---- the staying cursor (M 8.1, M 8.2) ----
+
+fn ryhma_walking() -> MemFiles {
+    let mut f = ryhma();
+    assert!(f.game["game.rlml"].contains("- walk WALK"), "the group example walks by click");
+    f.game.get_mut("game.rlml").unwrap().push('\n');
+    f
+}
+
+fn seat_at(app: &App, n: u8) -> (i32, i32) {
+    let p = app.r.w.s.at(app.r.w.s.active(n).unwrap()).unwrap();
+    (p.x, p.y)
+}
+
+fn cursor_of(app: &App, n: u8) -> Option<(i32, i32)> {
+    app.cursors.get(&n).map(|c| (c.pos.x, c.pos.y))
+}
+
+/// Ticks the clock; seat 2 waits (`q`) whenever it has the turn.
+fn seat_2_waits_while_ticking(app: &mut App, n: u64) {
+    let mut t = 100;
+    for _ in 0..n {
+        t += 100;
+        app.tick(ms(t)).unwrap();
+        if app.r.awaiting() == Some(2) && app.players_turn() {
+            app.key(key("q"), ms(t)).unwrap();
+        }
+    }
+}
+
+#[test]
+fn the_cursor_opens_moves_and_travels_and_stays() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let (x, y) = seat_at(&app, 1);
+    press(&mut app, "c");
+    assert_eq!(cursor_of(&app, 1), Some((x, y)), "it starts at the seat's hero");
+    press(&mut app, "j j");
+    assert_eq!(cursor_of(&app, 1), Some((x, y + 2)));
+    assert_eq!(app.r.w.s.game.time, 0, "moving the cursor takes no time");
+    app.draw();
+    assert!(app.view.cursors.iter().any(|p| (p.x, p.y) == (x, y + 2)), "the cursor is marked on the map");
+    press(&mut app, "enter");
+    seat_2_waits_while_ticking(&mut app, 40);
+    assert_eq!(seat_at(&app, 1), (x, y + 2), "travelled to the cursor");
+    assert_eq!(cursor_of(&app, 1), Some((x, y + 2)), "the cursor stays (M 8.1)");
+    press(&mut app, "c");
+    assert_eq!(cursor_of(&app, 1), None, "`cursor` closes it");
+}
+
+#[test]
+fn with_the_cursor_open_other_keys_do_nothing() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    press(&mut app, "c .");
+    assert_eq!((app.r.awaiting(), app.r.w.s.game.time), (Some(1), 0), "`.` did not wait: the cursor's context is modal");
+    press(&mut app, "backspace");
+    assert_eq!(cursor_of(&app, 1), None, "`back` closes the cursor");
+    press(&mut app, ".");
+    assert_eq!(app.r.awaiting(), Some(2), "and the game's keys work again");
+}
+
+#[test]
+fn an_order_on_another_seats_turn_runs_on_the_seats_next_one() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let (x, y) = seat_at(&app, 1);
+    press(&mut app, ".");
+    assert_eq!(app.r.awaiting(), Some(2));
+    // seat 1 plans on seat 2's turn
+    press(&mut app, "c j j enter");
+    assert_eq!(cursor_of(&app, 1), Some((x, y + 2)));
+    assert!(app.r.orders.contains_key(&1), "an order, not a travel");
+    assert_eq!(seat_at(&app, 1), (x, y), "nothing moved yet");
+    app.draw();
+    assert!(app.view.cursors.iter().filter(|p| (p.x, p.y) == (x, y + 2)).count() >= 2, "the cursor and the order's target are marked");
+    // seat 2 waits; seat 1's order runs
+    press(&mut app, "q");
+    assert_eq!(app.r.awaiting(), Some(1));
+    seat_2_waits_while_ticking(&mut app, 40);
+    assert_eq!(seat_at(&app, 1), (x, y + 2), "the order took seat 1 there");
+    assert!(!app.r.orders.contains_key(&1));
+}
+
+#[test]
+fn back_cancels_the_order_first() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    press(&mut app, ". c j enter");
+    assert!(app.r.orders.contains_key(&1));
+    press(&mut app, "backspace");
+    assert!(!app.r.orders.contains_key(&1), "the order went");
+    assert!(cursor_of(&app, 1).is_some(), "the cursor stayed");
+    press(&mut app, "backspace");
+    assert_eq!(cursor_of(&app, 1), None);
+}
+
+#[test]
+fn seat_2_moves_its_cursor_from_its_keyboard_part_on_seat_1s_turn() {
+    let m = model(&ryhma_walking());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(1));
+    let (x, y) = seat_at(&app, 2);
+    press(&mut app, "x d");
+    assert_eq!(cursor_of(&app, 2), Some((x + 1, y)), "seat 2's own cursor");
+    assert_eq!(cursor_of(&app, 1), None);
+    assert_eq!(app.r.awaiting(), Some(1), "seat 1's turn goes on");
+    app.draw();
+    assert!(app.view.hover.is_some(), "the hover shows the cursor moved last");
+    press(&mut app, "x");
+    assert_eq!(cursor_of(&app, 2), None);
 }

@@ -18,11 +18,13 @@ use std::time::Duration;
 use rlml_core::model::Model;
 use rlml_core::rt::run::{Runner, Status};
 use rlml_core::rt::state::SeatId;
+use rlml_core::rt::travel::OrderGoal;
 use rlml_core::rt::value::{CommandValue, Value};
 use rlml_core::rt::world::{RtResult, World};
 use termplate_core::frame::Frame;
 use termplate_core::keys::{Binding, KeyCode, Mods};
 
+use crate::cursor::{self, Cursor};
 use crate::draw::View;
 use crate::input::{Action, Device, Effect, Input, PadPress, Press};
 use crate::menu::{self, ItemAction, Item, Menu, Menus};
@@ -108,6 +110,9 @@ pub struct App<'m> {
     pub pointer: Option<(usize, usize)>,
     /// When the last travel step ran, for the travel's pace.
     last_step: Duration,
+    /// The seats' look cursors (M 8.1), and the seat that moved one last.
+    pub cursors: BTreeMap<SeatId, Cursor>,
+    last_cursor: Option<SeatId>,
 }
 
 /// The least time between two travel steps, so a travel shows even
@@ -163,6 +168,8 @@ impl<'m> App<'m> {
             mouse: setting("mouse").as_deref() != Some("off"),
             pointer: None,
             last_step: Duration::ZERO,
+            cursors: BTreeMap::new(),
+            last_cursor: None,
         };
         match app.title() {
             Some(title) => {
@@ -287,7 +294,8 @@ impl<'m> App<'m> {
 
     pub fn draw(&mut self) -> Frame {
         self.view.marked = self.turn_marker();
-        self.view.hover = self.pointer_cell().and_then(|p| self.r.w.hover_text(&self.lang, p));
+        self.view.hover = self.hover_cell().and_then(|p| self.r.w.hover_text(&self.lang, p));
+        self.view.cursors = self.cursor_marks();
         let (w, h) = self.size;
         let mut f = if self.playing { self.view.draw(&mut self.r.w, &self.lang, w, h) } else { Frame::new(w, h) };
         if let Some(layer) = self.menus.layers.last() {
@@ -355,6 +363,12 @@ impl<'m> App<'m> {
     /// only; other presses are dropped.
     fn press(&mut self, device: Device, press: Press, now: Duration) -> RtResult<()> {
         let always = self.input.keys.is_always(device, &press);
+        // a seat's own cursor goes before the turn's routing: it works on
+        // other seats' turns too (M 8.2)
+        let travelling_seat = self.r.awaiting().filter(|&n| self.players_turn() && self.r.travelling(n) && self.drives(device, n));
+        if !always && !self.menus.is_open() && self.playing && travelling_seat.is_none() && self.cursor_press(device, &press, now)? {
+            return Ok(());
+        }
         if !always {
             let same = |a: Device, b: Device| matches!((a, b), (Device::Keyboard(_), Device::Keyboard(_))) || a == b;
             if self.menus.is_open() {
@@ -375,6 +389,7 @@ impl<'m> App<'m> {
             && self.players_turn()
             && let Some(n) = self.r.awaiting()
             && self.r.travelling(n)
+            && self.drives(device, n)
         {
             self.r.stop_travel(n);
             return Ok(());
@@ -457,7 +472,12 @@ impl<'m> App<'m> {
                     }
                 }
             }
-            "travel_to" | "follow" => {}
+            "look" if self.players_turn() => {
+                if let Some(n) = self.r.awaiting() {
+                    self.open_cursor(n, false);
+                }
+            }
+            "travel_to" | "follow" | "look" => {}
             "quit" if self.playing => self.quit_game(),
             "quit" | "exit" => self.quit = true,
             other => self.note = Some(format!("`{other}` is not supported yet")),
@@ -567,9 +587,151 @@ impl<'m> App<'m> {
 
     /// The pointer moved to screen cell (x, y): the hover follows it.
     pub fn pointer_at(&mut self, x: usize, y: usize) {
-        if self.mouse {
-            self.pointer = Some((x, y));
+        if !self.mouse {
+            return;
         }
+        self.pointer = Some((x, y));
+        // with the awaited seat's cursor open, the pointer is that cursor (M 8.1)
+        if let (Some(n), Some(p)) = (self.r.awaiting().filter(|_| self.players_turn()), self.pointer_cell())
+            && let Some(c) = self.cursors.get_mut(&n)
+        {
+            c.pos = p;
+            self.last_cursor = Some(n);
+        }
+    }
+
+    /// The seat a device plays now: the awaited seat if it does, else the
+    /// first seat it plays (M 8.2).
+    pub fn seat_of(&self, device: Device) -> Option<SeatId> {
+        if let Some(n) = self.r.awaiting().filter(|&n| self.drives(device, n)) {
+            return Some(n);
+        }
+        self.r.w.s.seats.iter().map(|s| s.n).find(|&n| self.drives(device, n))
+    }
+
+    /// The member a seat's cursor starts at: its controlled one, else the
+    /// camera's middle.
+    fn cursor_start(&self, n: SeatId) -> Option<rlml_core::rt::value::Pos> {
+        let s = &self.r.w.s;
+        if let Some(p) = s.active(n).and_then(|e| s.at(e)) {
+            return Some(p);
+        }
+        let map = s.active_map()?;
+        let (cx, cy) = self.view.camera.get(&map).copied().unwrap_or((0, 0));
+        let r = self.view.map_rect?;
+        Some(rlml_core::rt::value::Pos { map, x: cx + r.w as i32 / 2, y: cy + r.h as i32 / 2 })
+    }
+
+    fn open_cursor(&mut self, n: SeatId, stays: bool) {
+        if let Some(pos) = self.cursor_start(n) {
+            self.cursors.insert(n, Cursor { pos, stays });
+            self.last_cursor = Some(n);
+        }
+    }
+
+    /// A press for a seat's cursor (M 8.1, M 8.2): `cursor` opens or closes
+    /// the seat's staying cursor at any time, and with a cursor open the
+    /// `LOOK` context takes the seat's presses, also on other seats' turns.
+    /// Returns whether the press was the cursor's.
+    fn cursor_press(&mut self, device: Device, press: &Press, now: Duration) -> RtResult<bool> {
+        let Some(n) = self.seat_of(device) else { return Ok(false) };
+        if self.cursors.contains_key(&n) {
+            let look = vec!["LOOK".to_string()];
+            if let Some(Action::Engine(a)) = self.input.keys.lookup_on(&look, device, press).cloned() {
+                self.cursor_action(n, &a, now)?;
+                return Ok(true);
+            }
+        }
+        let contexts = self.contexts();
+        if self.input.keys.lookup_on(&contexts, device, press) == Some(&Action::Engine("cursor".into())) {
+            if self.cursors.remove(&n).is_none() {
+                self.open_cursor(n, true);
+            } else {
+                self.r.cancel_order(n);
+            }
+            return Ok(true);
+        }
+        // a seat with its cursor open is in the cursor's context: its other
+        // presses do nothing (the `LOOK` context is modal)
+        Ok(self.cursors.contains_key(&n))
+    }
+
+    /// A `LOOK` action of seat `n`'s cursor (M 8.1).
+    fn cursor_action(&mut self, n: SeatId, a: &str, now: Duration) -> RtResult<()> {
+        let Some(c) = self.cursors.get(&n).copied() else { return Ok(()) };
+        let my_turn = self.players_turn() && self.r.awaiting() == Some(n);
+        self.last_cursor = Some(n);
+        match a {
+            _ if cursor::dir_of(a).is_some() => {
+                let p = cursor::moved(&self.r.w, c.pos, cursor::dir_of(a).unwrap());
+                self.cursors.insert(n, Cursor { pos: p, ..c });
+            }
+            "next" | "prev" => {
+                let from = self.cursor_start(n).unwrap_or(c.pos);
+                let cells = cursor::visible(&self.r.w, from);
+                if !cells.is_empty() {
+                    let i = cells.iter().position(|p| *p == c.pos);
+                    let k = match (a, i) {
+                        ("next", Some(i)) => (i + 1) % cells.len(),
+                        ("prev", Some(i)) => (i + cells.len() - 1) % cells.len(),
+                        ("prev", None) => cells.len() - 1,
+                        _ => 0,
+                    };
+                    self.cursors.insert(n, Cursor { pos: cells[k], ..c });
+                }
+            }
+            "confirm" if my_turn => {
+                if !c.stays {
+                    self.cursors.remove(&n);
+                }
+                if self.r.travel_to(n, c.pos)? {
+                    self.travel_step(now)?;
+                }
+            }
+            "follow" if my_turn => {
+                let target = cursor::actor_at(&self.r.w, c.pos);
+                if !c.stays {
+                    self.cursors.remove(&n);
+                }
+                if self.r.follow(n, target)? {
+                    self.travel_step(now)?;
+                } else {
+                    self.note = Some("follow: nobody to follow".into());
+                }
+            }
+            // on another seat's turn: an order for the seat's next one
+            "confirm" if c.stays => self.r.give_order(n, OrderGoal::Cell(c.pos)),
+            "follow" if c.stays => self.r.give_order(n, OrderGoal::Follow(cursor::actor_at(&self.r.w, c.pos))),
+            "back" => {
+                if !self.r.cancel_order(n) {
+                    self.cursors.remove(&n);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// The cell the hover describes: the awaited seat's cursor, else the
+    /// cursor moved last, else the pointer's cell (M 8.1).
+    fn hover_cell(&self) -> Option<rlml_core::rt::value::Pos> {
+        let awaited = self.r.awaiting().filter(|_| self.players_turn()).and_then(|n| self.cursors.get(&n));
+        let last = self.last_cursor.and_then(|n| self.cursors.get(&n));
+        awaited.or(last).map(|c| c.pos).or_else(|| self.pointer_cell())
+    }
+
+    /// The cells to mark on the map: open cursors and the targets of
+    /// orders (M 7.1).
+    fn cursor_marks(&self) -> Vec<rlml_core::rt::value::Pos> {
+        let mut out: Vec<_> = self.cursors.values().map(|c| c.pos).collect();
+        for o in self.r.orders.values() {
+            match o.goal {
+                OrderGoal::Cell(p) => out.push(p),
+                OrderGoal::Follow(Some(e)) => out.extend(self.r.w.s.at(e)),
+                OrderGoal::Follow(None) => {}
+            }
+        }
+        out
     }
 
     /// A mouse press at screen cell (x, y) and time `now` (M 8.1, M 8.2).
