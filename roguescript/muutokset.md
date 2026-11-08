@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 8.11.2026 (ohjaus lyhyillä vuoroilla):** komennon määre `noverb` piilottaa komennon verbikolikosta (luvut [7.1](07-komennot-ja-tekoaly.md#71-komennot) ja [12](12-kielioppi.md)).
+
 **Muutokset 6.11.2026 (moninpeli):** `players` on uusi kontekstinimi (luku [2.4](02-yleinen-syntaksi.md#24-varatut-sanat-ja-paikalliset-nimet)). Moottorin tapahtumat `join(seat)` ja `part(seat)` lähetetään, kun istuin liittyy tai poistuu kesken pelin (luku [4.1](04-tapahtumat-ja-kasittelijat.md#41-moottorin-tapahtumat)). `begin` luo hahmon jokaiselle istuimelle kutsulla `control(e, seat: n)`, ja jäsenen kuolema tunnistetaan ehdolla `seat_of(victim) != none` (luku [10.1](10-aloitus-ja-checkpointit.md#101-aloitus)). Ryhmän muut jäsenet toimivat tekoälyllään (luku [7.2](07-komennot-ja-tekoaly.md#72-tekoäly)), ja istuimet tallentuvat (luku [11.1](11-tallennus-ja-korvaaminen.md#111-tallennus)).
 
 **Muutokset 31.10.2026 (RogueScript-lekseri ja -jäsennin):** rivin jatkaminen sulkujen sisällä, `namespace` koodilohkossa, yksirivinen lohko ja `none`-arvon tyypit ovat avoimia kysymyksiä (luku [13](13-avoimet-kysymykset.md)). Siltakohtauksen esimerkki saa vartijan parametrina (`BRIDGE_RISES(guard: entity)`, luku [9.1](09-kohtaukset-ja-aikajanat.md#91-rivi)). Aloituksen esimerkki ottaa hallintaan kortista syntyneen kokoelman ensimmäisen jäsenen (`spawn(…).first`, luku [10.1](10-aloitus-ja-checkpointit.md#101-aloitus)).

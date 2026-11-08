@@ -12,14 +12,14 @@ Kaikki moottorin nimet ovat pieniä.
 | --- | --- |
 | komponentit | `render`, `movement`, `ai`, `sight`, `light`, `facing`, `timer`, `interior`, `shape`, `label`, `wire`, `blocks`, `hearing`, `sound`, `name`, `revealed`, `seat` |
 | tapahtumat | `begin`, `turn`, `wake`, `created`, `removed`, `enter`, `leave`, `arrive`, `depart`, `hear`, `join`, `part` |
-| toiminnot | `save`, `quit`, `pass`, `repeat`, `help`, `confirm`, `back`, `close`, `resume`, `skip`, `restart`, `rewind`, `new_game`, `load_game`, `exit`, `next`, `prev`, `cursor.<suunta>`, `toggle`, `travel_to`, `look`, `join`, `leave_seat` |
+| toiminnot | `save`, `quit`, `pass`, `repeat`, `help`, `confirm`, `back`, `close`, `resume`, `skip`, `restart`, `rewind`, `new_game`, `load_game`, `exit`, `next`, `prev`, `cursor.<suunta>`, `toggle`, `travel_to`, `look`, `cursor`, `follow`, `verbs`, `focus`, `join`, `leave_seat`; toiminto `follow` on eri nimi kuin kameran funktio `follow(camera, e)`, koska toiminnot esiintyvät vain sidonnoissa ja valikon kohdissa |
 | hiiren nimet | `click`, `rclick`, `mclick`, `wheel.up`, `wheel.down` (luku [8.1](08-syote.md#81-hiiri)) |
-| asettelun lähteet | `map`, `hover` (luku [7.1](07-esitys.md#71-asettelu)) |
+| asettelun lähteet | `map`, `hover`, `sentence`, `menu` (luku [7.1](07-esitys.md#71-asettelu)) |
 | kontekstinimet | `self`, `holder`, `actor`, `it`, `player`, `players`, `game`, `profile`, `map`, `camera` |
-| `game`-kentät | `start`, `at`, `seed`, `turn`, `time`, `call_depth`, `loop_steps`, `keys`, `title`, `layout`, `naming`, `masking`, `walk`, `walk_stop`, `seats`, `party`, `leash` |
+| `game`-kentät | `start`, `at`, `seed`, `turn`, `time`, `call_depth`, `loop_steps`, `keys`, `title`, `layout`, `naming`, `masking`, `walk`, `walk_stop`, `leader`, `rest`, `follow_distance`, `follow_ai`, `seats`, `party`, `leash` |
 | entiteetin kentät | `at`, `map`, `kind`, `slot`, `stack` |
 | tilen ominaisuudet | `blocks`, `only`, `lit`, `forget` ([D 7.5](../dataformaatit/07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#75-tilen-ominaisuudet-tiles)) |
-| valikon määreet | `list`, `final` ([D 11.2](../dataformaatit/11-kayttoliittyman-data.md#112-valikot)) |
+| valikon määreet | `list`, `final`, `verbs` ([D 11.2](../dataformaatit/11-kayttoliittyman-data.md#112-valikot)) |
 | tyylin määreet | `series` ([D 9.2](../dataformaatit/09-ulkoasu.md#92-tilejen-ulkoasu-tilesglyphs)) |
 | tila ja ilmentymät | `spawn`, `destroy`, `add`, `remove`, `move`, `tile`, `tag`, `entities`, `control`, `travel`, `follow`, `noise` (luku [6.8](06-ajo.md#68-äänet-ja-kuuleminen)) |
 | ruutujoukot | `tiles`, `at`, `near`, `from`, `rect`, `line`, `path`, `label`, `edge`, `pos`, `region` |

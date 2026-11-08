@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 8.11.2026 (ohjaus lyhyillä vuoroilla):** `game`-lohkon kentät `leader`, `rest`, `follow_distance` ja `follow_ai` seuraamiselle (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)). Asettelun lähde `sentence`, telakoitu valikko `- v menu NIMI` ja kartta-alueen määre `cursor` (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)). Valikon määre `verbs`, jonka verbin kohteet klikataan missä järjestyksessä tahansa (luku [11.2](11-kayttoliittyman-data.md#112-valikot)). Moottorin toiminnot `cursor`, `follow`, `verbs` ja `focus`, `verbs` oletuksena `rclick`, hiiri on yhteinen laite eikä kuulu osan 1 istuimelle, ja hiiren nimi `keyboard N` -osiossa on latausvirhe (luku [11.3](11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad)). Tekstiavaimet `<KOMENTO>.SENTENCE` ja `<KOMENTO>.NO_TARGET` sekä verbirivien pikanäppäimet (luku [10](10-tekstit.md)). Otsikkorivit (luku [14](14-osiot-ja-otsikkorivit.md)). Moottorin käytös on moottoridokumentin luvuissa [8.1](../moottori/08-syote.md#81-hiiri) ja [8.2](../moottori/08-syote.md#82-istuimet-ja-laitteet).
+
 **Muutokset 7.11.2026 (istuinten nimet):** istuimen jäsenen nimi haetaan ensin avaimella `<ENTITEETTI>.SEATn.NAME` (luku [10](10-tekstit.md)).
 
 **Muutokset 7.11.2026 (ryhmäesimerkki):** istuimen jäsenen tile `TILE.SEATn` (luku [9.2](09-ulkoasu.md#92-tilejen-ulkoasu-tilesglyphs)).
