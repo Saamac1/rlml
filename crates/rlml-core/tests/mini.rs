@@ -10,6 +10,10 @@ use rlml_core::load::MemFiles;
 fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<String, String>) {
     for e in std::fs::read_dir(dir).unwrap().flatten() {
         let p = e.path();
+        // hidden files, such as Finder's `.DS_Store`, are not game data
+        if e.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
         if p.is_dir() {
             read_tree(root, &p, out);
         } else {
