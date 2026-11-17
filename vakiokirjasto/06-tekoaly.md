@@ -60,7 +60,7 @@ Seuraaja kulkee johtajansa perässä ja puolustautuu viereiseltä viholliselta. 
 
 | Komponentti | Kentät | Merkitys |
 | --- | --- | --- |
-| `FOLLOW` | `target: entity = none`, `distance: number = 1` | johtaja ja etäisyys, jolla seuraaja pysähtyy; ilman johtajaa johtaja on lähin istuimen jäsen |
+| `FOLLOW` | `target: entity = none`, `distance: number = 1` | johtaja ja etäisyys, jolla seuraaja pysähtyy; ilman johtajaa johtaja on lähin ihmisen ohjaama istuimen jäsen |
 
 ```roguescript
 namespace STD
@@ -70,6 +70,9 @@ component FOLLOW(target: entity = none, distance: number = 1)
 query LEADER_OF(e: entity) -> entity:
     if e has FOLLOW and e.FOLLOW.target != none:
         return e.FOLLOW.target
+    led = nearest(players where it != e and controlled(it), e)
+    if led != none:
+        return led
     return nearest(players where it != e, e)
 
 ai FOLLOWER:
@@ -87,7 +90,7 @@ ai FOLLOWER:
     return APPROACH(leader)
 ```
 
-- **Lähin jäsen.** Ilman `FOLLOW.target`-kenttää johtaja on lähin muu istuimen jäsen (`players`, moottoridokumentti luku [6.1.10](../moottori/06-ajo.md#6110-istuimet-ja-ryhmä)), joten ryhmän jäsen seuraa toista jäsentä eikä itseään. Yksinpelissä se on pelaaja. Moninpelissä `player` vaihtuisi joka vuoro.
+- **Lähin jäsen.** Ilman `FOLLOW.target`-kenttää johtaja on lähin muu jäsen, jota ihminen ohjaa (`controlled`, moottoridokumentti luku [9.3](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)), ja jos sellaista ei ole, lähin muu istuimen jäsen (`players`, luku [6.1.10](../moottori/06-ajo.md#6110-istuimet-ja-ryhmä)). Ryhmän jäsen seuraa siis toista jäsentä eikä itseään, eikä seuraaja valitse johtajakseen toisen istuimen seuraajaa, joka vain odottaa. Yksinpelissä se on pelaaja. Moninpelissä `player` vaihtuisi joka vuoro.
 - **Poistuva istuin.** `PART_PLAYER` tekee poistuvan istuimen jäsenistä seuraajia, joten hahmot jäävät ryhmään:
 
 ```roguescript
@@ -114,7 +117,7 @@ keys GAME
 - follow f
 ```
 
-  Tekoälyaskeleessa `self` on seuraaja, joten `LEADER_OF(self)` palauttaa lähimmän muun jäsenen, ellei `FOLLOW.target` nimeä toista. Katselukursorilla valittu kohde ei siksi ohjaa `FOLLOWER`-askelta. Pelin oma tekoäly voi käyttää kontekstinimeä `it`, joka on seurattava.
+  Tekoälyaskeleessa `self` on seuraaja, joten `LEADER_OF(self)` palauttaa lähimmän muun ihmisen ohjaaman jäsenen, ellei `FOLLOW.target` nimeä toista. Katselukursorilla valittu kohde ei siksi ohjaa `FOLLOWER`-askelta. Pelin oma tekoäly voi käyttää kontekstinimeä `it`, joka on seurattava.
 
 ---
 
