@@ -53,7 +53,7 @@ tiles.glyphs spritesheet "tiles16.png" 16x16
 - **Merkki.** Merkki on yksi Unicode-koodipiste kuten piirroksessa (luku [8.1](08-kartat-ja-prefabit.md#81-karttatiedosto)): yhdistävät merkit, liitosmerkki ja variaatiovalitsimet ovat latausvirheitä, ja leveä merkki antaa latausvaroituksen (`- GLYPH.HEART ♥ fg RED`). Välilyönti kirjoitetaan `' '` kuten legendissä (`- FLOOR ' ' bg DARK`), ja heittomerkki itse kirjoitetaan sellaisenaan (`- DOOR.open ' fg WOOD`).
 - **Graafinen:** `tiles.glyphs spritesheet "tiles16.png" 16x16` lukee kuva-arkin, ja sen rivit antavat kuvan indeksin (`- WALL 12`). `fg` ja `bg` ovat valinnaisia, ja graafisessa esitystavassa ne ovat sävytyksiä.
 - **Haku** on sama kuin muilla tilen ominaisuuksilla (luku [7.5](07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#75-tilen-ominaisuudet-tiles)): tarkin nimi, välirivit, perusnimi ja `default`. Tilejoukot eivät kelpaa riveiksi (luku [7.4](07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#74-hakeva-ja-tuottava-paikka)).
-- **Otsikon muoto** on `tiles.OMINAISUUS ESITYSTAPA [lisät]`. Pisteen jälkeen sallitaan vain esitystavoittain annettavat ominaisuudet, eli toistaiseksi `glyphs`. Esimerkiksi `tiles.blocks` on latausvirhe, koska esto ei riipu esitystavasta.
+- **Otsikon muoto** on `tiles.OMINAISUUS ESITYSTAPA [lisät]`. Pisteen jälkeen sallitaan vain esitystavoittain annettavat ominaisuudet, eli toistaiseksi `glyphs`. Paperiesitystavan otsikot `maps.theme` ja `areas.labels` kuvataan luvussa [9.6](#96-paperikartta-paper). Esimerkiksi `tiles.blocks` on latausvirhe, koska esto ei riipu esitystavasta.
 - **Erilliset rivit:** `tiles.glyphs`-rivillä annetaan vain ulkoasu, eikä `tiles`-rivillä anneta ulkoasua. Säännöt ja ulkoasu pysyvät näin eri tiedostoissa (luku [1.1](01-rajaus-ja-periaatteet.md#11-periaatteet)).
 - **Monta osiota ja korvaus:** saman esitystavan osiot yhdistyvät riveittäin kuten `tiles`-osiot (luku [4.8](04-nimiavaruudet.md#48-lohkojen-yhdistäminen-patch-new-ja-drop)), ja rivin korvaus merkitään `- override WALL # fg RED` (luku [4.5](04-nimiavaruudet.md#45-korvaaminen-ja-override)).
 - **Entiteetin tile** tulee moottorin komponentista `render` (`- render GLYPH.GOBLIN`, luku [5.3](05-komponentit-ja-entiteetit.md#53-moottorin-komponentit)).
@@ -110,6 +110,63 @@ Rivi on `- NIMI LÄHDE [where ehto] [remember] [smooth AIKA]`.
 - `smooth` liu’uttaa liikkeen annetussa ajassa, ja se on käytössä vain graafisessa esitystavassa.
 - Kerroksen ulkoasu (`alpha`, värit) kuuluu tyylitiedostoon.
 - **Nimet:** konsolin piirtokerrokset (`layers`) ja ruudun maastokerrokset (`terrain`) ovat eri asioita. Molemmat nimetään isoilla, mutta ne eivät viittaa toisiinsa.
+
+## 9.6 Paperikartta: paper
+
+Esitystapa `paper` piirtää kartan tulostettavaksi mustavalkoiseksi vektorikartaksi: rosoinen rantaviiva, viivoitettu meri ja kallio, maaston ja esineiden symbolit, alueiden nimet ja selite. Sitä käyttävät tulostettavien karttojen työkalut, kuten karttageneraattori. Peli ei valitse sitä asetuksella `- style`, eikä sillä ole konsolin kerroksia. Tulosteen paperikoko, ruudun koko ja viivavahvuudet ovat työkalun asetuksia eivätkä dataa.
+
+```
+maps.theme paper
+- default sea
+- DECK ship
+- HOLD ship
+- CAVE cave
+
+tiles.glyphs paper
+- WALL.crystal solid straight pattern runes
+- FLOOR.bridge floor pattern planks
+- MARSH shrubs
+- KRAKEN decor
+
+areas.labels paper
+- level 0 size 11 spacing wide
+- level 1 size 8.5
+- SYNKKA_SYVA size 9 place water
+- VAARAVUORI in MERIKARTTA outline dotted
+```
+
+**Kartan piirtotapa: maps.theme.** Rivi `- KARTTA TAPA` valitsee kartan piirtotavan, ja `- default TAPA` antaa sen muille kartoille. Ilman riviä tapa on `sea`.
+
+| Tapa | Piirto |
+| --- | --- |
+| `sea` | merikartta: rosoinen rantaviiva, meri vaakaviivoitettuna (matalikko tummin), vuoret, kukkulat, metsät, pensaikko, palmut ja joet |
+| `cave` | luola: luonnonseinät rosoisina ja rakennetut seinät suorina, kallio viivoitettuna avoimen tilan vierestä |
+| `ship` | laiva: runko umpiviivoitettuna, kansilankut, ympärillä vaakaviivoitettu meri |
+
+**Tilen piirto: tiles.glyphs paper.** Paperiesitystavassa tilen ulkoasu on piirtotapa eikä merkki. Rivi on `- TILE [LAJI] [määreet] [decor]`, ja haku on sama kuin luvussa [9.2](#92-tilejen-ulkoasu-tilesglyphs): tarkin nimi, perusnimi ja `default`.
+
+- **Lajit merikartalla:** `water`, `grass`, `shrubs`, `conifer`, `deciduous`, `palm`, `mountain`, `hill`, `river`, `treasure` ja `kraken`.
+- **Lajit luolassa ja laivassa:** `solid` (seinä, kallio, runko), `floor` (kuljettava lattia), `void` (ulkopuoli: meri tai tyhjä), `door`, `stairs` ja `exit` (poistuminen kartalta).
+- **Määreet:** `rough` ja `straight` (seinän muoto), `thin` (ohut seinä, esimerkiksi kaide), `pattern planks|boards|gangplank|moss|runes` (lattian tai seinän kuvio), `symbol NIMI` (piirretty symboli), `locked` (ovi) sekä `up` ja `down` (portaat).
+- **Symbolit:** `chest`, `key`, `gold`, `gem`, `goblet`, `amulet`, `himmeli`, `pillar`, `barrel`, `cannon`, `mast`, `helm`, `crate`, `table`, `anchor`, `crew`, `torch`, `window`, `port`, `lantern`, `hatch` ja `ladder`.
+- `decor` piirtää tilen tai entiteetin kartalle mutta jättää sen pois selitteestä. Kraken on koriste, ei kartan merkki.
+- **Laji puuttuu.** Rivi ilman lajia (`- KRAKEN decor`) antaa vain määreet, ja piirtäjä päättelee lajin tilen nimestä. Päättely on piirtäjän oma eikä kuulu speksiin, joten tile, jonka piirto halutaan varmaksi, saa oman rivinsä.
+- **Entiteetin rivi.** Paperiesitystavassa rivin nimi voi olla tile tai entiteetti (`- CHEST symbol chest`). Entiteetin nimen rivi ei luo tileä eikä mainitse sitä (luku [7](07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md)), joten se ei törmää entiteetin nimeen. Nimi, joka on sekä entiteetin että tilen nimi, ei ole mahdollinen, koska yleiset nimet ovat yksikäsitteisiä (luku [2.1](02-yleinen-syntaksi.md#21-nimet-ja-sanasto)).
+- **Entiteetit** (`with` legendissä ja `at:`-rivillä) piirretään lattian päälle. Haku on entiteetin oma rivi, sitten sen vanhempien rivit (`extends`, luku [5.2](05-komponentit-ja-entiteetit.md#52-entiteetit)) ja lopuksi sen `render`-tilen rivi (luku [5.3](05-komponentit-ja-entiteetit.md#53-moottorin-komponentit)). Työkalu, joka ei lue entiteettien määrittelyjä, hakee vain entiteetin nimellä.
+- **Poistumat.** Nimiöllä merkitty `exit`-ruutu saa tekstikseen nimiön näkyvän nimen avaimella `<KARTTA>.<NIMIÖ>.NAME` (luku [10](10-tekstit.md)).
+
+**Alueiden nimet: areas.labels.** Alueet (luku [8.11](08-kartat-ja-prefabit.md#811-nimetyt-alueet-areas)) kirjoitetaan karttaan niiden näkyvällä nimellä. Rivi on `- level N [määreet]` tai `- ALUE [in KARTTA] [määreet]`.
+
+- **Haku:** piirtäjän oletus, sitten alueen tason rivi ja lopuksi alueen oma rivi. Myöhempi määre voittaa aiemman. `in KARTTA` rajaa rivin yhteen karttaan, ja ilman sitä rivi koskee kaikkia karttoja, joilla on samanniminen alue tai sama taso.
+- `size N` on tekstin korkeus, jossa 16 on yhden ruudun korkeus. Oletus on tasolla 0 `11`, tasolla 1 `8.5` ja syvemmällä `7`.
+- `spacing wide|normal` on kirjainväli. Tason 0 oletus on `wide`.
+- `place land|water|center` sijoittaa nimen alueen maaruutujen painopisteeseen, syvimpään vesikohtaan tai alueen keskelle. Ilman määrettä nimi menee maalle, jos alueesta on maata vähintään neljännes.
+- `at X,Y` antaa nimen keskipisteen ruutuina, ja desimaalit ovat sallittuja (`at 12.5,8`).
+- `hide` jättää alueen nimen piirtämättä.
+- `outline dotted` piirtää alueen rajan pisteviivana.
+- Piirtäjä siirtää nimeä, jos se osuisi toiseen nimeen, selitteeseen tai korkeaan maastoon.
+
+**Otsikot.** Paperiesitystapa tuo luvun [9.2](#92-tilejen-ulkoasu-tilesglyphs) otsikkomuodon rinnalle kaksi uutta: `maps.theme paper` ja `areas.labels paper`. Ne ovat esitystavan omia, joten muussa esitystavassa (`maps.theme ascii`) ne ovat latausvirheitä.
 
 ---
 

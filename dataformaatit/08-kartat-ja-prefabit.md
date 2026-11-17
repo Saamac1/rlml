@@ -190,8 +190,9 @@ Kohde on yksi kolmesta, ja laji ratkeaa muodosta:
 | sijainti | `at 5,3` | yksi ruutu |
 | nimiö | `at START` | nimiöryhmän ruudut ja nimettyjen entiteettien ruudut |
 | hakujoukko | `at STAIR.up`, `at WATER.1..2`, `at SHRINES` | ruudut, joiden jokin kerros on joukon jäsen (luku [7.4](07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#74-hakeva-ja-tuottava-paikka)) |
+| alue | `at VAARAVUORI` | alueen ruudut (luku [8.11](#811-nimetyt-alueet-areas)) |
 
-Luvulla alkava kohde on sijainti. Muu kohde on nimi: ensin katsotaan kartan nimiöt, sitten yleinen nimenhaku. Sekaannusta ei synny, koska nimiö ei saa olla sama kuin yleinen nimi (luku [2.1](02-yleinen-syntaksi.md#21-nimet-ja-sanasto)). Löytynyt yleinen nimi, joka ei ole tile eikä tilejoukko, on latausvirhe.
+Luvulla alkava kohde on sijainti. Muu kohde on nimi: ensin katsotaan kartan nimiöt ja alueet, sitten yleinen nimenhaku. Sekaannusta ei synny, koska nimiö ei saa olla sama kuin yleinen nimi (luku [2.1](02-yleinen-syntaksi.md#21-nimet-ja-sanasto)). Löytynyt yleinen nimi, joka ei ole tile eikä tilejoukko, on latausvirhe.
 
 `near` rajaa kohteen ruudut ankkurin lähelle:
 
@@ -201,7 +202,7 @@ at FLOOR near GATE_A 2..4
 at START near 3
 ```
 
-- **Ankkuri** on nimiö. Ruudun nimiö on kiinteä paikka, entiteetin nimiö (`label`, luku [8.5](#85-nimiöt-ryhmät-ja-johtimet)) sen kantajan nykyinen ruutu. Ryhmä on jäsentensä lähialueiden yhdiste. Kokoelmassa oleva entiteetti ei ole kartalla, joten se ei ole ankkuri.
+- **Ankkuri** on nimiö tai alue. Ruudun nimiö ja alue ovat kiinteitä paikkoja, entiteetin nimiö (`label`, luku [8.5](#85-nimiöt-ryhmät-ja-johtimet)) sen kantajan nykyinen ruutu. Ryhmä on jäsentensä lähialueiden yhdiste. Kokoelmassa oleva entiteetti ei ole kartalla, joten se ei ole ankkuri.
 - **Etäisyys** on luku tai väli. Luku N tarkoittaa väliä `0..N`, ja oletus on 1. Väli antaa renkaan: `2..4` jättää ankkurin ja sen lähimmät ruudut pois. Avoin yläraja `2..` on sallittu.
 - **Metriikka** on Chebyshev: kaikki kahdeksan naapuria ovat etäisyydellä 1, kuten kahdeksan suuntaa (luku [2.4](02-yleinen-syntaksi.md#24-arvot)).
 - **Leikkaus:** `FLOOR near START 3` on lattiaruudut, jotka ovat enintään kolmen ruudun päässä `START`-ruudusta.
@@ -257,11 +258,38 @@ vars:
 - WEALTH 2
 ```
 
-- Perivä kartta saa pohjan piirroksen, legendin, `vars:`-osion ja `at:`-rivit.
-- Omat `legend:`-rivit korvaavat pohjan rivit merkin mukaan, `vars:`-rivit nimen mukaan ja `at:`-rivit sijainnin mukaan. Uudet rivit lisätään.
+- Perivä kartta saa pohjan piirroksen, legendin, `vars:`-osion, `at:`-rivit ja alueet (`areas:`).
+- Omat `legend:`-rivit korvaavat pohjan rivit merkin mukaan, `vars:`-rivit nimen mukaan ja `at:`-rivit sijainnin mukaan. `areas:`-rivit lisätään aina, joten oma rivi voi laajentaa pohjan aluetta. Uudet rivit lisätään.
 - `size` tulee pohjasta, ja oma piirros on latausvirhe. Otsikon `transient`, `wrap` ja `nosave` ovat kartan omia eivätkä periydy.
 - Pohja voi itse periä toisen kartan. Kehä tai puuttuva pohja on latausvirhe, samoin generoitu pohja.
 - Pohja on tavallinen kartta, jolle voi myös siirtyä. Pelkkänä pohjana käytettävän kartan nimi kannattaa ryhmitellä (`TOWN.A`).
+
+## 8.11 Nimetyt alueet: areas:
+
+Alue nimeää kartan osan, esimerkiksi saaren, vuoren tai salin. Alue on pelkkää merkitystä: se ei muuta ruutuja, vaan kertoo, mihin nimettyyn paikkaan ruutu kuuluu. Pelin tilarivi voi näyttää sen, ja tulostettava kartta kirjoittaa alueen nimen karttaan.
+
+```
+map MERIKARTTA size 64x44
+…
+
+areas:
+- 8,6 size 26x17 as NORSUSAARI
+- 30,3 size 7x6 as NORSUSAARI
+- 14,9 size 7x5 as VAARAVUORI
+- 2,24 size 12x10 as SYNKKA_SYVA
+```
+
+- **Rivi** on `- X,Y size LxK as ALUE`: suorakulmio, jonka vasen yläkulma on ruudussa `X,Y` (luku [2.4](02-yleinen-syntaksi.md#24-arvot)) ja koko L × K ruutua. Suorakulmion on oltava kokonaan kartan sisällä, ja sen leveys ja korkeus ovat vähintään 1. Muu on latausvirhe.
+- **Yhdiste.** Saman nimen rivit muodostavat yhdessä alueen. Rajaukset saavat olla päällekkäin ja vierekkäin, joten alueen voi koota mistä muodosta tahansa. Yllä `NORSUSAARI` on kahden suorakulmion yhdiste.
+- **Nimi** on kartan sisäinen nimi kuten nimiö (luku [8.5](#85-nimiöt-ryhmät-ja-johtimet)), joten jokaisella kartalla voi olla omat alueensa. Sama nimi ei saa olla kartalla sekä alueena että nimiönä, ja se ei saa olla sama kuin yleinen nimi (luku [2.1](02-yleinen-syntaksi.md#21-nimet-ja-sanasto)). Myös yhdistelmä `<KARTTA>.<ALUE>` on latausvirhe, jos se on yleinen nimi, koska näkyvän nimen avain olisi silloin kaksitulkintainen (luku [10](10-tekstit.md)).
+- **Ruutu voi kuulua moneen alueeseen.** Yllä Vaaravuoren ruudut kuuluvat sekä Vaaravuoreen että Norsusaareen.
+- **Sisäkkäisyys.** Alue A on alueen B vanhempi, kun kaikki B:n ruudut ovat A:ssa ja A:ssa on enemmän ruutuja. Vanhemmista lähin on se, jossa on vähiten ruutuja. Alueen taso on sen vanhempien määrä, joten uloimmat alueet ovat tasolla 0. Sisäkkäisyys lasketaan ruuduista, eikä sitä kirjoiteta.
+- **Osittainen päällekkäisyys.** Jos kaksi aluetta jakaa ruutuja mutta kumpikaan ei ole toisen sisällä, lataus varoittaa, eikä kummastakaan tule toisen vanhempaa.
+- **Tarkin alue.** Ruudun tarkin alue on pienin alue, johon ruutu kuuluu. Tasatilanteessa voittaa myöhemmin määritelty alue. Esimerkiksi tilarivi näyttää tarkimman alueen (*Vaaravuori*) tai koko polun (*Norsusaari › Vaaravuori*).
+- **Paikkahaku.** Alueen nimi kelpaa paikkahaun kohteeksi ja ankkuriksi (luku [8.8](#88-paikkahaku-at-near-ja-from)): `at VAARAVUORI` on alueen ruudut, ja `at FLOOR near NORSUSAARI 2` on lattiat enintään kahden ruudun päässä saaresta.
+- **Näkyvä nimi** on kielitiedostossa avaimella `<KARTTA>.<ALUE>.NAME` (luku [10](10-tekstit.md)), ja alueen nimen piirtäminen kuuluu tyylitiedostoon (luku [9.6](09-ulkoasu.md#96-paperikartta-paper)).
+- **Perivä kartta** saa pohjan alueet, ja sen omat `areas:`-rivit lisätään niihin (luku [8.10](#810-perivä-kartta-extends)).
+- **Prefabissa** `areas:` on toistaiseksi latausvirhe, koska saman prefabin kaksi sijoitusta toisivat saman alueen kahteen paikkaan (luku [13](13-avoimet-kysymykset.md)).
 
 ---
 

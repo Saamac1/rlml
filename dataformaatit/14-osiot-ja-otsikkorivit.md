@@ -21,12 +21,16 @@
 | `terrain` | `- KERROS [default] [pass] [fill TILE]` | 7.2 |
 | `tileset` | `tileset NIMI`, rivit tilejä, välejä ja joukkoja | 7.3 |
 | `tiles` | `- TILE [OMINAISUUS arvot ...]`, esim. `- DOOR blocks move sight`, `- WATER only RAFT SHIP`, `- FLOOR lit`, `- FLOOR.dark lit false forget` | 7.5 |
-| `map` | `map NIMI [extends POHJA] [size LxK] [transient] [wrap] [nosave]`, piirros, `legend:`, `vars:`, `at:` (generoitu kartta RogueScriptissä) | 8.1, 8.10 |
+| `map` | `map NIMI [extends POHJA] [size LxK] [transient] [wrap] [nosave]`, piirros, `legend:`, `vars:`, `at:`, `areas:` (generoitu kartta RogueScriptissä) | 8.1, 8.10, 8.11 |
 | `at:` | `- X,Y [TILE] [KERROS TILE ...] [with …] [as …] [wire …]` kartan tai prefabin alilohkona | 8.9 |
+| `areas:` | `- X,Y size LxK as ALUE` kartan alilohkona; saman nimen rivit muodostavat yhdisteen | 8.11 |
 | `prefab` | `prefab NIMI`, piirros, `legend:`, `at:` (sijoitus generaattorissa) | 8.7 |
 | paikkahaku | `at KOHDE [near [ANKKURI] [ETÄISYYS]]`, `at SIIRTYMÄ from ANKKURI` | 8.8 |
 | `colors` | `- NIMI hex` | 9.1 |
 | `tiles.glyphs` | `tiles.glyphs ascii` tai `tiles.glyphs spritesheet "polku" LxK`; sarjarivi `- TILE.a..b series "MERKIT" fg VÄRIT` tai `- TILE.a..b series ALKU..LOPPU` | 9.2 |
+| `tiles.glyphs paper` | `- TILE [LAJI] [määreet] [decor]` | 9.6 |
+| `maps.theme paper` | `- KARTTA sea \| cave \| ship`, `- default TAPA` | 9.6 |
+| `areas.labels paper` | `- level N [määreet]` tai `- ALUE [in KARTTA] [määreet]`; määreet `size N`, `spacing wide \| normal`, `place land \| water \| center`, `at X,Y`, `hide`, `outline dotted` | 9.6 |
 | `panels`, `logs`, `presentation` | tyylin rivit | 9.3 |
 | `layers` | `- NIMI LÄHDE [where ehto] [remember] [smooth AIKA]` | 9.5 |
 | `language` | `language KIELI` tiedoston alussa, rivit `AVAIN teksti` ilman `-`-merkkejä | 10 |
