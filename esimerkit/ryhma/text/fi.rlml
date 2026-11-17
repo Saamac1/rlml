@@ -26,3 +26,5 @@ EXAMINE.SENTENCE Tutki {what}
 STRIKE_AT.SENTENCE Lyö {target}
 EXAMINE.NO_TARGET Siinä ei ole mitään tutkittavaa.
 STRIKE_AT.NO_TARGET Siinä ei ole vihollista vieressä.
+FLOOR.DESC Kivinen lattia.
+WALL.DESC Karkea luolan seinä.
