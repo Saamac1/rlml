@@ -56,6 +56,9 @@ component FOLLOW(target: entity = none, distance: number = 1)
 query LEADER_OF(e: entity) -> entity:
     if e has FOLLOW and e.FOLLOW.target != none:
         return e.FOLLOW.target
+    led = nearest(players where it != e and controlled(it), e)
+    if led != none:
+        return led
     return nearest(players where it != e, e)
 
 ai FOLLOWER:

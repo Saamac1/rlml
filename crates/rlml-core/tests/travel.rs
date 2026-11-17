@@ -6,13 +6,17 @@ use rlml_core::load::MemFiles;
 use rlml_core::model::Model;
 use rlml_core::rt::run::{Runner, Status};
 use rlml_core::rt::state::Place;
-use rlml_core::rt::travel::{OrderGoal, Stop};
+use rlml_core::rt::travel::{Goal, OrderGoal, Stop};
 use rlml_core::rt::value::{CommandValue, Pos};
 use rlml_core::rt::world::World;
 
 fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<String, String>) {
     for e in std::fs::read_dir(dir).unwrap().flatten() {
         let p = e.path();
+        // hidden files, such as Finder's `.DS_Store`, are not game data
+        if e.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
         if p.is_dir() {
             read_tree(root, &p, out);
         } else {
@@ -215,6 +219,24 @@ fn a_follower_keeps_next_to_its_leader() {
     assert!(r.travelling(2));
     r.stop_travel(2);
     assert!(!r.travelling(2), "a press stops it");
+}
+
+#[test]
+fn the_leader_is_a_member_a_person_drives() {
+    // seat 1's companion stands as near to seat 2 as seat 1's hero does
+    let src = CORRIDOR
+        .replace("FIELDS", "- party switch")
+        .replace("#B...............R.#", "#BP..............R.#")
+        .replace("- B FLOOR as P2", "- B FLOOR as P2\n- P FLOOR with PAL")
+        .replace("entity RAT", "entity PAL extends HERO\n- seat 1\n- ai behavior STILL\n\nentity RAT");
+    let m = model(&files(&src));
+    let mut r = start(&m);
+    r.input(1, &wait()).unwrap();
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(r.awaiting(), Some(2));
+    assert!(r.follow(2, None).unwrap());
+    let hero = r.w.s.active(1).unwrap();
+    assert_eq!(r.travels[&2].goal, Goal::Follow(hero), "seat 1's hero, not its companion (STD 6.1)");
 }
 
 #[test]

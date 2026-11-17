@@ -281,7 +281,7 @@ on begin() as SPAWN_PLAYER:
 
 - **`JOIN_PLAYER`** (`on join`) luo hahmon vapaaseen ruutuun `player`-hahmon ympäriltä kahden ruudun säteeltä ja antaa sen istuimelle. Jos elävää jäsentä ei ole tai vapaata ruutua ei löydy, istuin jää tyhjäksi.
 - **`PART_PLAYER`** (`on part`) antaa poistuvan istuimen jäsenille seuraajan tekoälyn `FOLLOWER` ja komponentin `FOLLOW` (STD 6.1). Uutta tekoälyä ei tarvita.
-- **Johtaja.** `LEADER_OF` palauttaa `FOLLOW.target`-kentän tai, jos se puuttuu, lähimmän jäsenen (`nearest(players, e)`). Nykyinen varajohtaja `player` vaihtuisi joka vuoro.
+- **Johtaja.** `LEADER_OF` palauttaa `FOLLOW.target`-kentän tai, jos se puuttuu, lähimmän jäsenen (`nearest(players, e)`). Myöhemmin (STD 6.1) johtajaksi valitaan ensin lähin ihmisen ohjaama jäsen, jotta `follow` ei seuraa toisen istuimen seuraajaa. Nykyinen varajohtaja `player` vaihtuisi joka vuoro.
 
 ```roguescript
 on join(seat) as JOIN_PLAYER:
