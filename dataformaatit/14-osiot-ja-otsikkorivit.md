@@ -30,7 +30,7 @@
 | `tiles.glyphs` | `tiles.glyphs ascii` tai `tiles.glyphs spritesheet "polku" LxK`; sarjarivi `- TILE.a..b series "MERKIT" fg VÄRIT` tai `- TILE.a..b series ALKU..LOPPU` | 9.2 |
 | `tiles.glyphs paper` | `- TILE [LAJI] [määreet] [decor]` | 9.6 |
 | `maps.theme paper` | `- KARTTA sea \| cave \| ship`, `- default TAPA` | 9.6 |
-| `areas.labels paper` | `- level N [määreet]` tai `- ALUE [in KARTTA] [määreet]`; määreet `size N`, `spacing wide \| normal`, `place land \| water \| center`, `at X,Y`, `hide`, `outline dotted` | 9.6 |
+| `areas.labels paper` | `- level N [in KARTTA] [määreet]` tai `- ALUE [in KARTTA] [määreet]`; määreet `size N`, `spacing wide \| normal`, `place land \| water \| center`, `at X,Y`, `hide`, `outline dotted` | 9.6 |
 | `panels`, `logs`, `presentation` | tyylin rivit | 9.3 |
 | `layers` | `- NIMI LÄHDE [where ehto] [remember] [smooth AIKA]` | 9.5 |
 | `language` | `language KIELI` tiedoston alussa, rivit `AVAIN teksti` ilman `-`-merkkejä | 10 |
