@@ -228,7 +228,7 @@ Järjestyksen ansiosta käsittelijä voi siirtää pelaajan ja käynnistää koh
 
 ### 6.1.8 Aktiiviset kartat ja jäädytys
 
-Aika kulkee vain aktiivisella kartalla. Moninpelissä aktiivisia ovat kaikki jäsenten kartat (luku [6.1.10](#6110-istuimet-ja-ryhmä)). Aktiivinen kartta on pelaajan kartta, ja jos pelaaja on kokoelmassa, sen ylimmän kantajan kartta. Jos pelaajaa ei ole, aktiivinen kartta on se, jolla pelaaja viimeksi oli, ja kamera jää sinne. Ilman pelaajaa alkanut peli käyttää aloituskarttaa (`game.start`). Muut kartat ovat jäädytettyjä: niiden toimijat eivät herää, ajastimet eivät etene eikä `turn` tavoita niiden ilmentymiä.
+Aika kulkee vain aktiivisella kartalla. Moninpelissä aktiivisia ovat kaikki jäsenten kartat (luku [6.1.10](#6110-istuimet-ja-ryhmä)), ja atlaksessa pelaajan lehden koko lähialue (luku [6.10](#610-atlas)). Aktiivinen kartta on pelaajan kartta, ja jos pelaaja on kokoelmassa, sen ylimmän kantajan kartta. Jos pelaajaa ei ole, aktiivinen kartta on se, jolla pelaaja viimeksi oli, ja kamera jää sinne. Ilman pelaajaa alkanut peli käyttää aloituskarttaa (`game.start`). Muut kartat ovat jäädytettyjä: niiden toimijat eivät herää, ajastimet eivät etene eikä `turn` tavoita niiden ilmentymiä.
 
 - **Kartan kello.** Jokaisella kartalla on oma kello, joka kulkee vain, kun kartta on aktiivinen: se on `game.time` vähennettynä ajalla, jonka kartta on ollut jäädytettynä. Kartan herätykset ovat sen kellon ajassa, joten jäädytetyn kartan herätykset odottavat sellaisinaan. Kello alkaa ensimmäisessä latauksessa arvosta game.time. Herätyksen hetki on aina sen kartan kellossa, jolla toimija on ajoitushetkellä.
 - **Sulatus.** Kun kartta tulee taas aktiiviseksi, sen kello jatkaa siitä, mihin se pysähtyi. Järjestysnumerot säilyvät, joten kartan sisäinen järjestys ei muutu. Hirviö, jolta puuttui 30 mikroaskelta vuoroon pelaajan lähtiessä, saa vuoronsa 30 mikroaskelta pelaajan paluun jälkeen.
@@ -415,6 +415,20 @@ Otsikon määre `wrap` ([D 8.1](../dataformaatit/08-kartat-ja-prefabit.md#81-kar
 - **Näkö, valo ja ääni** leviävät reunan yli samoin säännöin.
 - **Reunat.** `edge` palauttaa tyhjän joukon, joten reunanimiöitä ei tarvita.
 - **Esitys.** Kamera piirtää kartan reunan yli (luku [7.1](07-esitys.md#71-asettelu)).
+
+## 6.10 Atlas
+
+Atlaksen lehdet ([D 8.12](../dataformaatit/08-kartat-ja-prefabit.md#812-atlas-karttalehdet)) ovat tavallisia karttoja, mutta niiden reunat liittyvät naapurilehtiin. Moottori siirtää kulkijan reunan yli, joten lehtien väliin ei tarvita nimiöitä eikä siirtymäkäsittelijöitä.
+
+- **Reunan ylitys.** Kun liike veisi entiteetin lehden reunan yli ja suunnassa on lehti atlaksen ruudukossa, kohderuutu on naapurilehden vastaava ruutu: itään ylittävä liike lehdeltä B10 ruudusta (L−1, y) vie lehdelle C10 ruutuun (0, y). Vinoliike kulman yli vie vinossa olevalle lehdelle. Ruudukon ulkoreuna on tavallinen kartan reuna.
+- **Esto.** Liikekomento tarkistaa kohderuudun eston naapurilehdeltä samoin kuin lehden sisällä (luku [6.3](#63-komennot)); naapurilehti on lähialueessa valmiiksi ladattuna. Törmäys lähettää `STD.BUMP`-tapahtuman kuten muulloinkin.
+- **Siirto.** Ylitys on siirto kartalta toiselle (luku [6.7](#67-siirtyminen-kartalta-toiselle)): se tehdään toiminnon lopussa, ja se lähettää tapahtumat `leave`, `depart` ja `arrive`. Jäädytystä ei tehdä lehti kerrallaan vaan lähialueittain (alla), ja moninpelissä jäsenet voivat olla eri lehdillä.
+- **Puuttuva lehti** luodaan atlaksen `fill`-tilestä, kun se tulee ensimmäisen kerran lähialueeseen, ja se säilyy kuten muutkin kartat. Jos `fill` estää liikkeen tai puuttuu, ylitys estyy.
+- **Lähialue.** Lehden lähialue on lehti ja sen naapurit, enintään 3 × 3 lehteä. Haut ja aistit ulottuvat yhden lehtirajan yli: `near`, `from`, `rect`, `line`, `ray`, `path`, `adjacent` ja etäisyys sekä näkö, valo ja ääni lasketaan lähialueella atlaksen koordinaatein, ja tulos voi sisältää naapurilehtien ruutuja. Jokainen ruutu kantaa lehtensä kuten muutkin ruudut ([RS 2](../roguescript/02-yleinen-syntaksi.md)). Lähialueen ulkopuolelle osuvat ruudut putoavat pois kuten kartan reunan yli. `tiles()`, `at(HAKU)`, `label` ja `edge` koskevat kontekstin lehteä, ja datan paikkahaku ([D 8.8](../dataformaatit/08-kartat-ja-prefabit.md#88-paikkahaku-at-near-ja-from)) pysyy lehdellä.
+- **Säteet.** Koska haku ulottuu vain yhden lehtirajan yli, lehden leveyden ja korkeuden on oltava vähintään pelin suurin säde. Lataus varoittaa, jos jonkin entiteetin `sight`-, `light`- tai `hearing`-säde on suurempi kuin lehden pienempi mitta.
+- **Aktiiviset lehdet.** Pelaajan lehden koko lähialue on aktiivinen (luku [6.1.8](#618-aktiiviset-kartat-ja-jäädytys)): kaikki sen lehdet kulkevat samalla kellolla, ja niiden toimijat heräävät. Naapurilehden hirviö, joka näkee pelaajan, jahtaa sitä siis rajan yli, eikä raja ole pakotie. Kun pelaaja ylittää rajan, lähialue siirtyy: pois jäävät lehdet jäädytetään ja uudet ladataan tai sulatetaan. Moninpelissä aktiivisia ovat jäsenten lähialueiden yhdiste.
+- **Liike ja reitti.** `move` ja reitin seuraaminen naapurilehden ruutuun on reunan ylitys yllä olevin säännöin. `path` voi kulkea lehtirajan yli lähialueella.
+- **Esitys.** Kamera näyttää lähialueen naapurilehdet kartta-alueen reunassa, joten lehtiraja ei näy (luku [7.1](07-esitys.md#71-asettelu)).
 
 ---
 

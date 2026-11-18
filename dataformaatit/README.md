@@ -64,6 +64,7 @@ Muutoshistoria: [muutokset.md](muutokset.md).
   - [8.9 Sijaintikohtaiset rivit: at:](08-kartat-ja-prefabit.md#89-sijaintikohtaiset-rivit-at)
   - [8.10 Perivä kartta: extends](08-kartat-ja-prefabit.md#810-perivä-kartta-extends)
   - [8.11 Nimetyt alueet: areas:](08-kartat-ja-prefabit.md#811-nimetyt-alueet-areas)
+  - [8.12 Atlas: karttalehdet](08-kartat-ja-prefabit.md#812-atlas-karttalehdet)
 - [9. Ulkoasu](09-ulkoasu.md)
   - [9.1 Värit](09-ulkoasu.md#91-värit)
   - [9.2 Tilejen ulkoasu: tiles.glyphs](09-ulkoasu.md#92-tilejen-ulkoasu-tilesglyphs)

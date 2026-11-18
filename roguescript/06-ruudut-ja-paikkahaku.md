@@ -9,7 +9,7 @@
 - **Ankkuri** on sijainti, entiteetti, ruutujoukko tai `label(…)`. Entiteetti tarkoittaa sen nykyistä ruutua, ja joukko on jäsentensä tulosten yhdiste. Kokoelmassa oleva entiteetti ei ole kartalla, joten se tuottaa tyhjän joukon.
 - **Etäisyys** on luku tai väli. Luku N tarkoittaa väliä `0..N`, ja väli `2..4` antaa renkaan. Metriikka on Chebyshev.
 - **Suunta** on absoluuttinen (`east`) tai suhteellinen (`front`). Suhteellinen suunta luetaan ankkurientiteetin `facing`-komponentista.
-- Kartan ulkopuolelle osuvat ruudut putoavat joukosta pois.
+- Kartan ulkopuolelle osuvat ruudut putoavat joukosta pois. Atlaksen lehdellä haku ulottuu yhden lehtirajan yli naapurilehtiin, ja vasta lähialueen ulkopuolelle osuvat ruudut putoavat pois (moottoridokumentti, luku [6.10](../moottori/06-ajo.md#610-atlas)).
 - **Kartta.** Funktiot käyttävät kontekstin `map`-karttaa, jonka moottoridokumentin luku [6.2](../moottori/06-ajo.md#62-tapahtumat) määrittelee kullekin kontekstille.
 
 | Funktio | Ruudut |

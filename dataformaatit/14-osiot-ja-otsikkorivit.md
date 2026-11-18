@@ -22,6 +22,7 @@
 | `tileset` | `tileset NIMI`, rivit tilejä, välejä ja joukkoja | 7.3 |
 | `tiles` | `- TILE [OMINAISUUS arvot ...]`, esim. `- DOOR blocks move sight`, `- WATER only RAFT SHIP`, `- FLOOR lit`, `- FLOOR.dark lit false forget` | 7.5 |
 | `map` | `map NIMI [extends POHJA] [size LxK] [transient] [wrap] [nosave]`, piirros, `legend:`, `vars:`, `at:`, `areas:` (generoitu kartta RogueScriptissä) | 8.1, 8.10, 8.11 |
+| `atlas` | `atlas NIMI sheet LxK grid SxR [fill TILE]`, `legend:`, `vars:`, `areas:`; lehdet ovat karttoja `NIMI.<sarake><rivi>` (`MAAILMA.B10`) | 8.12 |
 | `at:` | `- X,Y [TILE] [KERROS TILE ...] [with …] [as …] [wire …]` kartan tai prefabin alilohkona | 8.9 |
 | `areas:` | `- X,Y size LxK as ALUE` kartan alilohkona; saman nimen rivit muodostavat yhdisteen | 8.11 |
 | `prefab` | `prefab NIMI`, piirros, `legend:`, `at:` (sijoitus generaattorissa) | 8.7 |

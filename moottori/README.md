@@ -46,6 +46,7 @@ Muutoshistoria: [muutokset.md](muutokset.md).
   - [6.7 Siirtyminen kartalta toiselle](06-ajo.md#67-siirtyminen-kartalta-toiselle)
   - [6.8 Äänet ja kuuleminen](06-ajo.md#68-äänet-ja-kuuleminen)
   - [6.9 Kiertävä kartta](06-ajo.md#69-kiertävä-kartta)
+  - [6.10 Atlas](06-ajo.md#610-atlas)
 - [7. Esitys](07-esitys.md)
   - [7.1 Asettelu](07-esitys.md#71-asettelu)
   - [7.2 Kartan piirtäminen](07-esitys.md#72-kartan-piirtäminen)

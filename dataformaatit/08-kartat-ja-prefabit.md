@@ -30,7 +30,7 @@ vars:
 - DANGER 2
 ```
 
-- **Otsikko:** `map NIMI [extends POHJA] [size LxK] [transient] [wrap] [nosave]`, ja sen perään voi tulla vyöhykkeiden liitos (luku [1.2](01-rajaus-ja-periaatteet.md#12-rajapinnat-pelilogiikkaan)). Lyhyemmät rivit täytetään oikealta tyhjillä ruuduilla ja puuttuvat rivit alhaalta tyhjillä riveillä, joten editorin poistamat loppuvälilyönnit eivät haittaa. Liian pitkä rivi on virhe. Ilman `size`-määrettä koko lasketaan piirroksesta, ja rivien pitää olla yhtä pitkiä.
+- **Otsikko:** `map NIMI [extends POHJA] [size LxK] [transient] [wrap] [nosave]` (atlaksen lehti, luku [8.12](#812-atlas-karttalehdet)), ja sen perään voi tulla vyöhykkeiden liitos (luku [1.2](01-rajaus-ja-periaatteet.md#12-rajapinnat-pelilogiikkaan)). Lyhyemmät rivit täytetään oikealta tyhjillä ruuduilla ja puuttuvat rivit alhaalta tyhjillä riveillä, joten editorin poistamat loppuvälilyönnit eivät haittaa. Liian pitkä rivi on virhe. Ilman `size`-määrettä koko lasketaan piirroksesta, ja rivien pitää olla yhtä pitkiä.
 - **Generoitu kartta** määritellään RogueScriptissä (`map NIMI [transient] generate GENERAATTORI(…)`, RogueScript luku [8.2](../roguescript/08-generointi.md#82-generoitu-kartta)). Se on samaa lajia kuin piirretty kartta, joten siihen viitataan samalla tavalla.
 - **Ei pelaajaa.** Kartat eivät sisällä pelaajaa. Pelaajan luo logiikka aloituksessa (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)), ja kartalta toiselle siirrytään nimiöiden kautta (luku [8.5](#85-nimiöt-ryhmät-ja-johtimet)). Näin sama kartta toimii sekä aloituskarttana että tavallisena tasona. Yllä `@` on pelkkä aloituskohta `START`.
 - **Piirros:** yksi merkki on yksi ruutu, eikä piirroksessa ole kommentteja. Välilyönti on oletuksena `none` (tyhjä ruutu, prefabissa läpinäkyvä). Legendissä se kirjoitetaan `' '`. Jos välilyönnille annetaan toinen merkitys, tyhjä ruutu merkitään toisella merkillä (`- _ none`).
@@ -291,6 +291,49 @@ areas:
 - **Näkyvä nimi** on kielitiedostossa avaimella `<KARTTA>.<ALUE>.NAME` (luku [10](10-tekstit.md)), ja alueen nimen piirtäminen kuuluu tyylitiedostoon (luku [9.6](09-ulkoasu.md#96-paperikartta-paper)).
 - **Perivä kartta** saa pohjan alueet, ja sen omat `areas:`-rivit lisätään niihin (luku [8.10](#810-perivä-kartta-extends)).
 - **Prefabissa** `areas:` on toistaiseksi latausvirhe, koska saman prefabin kaksi sijoitusta toisivat saman alueen kahteen paikkaan (luku [13](13-avoimet-kysymykset.md)).
+
+## 8.12 Atlas: karttalehdet
+
+Atlas jakaa ison maailman karttalehtiin. Jokainen lehti on tavallinen kartta, joten peli lataa ja tallentaa vain ne lehdet, joilla on käyty, ja kartan voi piirtää ja muokata lehti kerrallaan. Lehdet liittyvät toisiinsa reunoistaan, ja moottori siirtää kulkijan reunan yli naapurilehdelle (moottoridokumentti, luku [6.10](../moottori/06-ajo.md#610-atlas)).
+
+```
+atlas MAAILMA sheet 64x48 grid 10x14 fill WATER
+
+legend:
+- ~ WATER
+- . GRASS
+- T FOREST.conifer
+
+vars:
+- OUTDOOR true
+
+areas:
+- 120,40 size 90x60 as NORSUSAARI
+```
+
+```
+map MAAILMA.B10
+
+(64 × 48 merkin piirros)
+
+at:
+- 12,7 as START
+
+areas:
+- 3,4 size 6x5 as LAHDE
+```
+
+- **Otsikko:** `atlas NIMI sheet LxK grid SxR [fill TILE]`. `sheet` on lehden koko ruutuina ja `grid` lehtien määrä sarakkeina ja riveinä, joten atlaksen koko on S·L × R·K ruutua. `fill` on puuttuvan lehden tile oletuskerroksessa, ja ilman sitä puuttuva lehti on `none`.
+- **Lehden nimi** on `NIMI.<sarake><rivi>`: sarake kirjaimin (`A`…`Z`, sitten `AA`, `AB` …) ja rivi numerona alkaen 01. Rivinumerossa on vähintään kaksi numeroa ja niin monta kuin rivien määrä vaatii (`C005`, kun rivejä on yli 99). `A01` on vasen yläkulma, ja `B10` on toinen sarake, kymmenes rivi. Lehden nimi on atlaksen ryhmässä (luku [2.3](02-yleinen-syntaksi.md#23-pistenotaatio)).
+- **Lehti** on kartta, jonka otsikossa on lehden nimi. Koko tulee atlaksesta, joten `size` on tarpeeton; jos se annetaan, sen on oltava sama. Lyhyemmät rivit ja puuttuvat rivit täytetään kuten muissakin kartoissa (luku [8.1](#81-karttatiedosto)). `wrap` lehdellä on latausvirhe, koska lehden reunat liittyvät naapureihin.
+- **Perintä.** Lehti saa atlaksen `legend:`-, `vars:`- ja `areas:`-rivit samoin kuin perivä kartta pohjaltaan (luku [8.10](#810-perivä-kartta-extends)): lehden omat legendirivit korvaavat merkin ja `vars:`-rivit nimen. Lehden `at:`-rivit ja `areas:`-rivit ovat lehden omia, ja niiden sijainnit ovat lehden koordinaateissa.
+- **Atlaksen alueet** ovat atlaksen koordinaateissa, joten saari voi ulottua usealle lehdelle. Lehdellä alue on sen osa, joka osuu lehteen, ja se on lehden alue atlaksen nimellä: `at NORSUSAARI` lehdellä B10 on saaren B10:lle osuvat ruudut. Lehden oma alue ja atlaksen alue eivät saa olla samannimisiä.
+- **Lähialue.** Pelissä lehti ja sen naapurit (enintään 3 × 3 lehteä) ovat yhdessä aktiivisia, ja haut, reitit, näkö, valo ja ääni ulottuvat yhden lehtirajan yli (moottoridokumentti, luku [6.10](../moottori/06-ajo.md#610-atlas)). Siksi lehden on oltava vähintään pelin suurimman säteen kokoinen; muuten lataus varoittaa.
+- **Puuttuva lehti.** Lehtiä ei tarvitse kirjoittaa kaikkia. Puuttuva lehti on `fill`-tileä, ja sillä on atlaksen legendi, muuttujat ja alueet.
+- **Atlas ei ole kartta.** Siihen ei voi siirtyä eikä se ole `game`-lohkon aloituskartta: siirto kirjoitetaan lehteen (`game MAAILMA_PELI start MAAILMA.B10 at START`).
+- **Tarkistukset.** Lehti ruudukon ulkopuolella (`MAAILMA.K01`, kun sarakkeita on 10) ja sama lehti kahdesti ovat latausvirheitä. Väärän kokoinen piirros on latausvirhe kuten liian pitkä rivi kartassa.
+- **Tiedostot.** Lehdet voivat olla samassa tiedostossa kuin atlas tai omissa tiedostoissaan. Tiedostonimellä ei ole merkitystä (luku [3](03-tiedostot-ja-include.md)); käytäntö on `maailma-B10.rlml.md`.
+- **Tekstit.** Atlaksen näkyvä nimi on avaimella `<ATLAS>.NAME` ja atlaksen alueen nimi avaimella `<ATLAS>.<ALUE>.NAME`. Lehti on kartta, joten sen alueen nimi on avaimella `<ATLAS>.<LEHTI>.<ALUE>.NAME` (`MAAILMA.B10.LAHDE.NAME`, luku [10](10-tekstit.md)).
 
 ---
 

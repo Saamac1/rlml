@@ -31,7 +31,7 @@ Alue, jonka legendirivi nimeää paneelin argumentteineen (`- s STATS(player)`),
 - **Kursorit.** Pysyvät katselukursorit ja ennakkokäskyjen kohteet (luku [8.1](08-syote.md#81-hiiri)) piirretään kartta-alueen määreen `cursor` tyylillä, ja ilman määrettä alleviivattuina. Moninpelissä merkin vieressä näkyy istuimen numero, kun alueessa on tilaa.
 - **Vuoron merkki.** Kun jäseniä on useampi ja moottori odottaa syötettä, moottori korostaa `player`-hahmon ruudun kartta-alueen määreen `turn` tyylillä, ja ilman määrettä käänteisin värein ([D 11.1](../dataformaatit/11-kayttoliittyman-data.md#111-asettelu)). Korostus välähtää vuoron alkaessa (600 ms) ja vilkkuu sen jälkeen (400 ms päällä, 400 ms pois), kunnes vuoro on käytetty. Päätteen ajo tukee toistaiseksi vain käänteisiä värejä.
 - `pan` ohittaa seurannan ajaksi, ja seuranta jatkuu sen jälkeen.
-- Aluetta pienempi kartta keskitetään. Kiertävällä kartalla näkymä jatkuu reunan yli (luku [6.9](06-ajo.md#69-kiertävä-kartta)).
+- Aluetta pienempi kartta keskitetään. Kiertävällä kartalla näkymä jatkuu reunan yli (luku [6.9](06-ajo.md#69-kiertävä-kartta)). Atlaksen lehdellä näkymä jatkuu lähialueen naapurilehdille, ja näkö ulottuu niihin (luku [6.10](06-ajo.md#610-atlas)).
 
 ## 7.2 Kartan piirtäminen
 
