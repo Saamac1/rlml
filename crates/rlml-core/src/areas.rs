@@ -3,7 +3,8 @@
 //! An area is meaning only: it does not change cells. Rows with the same
 //! name form one area; area A is a parent of area B when every cell of B
 //! is in A and A has more cells. The nearest parent is the one with the
-//! fewest cells, and an area's level is its number of parents. A cell's
+//! fewest cells, and an area's level is the length of its chain of nearest
+//! parents. A cell's
 //! most specific area is the smallest one it is in; a tie goes to the area
 //! whose first row is later.
 
@@ -65,7 +66,8 @@ pub struct NamedArea {
     pub first_row: usize,
     /// The nearest parent (D 8.11).
     pub parent: Option<usize>,
-    /// The number of parents; outermost areas are on level 0.
+    /// The length of the chain of nearest parents; outermost areas are on
+    /// level 0.
     pub level: usize,
 }
 
@@ -115,10 +117,19 @@ impl Areas {
         }
         let sets: Vec<BTreeSet<(i32, i32)>> = list.iter().map(NamedArea::set).collect();
         for b in 0..list.len() {
-            let parents: Vec<usize> = (0..list.len()).filter(|&a| sets[a].len() > sets[b].len() && sets[b].is_subset(&sets[a])).collect();
-            list[b].level = parents.len();
+            let parents = (0..list.len()).filter(|&a| sets[a].len() > sets[b].len() && sets[b].is_subset(&sets[a]));
             // the nearest parent has the fewest cells; a tie goes to the later first row
-            list[b].parent = parents.into_iter().min_by_key(|&a| (sets[a].len(), std::cmp::Reverse(list[a].first_row)));
+            list[b].parent = parents.min_by_key(|&a| (sets[a].len(), std::cmp::Reverse(list[a].first_row)));
+        }
+        // the level is the length of the chain of nearest parents; a parent
+        // always has more cells, so the chain ends
+        for b in 0..list.len() {
+            let (mut level, mut p) = (0, list[b].parent);
+            while let Some(a) = p {
+                level += 1;
+                p = list[a].parent;
+            }
+            list[b].level = level;
         }
         Areas { list }
     }
@@ -226,8 +237,14 @@ mod tests {
         assert_eq!(a.overlaps(), [Overlap::Same(0, 1), Overlap::Partial(0, 2), Overlap::Partial(1, 2)]);
         // A and B are on one level; neither is the other's parent
         assert_eq!((a.list[0].level, a.list[1].level), (0, 0));
-        // D is inside both; the nearest parent's tie goes to the later row
-        assert_eq!((a.list[3].parent, a.list[3].level), (Some(1), 2));
+        // D is inside both; the nearest parent's tie goes to the later row,
+        // and the level follows the chain of nearest parents
+        assert_eq!((a.list[3].parent, a.list[3].level), (Some(1), 1));
         assert_eq!(a.deepest(0, 0).unwrap().name, "B", "a tie goes to the later first row");
+        // inside two partly overlapping areas: one nearest parent, level 1
+        let a = Areas::build(&[("A".into(), rect(0, 0, 4, 4)), ("C".into(), rect(2, 2, 4, 4)), ("E".into(), rect(2, 2, 1, 1))]);
+        assert_eq!((a.list[2].parent, a.list[2].level), (Some(1), 1), "a tie in size goes to the later row");
+        let a = Areas::build(&[("A".into(), rect(0, 0, 4, 4)), ("C".into(), rect(2, 2, 3, 3)), ("E".into(), rect(2, 2, 1, 1))]);
+        assert_eq!((a.list[2].parent, a.list[2].level), (Some(1), 1), "the smaller one is nearer");
     }
 }

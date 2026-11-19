@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 19.11.2026 (alueen taso):** alueen taso on lähimpien vanhempien ketjun pituus eikä kaikkien vanhempien määrä, ja lähimmän vanhemman tasatilanne ratkeaa myöhemmän `areas:`-rivin mukaan. Tulos muuttuu vain, kun alue on kahden samanruutuisen tai osittain päällekkäisen alueen sisällä (luku [8.11](08-kartat-ja-prefabit.md#811-nimetyt-alueet-areas)).
+
 **Muutokset 18.11.2026 (atlaksen lähialue):** haut ja aistit ulottuvat yhden lehtirajan yli, ja lehden on oltava vähintään suurimman säteen kokoinen (luku [8.12](08-kartat-ja-prefabit.md#812-atlas-karttalehdet); moottoridokumentti, luku [6.10](../moottori/06-ajo.md#610-atlas)).
 
 **Muutokset 18.11.2026 (atlas):** iso maailma karttalehtinä: `atlas NIMI sheet LxK grid SxR [fill TILE]`, lehdet karttoina `NIMI.<sarake><rivi>` (kirjain on sarake, numero rivi), lehtien perimä legendi, muuttujat ja alueet, atlaksen alueet atlaksen koordinaateissa sekä puuttuvat lehdet (luku [8.12](08-kartat-ja-prefabit.md#812-atlas-karttalehdet)). Tekstiavaimet `<ATLAS>.NAME` ja `<ATLAS>.<ALUE>.NAME` (luku [10](10-tekstit.md)), otsikkorivi (luku [14](14-osiot-ja-otsikkorivit.md)) ja avoin kysymys lehtirajan yli ulottuvista hauista (luku [13](13-avoimet-kysymykset.md)). Reunan ylitys on moottoridokumentin luvussa [6.10](../moottori/06-ajo.md#610-atlas). Muoto kokeiltiin ensin karttageneraattorissa.
