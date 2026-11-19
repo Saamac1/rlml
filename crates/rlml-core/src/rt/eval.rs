@@ -575,7 +575,8 @@ impl World<'_> {
     fn arith(&mut self, op: BinOp, a: Value, b: Value, env: &mut Env, pos: Pos) -> RtResult<Value> {
         use BinOp::*;
         Ok(match (op, &a, &b) {
-            (Add, Value::Pos(p), Value::Dir(d)) => Value::Pos(p.step(*d)),
+            // a step past a sheet's edge is the neighbour sheet's cell (M 6.10)
+            (Add, Value::Pos(p), Value::Dir(d)) => Value::Pos(self.across(p.step(*d))),
             (Add, Value::Text(x), Value::Text(y)) => Value::Text(format!("{x}{y}")),
             (Add | Sub, Value::Percent(x), Value::Percent(y)) => Value::Percent(if op == Add { x + y } else { x - y }),
             (Mul, _, Value::Percent(p)) => Value::Number((self.number(a.clone(), env, pos)? * p).div_euclid(100)),
@@ -1590,7 +1591,7 @@ impl World<'_> {
                     return Err(self.rt_err(env, pos, format!("map `{map}` has no label `{at}` (M 6.7)")));
                 }
                 self.travels.retain(|t| t.who != e);
-                self.travels.push(Travel { who: e, map, at, align });
+                self.travels.push(Travel { who: e, map, at, align, cell: None });
                 Value::Entity(e)
             }
             "log" => {
@@ -1712,7 +1713,6 @@ impl World<'_> {
         let mv = self.s.get(e).get("movement");
         let dirs = mv.and_then(|m| m.get("dirs")).and_then(Value::as_number).unwrap_or(8);
         let corners = matches!(mv.and_then(|m| m.get("corners")), Some(Value::Bool(true)));
-        let map = &self.s.maps[at.map];
         let mut out = Vec::new();
         for d in Dir::ALL {
             let (dx, dy) = d.delta();
@@ -1720,13 +1720,14 @@ impl World<'_> {
             if diagonal && dirs == 4 {
                 continue;
             }
-            let p = at.step(d);
-            if !map.inside(p.x, p.y) {
+            // on an atlas the neighbour sheets' cells count (M 6.10)
+            let p = self.across(at.step(d));
+            if !self.s.maps[p.map].inside(p.x, p.y) {
                 continue;
             }
             if diagonal && !corners {
-                let a = Cell { x: at.x + dx, ..at };
-                let b = Cell { y: at.y + dy, ..at };
+                let a = self.across(Cell { x: at.x + dx, ..at });
+                let b = self.across(Cell { y: at.y + dy, ..at });
                 if self.blocks(a, "move", Some(e), true) || self.blocks(b, "move", Some(e), true) {
                     continue;
                 }
@@ -1834,7 +1835,15 @@ impl World<'_> {
         }
         let area = self.area(&to, env, pos)?;
         let Some(p) = self.one_cell(&area, env) else { return Ok(Value::Bool(false)) };
-        if was_on_map && prev.is_some_and(|q| q.map != p.map) {
+        if was_on_map && let Some(q) = prev.filter(|q| q.map != p.map) {
+            // a move to a neighbour sheet's cell crosses the edge at the
+            // action's end, as a transfer (M 6.10)
+            if self.neighbour_sheets(q.map, p.map) {
+                let map = self.s.maps[p.map].name.clone();
+                self.travels.retain(|t| t.who != e);
+                self.travels.push(Travel { who: e, map, at: String::new(), align: false, cell: Some(p) });
+                return Ok(Value::Bool(true));
+            }
             return Err(self.rt_err(env, pos, "`move` stays on one map; maps change with `travel` (M 6.2)"));
         }
         self.s.get_mut(e).place = Place::Map(p);
@@ -1906,8 +1915,13 @@ impl World<'_> {
         for t in travels {
             let Some(id) = self.s.map_id(&t.map) else { continue };
             let from = self.s.at(t.who);
-            let cells: Vec<Cell> = self.s.maps[id].label(&t.at).iter().map(|(x, y)| Cell { map: id, x: *x, y: *y }).collect();
-            let i = if t.align {
+            let cells: Vec<Cell> = match t.cell {
+                Some(c) => vec![c],
+                None => self.s.maps[id].label(&t.at).iter().map(|(x, y)| Cell { map: id, x: *x, y: *y }).collect(),
+            };
+            let i = if t.cell.is_some() {
+                0
+            } else if t.align {
                 // the same index as the start cell has in its own group
                 let idx = from.and_then(|p| self.s.maps[p.map].labels.iter().find_map(|(_, cs)| cs.iter().position(|c| *c == (p.x, p.y))));
                 match idx {
@@ -1937,6 +1951,9 @@ impl World<'_> {
                     self.switch = Some((p.map, id));
                 }
                 self.s.last_player_map = Some(id);
+                // the sheets next to the player's are loaded (M 6.10)
+                self.load_nearby(id)?;
+                self.flush_created(&env)?;
             }
             if let Some(p) = from {
                 let name = self.s.maps[p.map].name.clone();

@@ -215,3 +215,107 @@ fn a_radius_larger_than_a_sheet_warns() {
     let (_, r) = check_game(&f, "game.rlml");
     expect(&r, "warning: `sight` radius 7 of `OWL` is larger than the 3-cell sheets of atlas `MAAILMA`");
 }
+
+// ---- edge crossing (M 6.10) ----
+
+use rlml_core::rt::state::Place;
+use rlml_core::rt::value::{CommandValue, Pos};
+
+fn started(m: &rlml_core::model::Model) -> World<'_> {
+    let mut w = World::new_game(m, 7).unwrap();
+    w.begin().unwrap();
+    w
+}
+
+fn step(w: &mut World, dir: &str) {
+    let p = w.s.player.unwrap();
+    w.start_command(p, &CommandValue { name: format!("STD.MOVE.{dir}"), args: vec![] }).unwrap();
+    w.end_action().unwrap();
+    w.apply_switch();
+}
+
+/// The player's sheet and cell.
+fn where_(w: &World) -> (String, i32, i32) {
+    let p = w.s.at(w.s.player.unwrap()).unwrap();
+    (w.s.maps[p.map].name.clone(), p.x, p.y)
+}
+
+fn put(w: &mut World, sheet: &str, x: i32, y: i32) {
+    let map = w.s.map_id(sheet).unwrap();
+    let p = w.s.player.unwrap();
+    w.s.get_mut(p).place = Place::Map(Pos { map, x, y });
+}
+
+fn loaded(w: &World) -> Vec<String> {
+    let mut v: Vec<String> = w.s.maps.iter().map(|m| m.name.clone()).collect();
+    v.sort();
+    v
+}
+
+#[test]
+fn the_neighbour_sheets_are_loaded_and_frozen() {
+    let m = clean(&game(WORLD));
+    let w = started(&m);
+    assert_eq!(loaded(&w), ["MAAILMA.A01", "MAAILMA.A02", "MAAILMA.B01", "MAAILMA.B02"]);
+    for m in &w.s.maps[1..] {
+        assert!(m.frozen_at.is_some(), "{} waits frozen until the player comes", m.name);
+    }
+    assert!(w.s.maps[0].frozen_at.is_none());
+}
+
+#[test]
+fn walking_east_crosses_to_the_next_sheet() {
+    let m = clean(&game(WORLD));
+    let mut w = started(&m);
+    put(&mut w, "MAAILMA.A01", 5, 2);
+    step(&mut w, "EAST");
+    assert_eq!(where_(&w), ("MAAILMA.B01".into(), 0, 2));
+    let a = w.s.map_id("MAAILMA.A01").unwrap();
+    let b = w.s.map_id("MAAILMA.B01").unwrap();
+    assert!(w.s.maps[a].frozen_at.is_some() && w.s.maps[b].frozen_at.is_none(), "the sheet left behind freezes");
+    assert_eq!(w.s.active_map(), Some(b));
+    assert_eq!(loaded(&w).len(), 6, "B01's neighbours C01 and C02 load too");
+    // and back west
+    step(&mut w, "WEST");
+    assert_eq!(where_(&w), ("MAAILMA.A01".into(), 5, 2));
+    // a water cell on the neighbour blocks like water on the sheet
+    put(&mut w, "MAAILMA.B01", 0, 1);
+    step(&mut w, "WEST");
+    assert_eq!(where_(&w), ("MAAILMA.B01".into(), 0, 1));
+}
+
+#[test]
+fn blocked_crossings() {
+    let m = clean(&game(WORLD));
+    let mut w = started(&m);
+    // the grid's outer edge is a plain map edge
+    put(&mut w, "MAAILMA.A01", 0, 1);
+    step(&mut w, "WEST");
+    assert_eq!(where_(&w), ("MAAILMA.A01".into(), 0, 1));
+    // a diagonal into the missing sheet B02, which is water
+    put(&mut w, "MAAILMA.A01", 5, 2);
+    step(&mut w, "SOUTHEAST");
+    assert_eq!(where_(&w), ("MAAILMA.A01".into(), 5, 2), "the fill blocks the move");
+    // without a fill a missing sheet stops the crossing
+    let m = clean(&game(&WORLD.replace(" fill WATER", "")));
+    let mut w = started(&m);
+    put(&mut w, "MAAILMA.A01", 5, 2);
+    step(&mut w, "SOUTH");
+    assert_eq!(where_(&w), ("MAAILMA.A01".into(), 5, 2));
+}
+
+#[test]
+fn a_diagonal_crosses_a_corner() {
+    let world = WORLD.replace("## B01", "## B02\n\nmap MAAILMA.B02\n\n```\n......\n```\n\n## B01");
+    let m = clean(&game(&world));
+    let mut w = started(&m);
+    put(&mut w, "MAAILMA.A01", 5, 2);
+    step(&mut w, "SOUTHEAST");
+    assert_eq!(where_(&w), ("MAAILMA.A01".into(), 5, 2), "the water of the missing A02 is a wall's corner");
+    let world = world.replace("## B02", "## A02\n\nmap MAAILMA.A02\n\n```\n......\n```\n\n## B02");
+    let m = clean(&game(&world));
+    let mut w = started(&m);
+    put(&mut w, "MAAILMA.A01", 5, 2);
+    step(&mut w, "SOUTHEAST");
+    assert_eq!(where_(&w), ("MAAILMA.B02".into(), 0, 0));
+}

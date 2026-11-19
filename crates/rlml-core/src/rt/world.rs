@@ -92,6 +92,9 @@ pub struct Travel {
     pub map: String,
     pub at: String,
     pub align: bool,
+    /// The target cell of an edge crossing between atlas sheets; `at` and
+    /// `align` are not used then (M 6.10).
+    pub cell: Option<Pos>,
 }
 
 /// `viive = max(1, ceil(hinta × 10 / nopeus))`; no wake at speed 0 or less
@@ -544,6 +547,7 @@ impl<'m> World<'m> {
         let default_layer = self.default_layer();
         let mut map = MapState::new(full, w, h, layers.iter().map(|(n, _, _)| n.clone()).collect(), self.s.game.time);
         map.transient = b.has_arg("transient");
+        map.sheet = crate::atlas::sheet_of(self.m, full).and_then(Result::ok);
         // layer fills (D 7.2)
         for (i, (_, _, fill)) in layers.iter().enumerate() {
             if let Some(t) = fill {
@@ -621,6 +625,61 @@ impl<'m> World<'m> {
             parts.areas.push(crate::areas::parse_row(item)?);
         }
         Ok(parts)
+    }
+
+    /// Loads the sheets next to sheet `map` (M 6.10), so an edge crossing
+    /// finds its target. A sheet loaded here is frozen until the player
+    /// comes to it: only the player's sheet is active for now.
+    pub fn load_nearby(&mut self, map: MapId) -> RtResult<()> {
+        let Some((a, c, r)) = self.s.maps[map].sheet.clone() else { return Ok(()) };
+        for (dc, dr) in [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)] {
+            let (nc, nr) = (c + dc, r + dr);
+            if !(0..a.grid.0).contains(&nc) || !(0..a.grid.1).contains(&nr) {
+                continue;
+            }
+            let name = a.sheet_name(nc, nr);
+            if self.s.map_id(&name).is_none() {
+                let id = self.load_map(&name)?;
+                self.s.maps[id].freeze(self.s.game.time);
+            }
+        }
+        Ok(())
+    }
+
+    /// A cell past a sheet's edge as the matching cell of the neighbour
+    /// sheet, diagonals too (M 6.10). A cell inside its map, a cell past
+    /// the grid's outer edge, a cell more than one sheet away and a cell of
+    /// a neighbour that is not loaded stay as they are, outside the map.
+    /// A neighbour that is not written and has no `fill` stops the
+    /// crossing.
+    pub fn across(&self, p: Pos) -> Pos {
+        let m = &self.s.maps[p.map];
+        let Some((a, c, r)) = &m.sheet else { return p };
+        if m.inside(p.x, p.y) {
+            return p;
+        }
+        let (w, h) = a.sheet;
+        let (dc, dr) = (p.x.div_euclid(w), p.y.div_euclid(h));
+        let (nc, nr) = (c + dc, r + dr);
+        if dc.abs() > 1 || dr.abs() > 1 || !(0..a.grid.0).contains(&nc) || !(0..a.grid.1).contains(&nr) {
+            return p;
+        }
+        let name = a.sheet_name(nc, nr);
+        if a.fill.is_none() && !self.m.defs.contains_key(&name) {
+            return p;
+        }
+        match self.s.map_id(&name) {
+            Some(id) => Pos { map: id, x: p.x - dc * w, y: p.y - dr * h },
+            None => p,
+        }
+    }
+
+    /// Are `a` and `b` neighbour sheets of one atlas, diagonals included?
+    pub fn neighbour_sheets(&self, a: MapId, b: MapId) -> bool {
+        match (&self.s.maps[a].sheet, &self.s.maps[b].sheet) {
+            (Some((x, c1, r1)), Some((y, c2, r2))) => x.name == y.name && a != b && (c1 - c2).abs() <= 1 && (r1 - r2).abs() <= 1,
+            _ => false,
+        }
     }
 
     /// A sheet's parts from its atlas (D 8.12): the sheet size, the atlas's
@@ -810,8 +869,9 @@ impl<'m> World<'m> {
             },
         };
         w.s.game.start = Some(start_map.clone());
-        // 6. load it
+        // 6. load it, and on an atlas its neighbour sheets (M 6.10)
         let map = w.load_map(&start_map)?;
+        w.load_nearby(map)?;
         // 7. the start search
         let at = field("at").unwrap_or_else(|| "START".into());
         w.s.game.at = w.search(map, &at, ns)?;

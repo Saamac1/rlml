@@ -93,6 +93,8 @@ pub struct MapState {
     pub labels: Vec<(String, Vec<(i32, i32)>)>,
     /// Named areas (D 8.11).
     pub areas: crate::areas::Areas,
+    /// The atlas and the column and row when the map is a sheet (D 8.12).
+    pub sheet: Option<(crate::atlas::Atlas, i32, i32)>,
     pub wires: Vec<((i32, i32), String)>,
     pub vars: Vec<(String, Value)>,
     /// Cells the player remembers (M 7.2).
@@ -118,6 +120,7 @@ impl MapState {
             layers,
             labels: vec![],
             areas: Default::default(),
+            sheet: None,
             wires: vec![],
             vars: vec![],
             remembered: vec![],
