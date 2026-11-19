@@ -2,6 +2,7 @@
 //! come through [`load::Files`].
 
 pub mod areas;
+pub mod atlas;
 pub mod check;
 pub mod error;
 pub mod fields;

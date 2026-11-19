@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use unicode_width::UnicodeWidthChar;
 
 use crate::areas::{self, Areas, Overlap, Rect};
+use crate::atlas::{self, Atlas};
 use crate::error::Report;
 use crate::fields::{self, Values, component_fields, is_int, is_pos};
 use crate::model::{Def, Kind, Model, glyph_char};
@@ -46,6 +47,8 @@ struct AreaRow {
     item: RawItem,
     /// Written on this map, not inherited from its base.
     own: bool,
+    /// Inherited from the sheet's atlas (D 8.12).
+    from_atlas: bool,
 }
 
 impl Drawn {
@@ -61,9 +64,10 @@ impl Drawn {
 
 pub fn check(m: &Model, main: &str, r: &mut Report) {
     let logic_tiles = crate::rs::check::check(m, r);
-    let mut c = Checker { m, r, drawn: BTreeMap::new(), used_tiles: logic_tiles };
+    let mut c = Checker { m, r, drawn: BTreeMap::new(), used_tiles: logic_tiles, atlases: BTreeMap::new() };
     c.components();
     c.maps();
+    c.sheet_radii();
     c.entities();
     c.labels();
     c.areas();
@@ -86,7 +90,13 @@ struct Checker<'a> {
     r: &'a mut Report,
     drawn: BTreeMap<String, Drawn>,
     used_tiles: BTreeSet<String>,
+    /// Atlases by full name: the header and the labels of each legend
+    /// character, which their sheets inherit (D 8.12).
+    atlases: BTreeMap<String, (Atlas, LegendLabels)>,
 }
+
+/// The labels each legend character gives.
+type LegendLabels = BTreeMap<char, BTreeSet<String>>;
 
 fn defs_of(m: &Model, kind: Kind) -> impl Iterator<Item = &Def> {
     m.defs.values().filter(move |d| d.kind == kind)
@@ -215,15 +225,25 @@ impl Checker<'_> {
     }
 
     fn maps(&mut self) {
+        self.atlases();
         let defs: Vec<&Def> = self.m.defs.values().filter(|d| matches!(d.kind, Kind::Map | Kind::Prefab)).collect();
         for def in &defs {
             let Some(b) = def.block() else { continue };
             if b.has_arg("extends") {
                 continue;
             }
-            let mut drawn = self.drawing(b);
-            drawn.areas = self.area_rows(b, def.kind, drawn.width, drawn.height);
-            self.drawn.insert(def.full.clone(), drawn);
+            match atlas::sheet_of(self.m, &def.full) {
+                Some(Ok((a, c, r))) => {
+                    let drawn = self.sheet(def, b, &a, c, r);
+                    self.drawn.insert(def.full.clone(), drawn);
+                }
+                Some(Err(e)) => self.r.push(b.err(e)),
+                None => {
+                    let mut drawn = self.drawing(b, None);
+                    drawn.areas = self.area_rows(b, def.kind, drawn.width, drawn.height);
+                    self.drawn.insert(def.full.clone(), drawn);
+                }
+            }
         }
         // extending maps get their base's drawing, labels and areas (D 8.10);
         // a base is read before the maps that extend it
@@ -254,6 +274,9 @@ impl Checker<'_> {
     fn extending(&mut self, def: &Def) {
         let b = def.block().unwrap();
         let base = b.arg_after("extends").unwrap();
+        if atlas::sheet_of(self.m, &def.full).is_some() {
+            self.r.push(b.err("a sheet takes its atlas's legend, vars and areas; it cannot extend a map (D 8.12)"));
+        }
         if !b.drawing.is_empty() {
             self.r.push(b.err("an extending map takes its base's drawing; it cannot have its own (D 8.10)"));
         }
@@ -287,14 +310,19 @@ impl Checker<'_> {
     }
 
     /// Reads a drawn map or prefab: size, characters and legend (D 8.1–8.9).
-    fn drawing(&mut self, b: &RawBlock) -> Drawn {
+    /// `sheet` is a sheet's inherited legend labels and its atlas's sheet
+    /// size (D 8.12).
+    fn drawing(&mut self, b: &RawBlock, sheet: Option<(&LegendLabels, (usize, usize))>) -> Drawn {
         let mut d = Drawn::default();
         if b.drawing.is_empty() {
             self.r.push(b.err(format!("{} `{}` has no drawing", b.kind, b.name)));
             return d;
         }
         let rows: Vec<Vec<char>> = b.drawing.iter().map(|l| l.chars().collect()).collect();
-        let size = b.arg_after("size").map(|s| s.split_once('x').and_then(|(w, h)| Some((w.parse::<usize>().ok()?, h.parse::<usize>().ok()?))));
+        let size = match sheet {
+            Some((_, size)) => Some(Some(size)),
+            None => b.arg_after("size").map(|s| s.split_once('x').and_then(|(w, h)| Some((w.parse::<usize>().ok()?, h.parse::<usize>().ok()?)))),
+        };
         match size {
             Some(Some((w, h))) => {
                 (d.width, d.height) = (w, h);
@@ -319,8 +347,8 @@ impl Checker<'_> {
                 }
             }
         }
-        let mut legend: BTreeMap<char, BTreeSet<String>> = BTreeMap::new();
-        legend.insert(' ', BTreeSet::new());
+        let mut legend: BTreeMap<char, BTreeSet<String>> = sheet.map(|(l, _)| l.clone()).unwrap_or_default();
+        legend.entry(' ').or_default();
         for item in b.sub("legend") {
             match glyph_char(item) {
                 Ok((c, _)) => {
@@ -472,6 +500,129 @@ impl Checker<'_> {
         ok.then_some(labels)
     }
 
+    /// Atlas blocks (D 8.12): the header, the `fill` tile, legend, `vars:`
+    /// and `areas:` rows in atlas coordinates; no drawing and no `at:`.
+    /// Each atlas is read like a map of its whole size, so its labels and
+    /// areas get the usual name checks.
+    fn atlases(&mut self) {
+        for def in defs_of(self.m, Kind::Atlas) {
+            let Some(b) = def.block() else { continue };
+            let a = match Atlas::parse(&def.full, b) {
+                Ok(a) => a,
+                Err(e) => {
+                    self.r.push(b.err(e));
+                    continue;
+                }
+            };
+            if !b.drawing.is_empty() {
+                self.r.push(b.err("an atlas has no drawing: its sheets are maps `NAME.<column><row>` (D 8.12)"));
+            }
+            if let Some(sub) = b.subs.iter().find(|s| s.name == "at") {
+                self.r.error(&b.file, sub.line, "an atlas has no `at:` rows: a sheet's `at:` rows are its own (D 8.12)");
+            }
+            if let Some(f) = &a.fill {
+                if names::tile_name(f).is_ok_and(|t| matches!(t.index, Some(Index::Range(..)))) {
+                    self.r.push(b.err(format!("`fill {f}`: a missing sheet is one tile, not a range (D 8.12)")));
+                    continue;
+                }
+                match self.m.resolve_tile(b.namespace.as_deref(), f) {
+                    Ok(full) => {
+                        self.used_tiles.insert(full);
+                    }
+                    Err(e) => self.r.push(b.err(format!("`fill`: {e}"))),
+                }
+            }
+            let mut legend: BTreeMap<char, BTreeSet<String>> = BTreeMap::new();
+            for item in b.sub("legend") {
+                match glyph_char(item) {
+                    Ok((c, _)) => {
+                        let labels = self.legend_row(item, b).unwrap_or_default();
+                        legend.insert(c, labels);
+                    }
+                    Err(e) => self.r.push(item.err(e)),
+                }
+            }
+            self.vars_rows(b);
+            let (w, h) = a.size();
+            let areas = self.area_rows(b, Kind::Atlas, w as usize, h as usize);
+            let labels = legend.values().flatten().cloned().collect();
+            self.drawn.insert(def.full.clone(), Drawn { width: w as usize, height: h as usize, labels, areas });
+            self.atlases.insert(def.full.clone(), (a, legend));
+        }
+    }
+
+    /// A sheet of an atlas (D 8.12): its atlas's size, legend, `vars:` and
+    /// the part of each atlas area on the sheet, its own rows on top; no
+    /// `wrap`, and a written `size` must be the sheet's. A sheet written
+    /// twice is an error.
+    fn sheet(&mut self, def: &Def, b: &RawBlock, a: &Atlas, c: i32, r: i32) -> Drawn {
+        let (sw, sh) = (a.sheet.0 as usize, a.sheet.1 as usize);
+        if self.m.replaced.contains(&def.full) {
+            self.r.push(b.err(format!("sheet `{}` is written twice (D 8.12)", def.full)));
+        }
+        if b.has_arg("wrap") {
+            self.r.push(b.err("a sheet cannot `wrap`: its edges join its neighbours (D 8.12)"));
+        }
+        if let Some(size) = b.arg_after("size")
+            && size != format!("{sw}x{sh}")
+        {
+            self.r.push(b.err(format!("sheet `{}` is `size {size}`, but the sheets of atlas `{}` are {sw}x{sh} (D 8.12)", def.full, a.name)));
+        }
+        let legend = self.atlases.get(&a.name).map(|(_, l)| l.clone()).unwrap_or_default();
+        let mut d = self.drawing(b, Some((&legend, (sw, sh))));
+        let mut areas: Vec<AreaRow> = Vec::new();
+        if let Some(atlas) = self.drawn.get(&a.name) {
+            for row in &atlas.areas {
+                if let Some(rect) = a.clip(row.rect, c, r) {
+                    areas.push(AreaRow { rect, own: false, from_atlas: true, ..row.clone() });
+                }
+            }
+        }
+        let atlas_names: BTreeSet<String> = self.drawn.get(&a.name).map(|d| d.areas.iter().map(|r| r.name.clone()).collect()).unwrap_or_default();
+        for row in self.area_rows(b, def.kind, sw, sh) {
+            if atlas_names.contains(&row.name) {
+                self.r.push(row.item.err(format!("area `{}` of sheet `{}` has the name of an area of atlas `{}` (D 8.12)", row.name, def.full, a.name)));
+            } else {
+                areas.push(row);
+            }
+        }
+        d.areas = areas;
+        self.vars_rows(b);
+        d
+    }
+
+    /// Searches and senses reach across one sheet edge, so a sight or light
+    /// radius larger than an atlas's sheet is a warning (M 6.10).
+    fn sheet_radii(&mut self) {
+        let Some(smallest) = self.atlases.values().map(|(a, _)| a.sheet.0.min(a.sheet.1)).min() else { return };
+        let atlas = self.atlases.values().find(|(a, _)| a.sheet.0.min(a.sheet.1) == smallest).map(|(a, _)| a.name.clone()).unwrap_or_default();
+        let mut out = Vec::new();
+        for def in defs_of(self.m, Kind::Entity) {
+            let Some(b) = def.block() else { continue };
+            for item in &b.items {
+                let (_, row) = item.marker();
+                if !["sight", "light"].contains(&row.key()) {
+                    continue;
+                }
+                let words: Vec<&str> = row.tokens.iter().map(|t| t.text.as_str()).collect();
+                let radius = match words.as_slice() {
+                    [_, n] => n.parse::<i32>().ok(),
+                    _ => words.iter().position(|w| *w == "radius").and_then(|i| words.get(i + 1)).and_then(|n| n.parse::<i32>().ok()),
+                };
+                if let Some(n) = radius.filter(|n| *n > smallest) {
+                    out.push(row.warn(format!(
+                        "`{}` radius {n} of `{}` is larger than the {smallest}-cell sheets of atlas `{atlas}`: searches and senses reach across one sheet edge only (M 6.10)",
+                        row.key(),
+                        def.full
+                    )));
+                }
+            }
+        }
+        for d in out {
+            self.r.push(d);
+        }
+    }
+
     /// A map's own `areas:` rows, each inside the `width`×`height` map
     /// (D 8.11). A prefab cannot have areas yet.
     fn area_rows(&mut self, b: &RawBlock, kind: Kind, width: usize, height: usize) -> Vec<AreaRow> {
@@ -484,7 +635,7 @@ impl Checker<'_> {
         let mut out = Vec::new();
         for item in b.sub("areas") {
             match areas::parse_row(item) {
-                Ok((name, rect)) if rect.inside(width as i32, height as i32) => out.push(AreaRow { name, rect, item: item.clone(), own: true }),
+                Ok((name, rect)) if rect.inside(width as i32, height as i32) => out.push(AreaRow { name, rect, item: item.clone(), own: true, from_atlas: false }),
                 Ok((name, rect)) => self.r.push(item.err(format!(
                     "area `{name}`: {},{} size {}x{} is not inside the {width}x{height} map",
                     rect.x, rect.y, rect.w, rect.h
@@ -504,8 +655,14 @@ impl Checker<'_> {
         for (map, drawn) in &self.drawn {
             let ns = self.m.defs[map].block().and_then(|b| b.namespace.as_deref());
             let mut named = BTreeSet::new();
-            for row in drawn.areas.iter().filter(|r| r.own) {
+            for row in drawn.areas.iter().filter(|r| r.own || r.from_atlas) {
                 if !named.insert(row.name.clone()) {
+                    continue;
+                }
+                if row.from_atlas {
+                    if drawn.labels.contains(&row.name) {
+                        out.push(self.m.defs[map].block().unwrap().err(format!("`{}` is both a label of sheet `{map}` and an area of its atlas (D 8.11)", row.name)));
+                    }
                     continue;
                 }
                 if drawn.labels.contains(&row.name) {
@@ -634,6 +791,11 @@ impl Checker<'_> {
                 Some(s) => match self.m.resolve_kind(ns, &s, &[Kind::Map, Kind::Deck, Kind::Table]) {
                     Ok(d) if d.kind == Kind::Map => start_map = Some(d.full.clone()),
                     Ok(_) => {}
+                    // a sheet that is not written is the atlas's fill (D 8.12)
+                    Err(_) if let Some(Ok(_)) = names::candidates(ns, &s).iter().find_map(|c| atlas::sheet_of(self.m, c)) => {}
+                    Err(_) if self.m.resolve(ns, &s).is_ok_and(|d| d.kind == Kind::Atlas) => {
+                        self.r.push(item.err(format!("`start`: an atlas is not a map; start on one of its sheets, such as `{s}.A01` (D 8.12)")))
+                    }
                     Err(e) => self.r.push(item.err(format!("`start`: {e}"))),
                 },
             },

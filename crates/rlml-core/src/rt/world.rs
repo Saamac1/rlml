@@ -528,9 +528,17 @@ impl<'m> World<'m> {
         if let Some(id) = self.s.map_id(full) {
             return Ok(id);
         }
-        let def = self.m.defs.get(full).ok_or_else(|| format!("no map `{full}`"))?;
-        let b = def.block().ok_or_else(|| format!("map `{full}` is generated; generators are not supported yet"))?.clone();
-        let MapParts { drawing, legend, at: at_rows, vars, areas, size } = self.map_parts(&b)?;
+        // a sheet that is not written is made from its atlas (D 8.12)
+        let b = match self.m.defs.get(full) {
+            Some(def) => def.block().ok_or_else(|| format!("map `{full}` is generated; generators are not supported yet"))?.clone(),
+            None => match crate::atlas::sheet_of(self.m, full) {
+                Some(Ok(_)) => RawBlock { kind: "map".into(), name: full.to_string(), ..self.m.defs[full.rsplit_once('.').unwrap().0].block().unwrap().clone() },
+                Some(Err(e)) => return Err(e),
+                None => return Err(format!("no map `{full}`")),
+            },
+        };
+        let missing = !self.m.defs.contains_key(full);
+        let MapParts { drawing, legend, at: at_rows, vars, areas, size } = if missing { self.missing_sheet(full)? } else { self.map_parts(full, &b)? };
         let (w, h) = size.unwrap_or((drawing.iter().map(|r| r.chars().count()).max().unwrap_or(0) as i32, drawing.len() as i32));
         let layers = self.layers();
         let default_layer = self.default_layer();
@@ -578,11 +586,17 @@ impl<'m> World<'m> {
     /// A map block's parts with its base's (D 8.10): the base's drawing
     /// and size; legend rows replace by character, `vars:` rows by name and
     /// `at:` rows by position, and `areas:` rows are always added.
-    fn map_parts(&self, b: &RawBlock) -> RtResult<MapParts> {
+    fn map_parts(&self, full: &str, b: &RawBlock) -> RtResult<MapParts> {
         let mut parts = match b.arg_after("extends") {
             Some(base) => {
                 let base = self.m.resolve_kind(b.namespace.as_deref(), base, &[Kind::Map])?;
-                self.map_parts(base.block().ok_or_else(|| format!("map `{}` is generated", base.full))?)?
+                self.map_parts(&base.full, base.block().ok_or_else(|| format!("map `{}` is generated", base.full))?)?
+            }
+            None if let Some(sheet) = crate::atlas::sheet_of(self.m, full) => {
+                let mut parts = self.missing_sheet(full)?;
+                let _ = sheet?;
+                parts.drawing = b.drawing.clone();
+                parts
             }
             None => {
                 let size = b.arg_after("size").and_then(|s| s.split_once('x')).and_then(|(w, h)| Some((w.parse::<i32>().ok()?, h.parse::<i32>().ok()?)));
@@ -607,6 +621,37 @@ impl<'m> World<'m> {
             parts.areas.push(crate::areas::parse_row(item)?);
         }
         Ok(parts)
+    }
+
+    /// A sheet's parts from its atlas (D 8.12): the sheet size, the atlas's
+    /// legend and `vars:`, and the part of each atlas area on the sheet.
+    /// Without a drawing of its own the sheet is `fill` on the default
+    /// layer, or `none`.
+    fn missing_sheet(&self, full: &str) -> RtResult<MapParts> {
+        let (a, c, r) = crate::atlas::sheet_of(self.m, full).ok_or_else(|| format!("`{full}` is not a sheet"))??;
+        let b = self.m.defs[&a.name].block().unwrap();
+        let none = RawItem::new(&b.file, b.line, b.namespace.clone(), "none").map_err(|d| d.message)?;
+        let mut legend = vec![(' ', none)];
+        for item in b.sub("legend") {
+            let (ch, rest) = glyph_char(item)?;
+            legend.retain(|(x, _)| *x != ch);
+            legend.push((ch, rest));
+        }
+        let mut areas = Vec::new();
+        for item in b.sub("areas") {
+            let (name, rect) = crate::areas::parse_row(item)?;
+            if let Some(rect) = a.clip(rect, c, r) {
+                areas.push((name, rect));
+            }
+        }
+        // the fill is a drawing of one character that no legend row uses
+        let mut drawing = vec![];
+        if let Some(fill) = &a.fill {
+            let ch = '\u{0}';
+            legend.push((ch, RawItem::new(&b.file, b.line, b.namespace.clone(), fill).map_err(|d| d.message)?));
+            drawing = vec![ch.to_string().repeat(a.sheet.0 as usize); a.sheet.1 as usize];
+        }
+        Ok(MapParts { drawing, legend, at: vec![], vars: b.sub("vars").cloned().collect(), areas, size: Some(a.sheet) })
     }
 
     /// Terrain layers in order: name, `default` and `fill` (D 7.2); one
@@ -746,18 +791,23 @@ impl<'m> World<'m> {
         // 5. the start map
         let ns = g.namespace.as_deref();
         let start = field("start").ok_or("the game has no `start`")?;
-        let start_def = m.resolve(ns, &start)?;
-        let start_map = match start_def.kind {
-            Kind::Map => start_def.full.clone(),
-            Kind::Deck | Kind::Table => {
-                let card = w.card(&toks(&start), ns)?;
-                let cards = match start_def.kind {
-                    Kind::Deck => w.draw_deck(&start_def.full, Some(1))?,
-                    _ => w.draw_table(&card.entity.clone().unwrap_or_default())?,
-                };
-                cards.first().and_then(|c| c.entity.clone()).ok_or("the start draw gave no map")?
-            }
-            k => return Err(format!("`start` is a {k}")),
+        // a sheet that is not written is still a map (D 8.12)
+        let missing = names::candidates(ns, &start).into_iter().find(|c| matches!(crate::atlas::sheet_of(m, c), Some(Ok(_))));
+        let start_map = match (m.resolve(ns, &start), missing) {
+            (Err(_), Some(sheet)) => sheet,
+            (Err(e), None) => return Err(e),
+            (Ok(start_def), _) => match start_def.kind {
+                Kind::Map => start_def.full.clone(),
+                Kind::Deck | Kind::Table => {
+                    let card = w.card(&toks(&start), ns)?;
+                    let cards = match start_def.kind {
+                        Kind::Deck => w.draw_deck(&start_def.full, Some(1))?,
+                        _ => w.draw_table(&card.entity.clone().unwrap_or_default())?,
+                    };
+                    cards.first().and_then(|c| c.entity.clone()).ok_or("the start draw gave no map")?
+                }
+                k => return Err(format!("`start` is a {k}")),
+            },
         };
         w.s.game.start = Some(start_map.clone());
         // 6. load it

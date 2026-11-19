@@ -123,7 +123,9 @@ Kun pelaaja kuolee, maailma jatkaa kierros kerrallaan pelin `round`-tahdissa. As
 
 **Kartan alueet.** Kartan `areas:`-rivit nimeävät sen osia ([D 8.11](dataformaatit/08-kartat-ja-prefabit.md#811-nimetyt-alueet-areas)). Lataus tarkistaa rajaukset ja nimet sekä varoittaa alueista, joilla on samat ruudut tai jotka ovat osin päällekkäin. Ajossa jokaisella kartalla on alueensa sisäkkäisyyksineen ja ruudun tarkin alue. Alue kelpaa `game`-lohkon paikkahaun kohteeksi ja `near`-ankkuriksi, ja paikkahaussa toimivat nyt myös `near` ja `from` ([D 8.8](dataformaatit/08-kartat-ja-prefabit.md#88-paikkahaku-at-near-ja-from)). Perivä kartta saa pohjansa piirroksen, legendin, `vars:`-, `at:`- ja `areas:`-rivit myös ketjussa ([D 8.10](dataformaatit/08-kartat-ja-prefabit.md#810-perivä-kartta-extends)).
 
-Puuttuu vielä: listavalikot, paneelien kentät, kohtaukset ja dialogit, luku- ja tekstikentät, tallennus, äänet, atlas ja paperikartan piirto.
+**Atlas.** Atlas ja sen lehdet latautuvat ([D 8.12](dataformaatit/08-kartat-ja-prefabit.md#812-atlas-karttalehdet)). Lehti saa atlaksen koon, legendin, `vars:`-rivit ja atlaksen alueista lehdelle osuvan osan. Puuttuva lehti luodaan `fill`-tilestä, ja peli voi alkaa myös puuttuvalta lehdeltä. Lataus tarkistaa lehtien nimet, ruudukon, koon, `wrap`-määreen, kahdesti kirjoitetut lehdet ja alueiden nimet. Se varoittaa myös näkö- ja valosäteistä, jotka ovat lehteä suurempia. Reunan ylitys, lähialue sekä haut ja aistit lehtirajan yli puuttuvat vielä ([M 6.10](moottori/06-ajo.md#610-atlas)).
+
+Puuttuu vielä: listavalikot, paneelien kentät, kohtaukset ja dialogit, luku- ja tekstikentät, tallennus, äänet, atlaksen reunan ylitys ja lähialue sekä paperikartan piirto.
 
 ## Avoimet kysymykset
 

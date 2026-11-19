@@ -26,7 +26,7 @@ use crate::token::{Token, tokenize};
 
 pub const BLOCK_KINDS: &[&str] = &[
     "game", "profile", "settings", "autosave", "constants", "component", "entity", "deck", "table", "terrain", "tileset", "tiles",
-    "tiles.glyphs", "map", "prefab", "colors", "panels", "logs", "presentation", "layers", "layout", "menu", "keys", "pad", "log",
+    "tiles.glyphs", "map", "atlas", "prefab", "colors", "panels", "logs", "presentation", "layers", "layout", "menu", "keys", "pad", "log",
     "messages", "panel", "sounds",
 ];
 

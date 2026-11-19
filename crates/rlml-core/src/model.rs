@@ -25,6 +25,7 @@ pub enum Kind {
     Layer,
     Tile,
     Map,
+    Atlas,
     Prefab,
     Menu,
     Panel,
@@ -55,6 +56,7 @@ impl fmt::Display for Kind {
             Kind::Layer => "terrain layer",
             Kind::Tile => "tile",
             Kind::Map => "map",
+            Kind::Atlas => "atlas",
             Kind::Prefab => "prefab",
             Kind::Menu => "menu",
             Kind::Panel => "panel",
@@ -129,7 +131,8 @@ pub struct Model {
     /// Full names written with `override`, for the check that something
     /// was replaced.
     overrides: Vec<(String, Kind, String, usize)>,
-    replaced: Vec<String>,
+    /// Full names written more than once.
+    pub replaced: Vec<String>,
 }
 
 impl Model {
@@ -252,6 +255,7 @@ fn block_kind(kind: &str) -> Option<Kind> {
         "table" => Kind::Table,
         "tileset" => Kind::Tileset,
         "map" => Kind::Map,
+        "atlas" => Kind::Atlas,
         "prefab" => Kind::Prefab,
         "menu" => Kind::Menu,
         "panel" => Kind::Panel,
@@ -413,8 +417,14 @@ impl Model {
                 Err(e) => report.push(item.err(e)),
             }
         }
-        for def in self.defs.values().filter(|d| matches!(d.kind, Kind::Map | Kind::Prefab)) {
+        for def in self.defs.values().filter(|d| matches!(d.kind, Kind::Map | Kind::Prefab | Kind::Atlas)) {
             let Some(b) = def.block() else { continue };
+            // an atlas's `fill` is its missing sheets' tile (D 8.12)
+            if def.kind == Kind::Atlas
+                && let Some(t) = b.arg_after("fill").and_then(|t| names::tile_name(t).ok())
+            {
+                seen.push((qualify(b.namespace.as_deref(), &t.base), b.file.clone(), b.line));
+            }
             // `at:` rows start with a position, legend rows with a character
             let rows = b.sub("legend").map(|i| glyph_char(i).map(|(_, r)| r).unwrap_or_else(|_| i.shift(1))).chain(b.sub("at").map(|i| i.shift(1)));
             for item in rows {
