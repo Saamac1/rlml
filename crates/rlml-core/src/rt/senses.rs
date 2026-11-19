@@ -329,11 +329,12 @@ impl World<'_> {
     /// `route` through the cells of `known` only, when given: a travel's
     /// route passes only cells the players see or remember (M 8.1).
     pub fn route_within(&self, from: Pos, to: &[Pos], who: Option<EntityId>, known: Option<&BTreeSet<(i32, i32)>>) -> Vec<Pos> {
-        let goals: BTreeSet<(i32, i32)> = to.iter().filter(|p| p.map == from.map).map(|p| (p.x, p.y)).collect();
+        // on an atlas the route may cross one sheet edge: it is found in
+        // the start map's coordinates (M 6.10)
+        let goals: BTreeSet<(i32, i32)> = to.iter().filter_map(|p| self.frame(from.map, *p)).collect();
         if goals.is_empty() || goals.contains(&(from.x, from.y)) {
             return vec![];
         }
-        let map = &self.s.maps[from.map];
         let h = |(x, y): (i32, i32)| goals.iter().map(|g| ((g.0 - x).abs().max((g.1 - y).abs())) as i64).min().unwrap_or(0);
         let mv = who.and_then(|w| self.s.get(w).get("movement"));
         let dirs = mv.and_then(|m| m.get("dirs")).and_then(Value::as_number).unwrap_or(8);
@@ -341,8 +342,8 @@ impl World<'_> {
         // the cost of entering a cell, or `None` if it is closed: a blocking
         // actor is passed at four steps on a route `for` someone (M 9.3)
         let enter = |x: i32, y: i32| -> Option<i64> {
-            let p = Pos { map: from.map, x, y };
-            if !map.inside(x, y) || known.is_some_and(|k| !k.contains(&(x, y))) || self.blocks_tiles(p, "move", who) {
+            let p = self.unframe(from.map, x, y);
+            if !self.on_map(p) || known.is_some_and(|k| !k.contains(&(x, y))) || self.blocks_tiles(p, "move", who) {
                 return None;
             }
             let Some(w) = who else { return Some(1) };
@@ -377,7 +378,7 @@ impl World<'_> {
                     c = p;
                 }
                 route.reverse();
-                return route.into_iter().map(|(x, y)| Pos { map: from.map, x, y }).collect();
+                return route.into_iter().map(|(x, y)| self.unframe(from.map, x, y)).collect();
             }
             for d in Dir::ALL {
                 let (dx, dy) = d.delta();
@@ -390,7 +391,7 @@ impl World<'_> {
                     continue;
                 }
                 if diagonal && who.is_some() && !corners {
-                    let side = |x: i32, y: i32| self.blocks(Pos { map: from.map, x, y }, "move", who, true);
+                    let side = |x: i32, y: i32| self.blocks(self.unframe(from.map, x, y), "move", who, true);
                     if side(x + dx, y) || side(x, y + dy) {
                         continue;
                     }
@@ -415,17 +416,24 @@ impl World<'_> {
     /// without the start, on to `range` steps, ending before the first cell
     /// that stops it (M 9.3).
     pub fn ray(&self, a: Pos, b: Pos, who: Option<EntityId>, range: i64, mode: Option<&str>) -> Vec<Pos> {
+        // in `a`'s coordinates, so a flight crosses one sheet edge (M 6.10)
+        let Some((bx, by)) = self.frame(a.map, b) else { return vec![] };
         if a == b {
             return vec![];
         }
         let far = if range > 0 {
             let k = range.max(1) as i32 * 2 + 1;
-            Pos { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, ..a }
+            Pos { x: a.x + (bx - a.x) * k, y: a.y + (by - a.y) * k, ..a }
         } else {
-            b
+            Pos { x: bx, y: by, ..a }
         };
         let mut out = Vec::new();
         for p in super::eval::line(a, far).into_iter().skip(1) {
+            let p = self.unframe(a.map, p.x, p.y);
+            // the flight leaves the nearby region like a map's edge
+            if !self.on_map(p) {
+                break;
+            }
             if range > 0 && out.len() as i64 >= range {
                 break;
             }

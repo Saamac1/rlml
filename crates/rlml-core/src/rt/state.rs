@@ -342,6 +342,45 @@ impl State {
         self.wakes.iter().find(|w| w.entity == entity).copied()
     }
 
+    /// The active maps (M 6.1.8, M 6.10): the active map and, on an atlas,
+    /// the loaded sheets next to it, which form its nearby region.
+    pub fn active_maps(&self) -> Vec<MapId> {
+        self.active_map().map(|m| self.region(m)).unwrap_or_default()
+    }
+
+    /// A map's nearby region (M 6.10): the map and, when it is a sheet,
+    /// its loaded neighbour sheets of the same atlas, diagonals included.
+    pub fn region(&self, map: MapId) -> Vec<MapId> {
+        let Some((a, c, r)) = &self.maps[map].sheet else { return vec![map] };
+        let mut out = vec![map];
+        for (id, m) in self.maps.iter().enumerate() {
+            if let Some((b, c2, r2)) = &m.sheet
+                && id != map
+                && b.name == a.name
+                && (c - c2).abs() <= 1
+                && (r - r2).abs() <= 1
+            {
+                out.push(id);
+            }
+        }
+        out
+    }
+
+    /// The next wake of actors on any of `maps` and its moment in
+    /// `game.time` (M 6.1.2). Each map's wakes are on its own clock, so
+    /// they compare by how far they are from now; a tie goes to the
+    /// smaller sequence number.
+    pub fn next_wake_on(&self, maps: &[MapId]) -> Option<(Wake, i64)> {
+        let now = self.game.time;
+        self.wakes
+            .iter()
+            .filter_map(|w| {
+                let m = self.at(w.entity)?.map;
+                maps.contains(&m).then(|| (*w, now + (w.at - self.maps[m].clock(now))))
+            })
+            .min_by_key(|(w, t)| (*t, w.seq))
+    }
+
     /// The next wake of actors on `map`: the smallest moment, then the
     /// smallest sequence number (M 6.1.2).
     pub fn next_wake(&self, map: MapId) -> Option<Wake> {

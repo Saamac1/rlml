@@ -113,11 +113,14 @@ impl<'m> Runner<'m> {
     pub fn run_with(&mut self, rounds: i64, seen: &mut dyn FnMut(&mut World)) -> RtResult<Status> {
         let start_turn = self.w.s.game.turn();
         loop {
-            let Some(map) = self.w.s.active_map() else { return Ok(Status::NoPlayer { rounds: 0 }) };
-            let now = self.clock(map);
+            if self.w.s.active_map().is_none() {
+                return Ok(Status::NoPlayer { rounds: 0 });
+            }
+            // every active map: on an atlas the player's nearby region (M 6.10)
+            let maps = self.w.s.active_maps();
             // phase 4: the wakes of this moment, by sequence number
-            if let Some(wake) = self.w.s.next_wake(map)
-                && wake.at <= now
+            if let Some((wake, moment)) = self.w.s.next_wake_on(&maps)
+                && moment <= self.w.s.game.time
             {
                 let e = wake.entity;
                 if let Some(n) = self.w.s.seat_of(e).filter(|_| self.w.s.get(e).alive && !self.waiting.contains_key(&e)) {
@@ -169,7 +172,7 @@ impl<'m> Runner<'m> {
             }
             // the next moment: the nearest wake or round boundary (M 6.1.1)
             let boundary = (self.w.s.game.time.div_euclid(120) + 1) * 120;
-            let next_wake = self.w.s.next_wake(map).map(|w| self.w.s.game.time + (w.at - now));
+            let next_wake = self.w.s.next_wake_on(&maps).map(|(_, t)| t);
             let next = next_wake.map_or(boundary, |t| t.min(boundary));
             self.w.s.game.time = next;
             if next == boundary {
@@ -184,12 +187,18 @@ impl<'m> Runner<'m> {
     /// (M 6.1.4).
     fn round(&mut self) -> RtResult<()> {
         let Some(map) = self.w.s.active_map() else { return Ok(()) };
-        if self.w.s.entities_on(map).iter().any(|&e| self.w.s.get(e).has("timer")) {
+        // the instances of every active map, in creation order
+        let maps = self.w.s.active_maps();
+        let mut on: Vec<EntityId> = maps.iter().flat_map(|&m| self.w.s.entities_on(m)).collect();
+        on.sort_unstable();
+        if on.iter().any(|&e| self.w.s.get(e).has("timer")) {
             return Err("timers are not supported yet (M 6.1.4 phase 2)".into());
         }
         let mut env = engine_env("turn");
         env.map = Some(map);
-        for e in self.w.s.entities_on(map) {
+        for e in on {
+            let mut env = env.clone();
+            env.map = self.w.s.at(e).map(|p| p.map).or(Some(map));
             self.w.emit_to("turn", vec![Value::Entity(e)], &env, Scope::Components)?;
         }
         self.w.emit_to("turn", vec![], &env, Scope::General)?;

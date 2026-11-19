@@ -253,35 +253,64 @@ fn loaded(w: &World) -> Vec<String> {
 }
 
 #[test]
-fn the_neighbour_sheets_are_loaded_and_frozen() {
+fn the_nearby_region_is_active() {
     let m = clean(&game(WORLD));
     let w = started(&m);
     assert_eq!(loaded(&w), ["MAAILMA.A01", "MAAILMA.A02", "MAAILMA.B01", "MAAILMA.B02"]);
-    for m in &w.s.maps[1..] {
-        assert!(m.frozen_at.is_some(), "{} waits frozen until the player comes", m.name);
-    }
-    assert!(w.s.maps[0].frozen_at.is_none());
+    assert!(w.s.maps.iter().all(|m| m.frozen_at.is_none()), "the sheet and its neighbours run together");
+    let mut active: Vec<String> = w.s.active_maps().iter().map(|&m| w.s.maps[m].name.clone()).collect();
+    active.sort();
+    assert_eq!(active, loaded(&w));
+}
+
+/// The atlas with floor on row 2 of every sheet in the first row of sheets.
+fn corridor() -> String {
+    WORLD.replace("~~~~~.\n```", "~~~~..\n```").replace("~~~~~~\n......\n```", "~~~~~~\n......\n......\n```") + "\nmap MAAILMA.C01\n\n```\n~~~~~~\n~~~~~~\n......\n```\n"
 }
 
 #[test]
 fn walking_east_crosses_to_the_next_sheet() {
-    let m = clean(&game(WORLD));
+    let m = clean(&game(&corridor()));
     let mut w = started(&m);
     put(&mut w, "MAAILMA.A01", 5, 2);
     step(&mut w, "EAST");
     assert_eq!(where_(&w), ("MAAILMA.B01".into(), 0, 2));
-    let a = w.s.map_id("MAAILMA.A01").unwrap();
     let b = w.s.map_id("MAAILMA.B01").unwrap();
-    assert!(w.s.maps[a].frozen_at.is_some() && w.s.maps[b].frozen_at.is_none(), "the sheet left behind freezes");
     assert_eq!(w.s.active_map(), Some(b));
     assert_eq!(loaded(&w).len(), 6, "B01's neighbours C01 and C02 load too");
-    // and back west
+    assert!(w.s.maps.iter().all(|m| m.frozen_at.is_none()), "A01 and A02 stay in B01's region");
+    // on C01 the A sheets fall out of the region and freeze
+    put(&mut w, "MAAILMA.B01", 5, 2);
+    step(&mut w, "EAST");
+    assert_eq!(where_(&w), ("MAAILMA.C01".into(), 0, 2));
+    let frozen: Vec<&str> = w.s.maps.iter().filter(|m| m.frozen_at.is_some()).map(|m| m.name.as_str()).collect();
+    assert_eq!(frozen, ["MAAILMA.A01", "MAAILMA.A02"]);
+    // and back west: they thaw
     step(&mut w, "WEST");
-    assert_eq!(where_(&w), ("MAAILMA.A01".into(), 5, 2));
+    assert_eq!(where_(&w), ("MAAILMA.B01".into(), 5, 2));
+    assert!(w.s.maps.iter().all(|m| m.frozen_at.is_none()));
     // a water cell on the neighbour blocks like water on the sheet
     put(&mut w, "MAAILMA.B01", 0, 1);
     step(&mut w, "WEST");
     assert_eq!(where_(&w), ("MAAILMA.B01".into(), 0, 1));
+}
+
+#[test]
+fn an_actor_on_a_neighbour_sheet_has_turns() {
+    use rlml_core::rt::run::{Runner, Status};
+    let world = WORLD.replace("~~~~~~\n......\n```", "~~~~~~\n....x.\n```");
+    let m = clean(&game(&world));
+    let w = started(&m);
+    let rat = (0..w.s.entities.len()).find(|&e| w.s.get(e).kind == "RAT").unwrap();
+    let rat_map = w.s.at(rat).unwrap().map;
+    assert_eq!(w.s.maps[rat_map].name, "MAAILMA.B01");
+    let first = w.s.wake_of(rat).unwrap().at;
+    let mut r = Runner::new(w);
+    for _ in 0..4 {
+        assert_eq!(r.run(0).unwrap(), Status::Input);
+        r.player(&CommandValue { name: "STD.WAIT".into(), args: vec![] }).unwrap();
+    }
+    assert!(r.w.s.wake_of(rat).unwrap().at > first, "the rat's turns go on while the player is on A01");
 }
 
 #[test]
@@ -318,4 +347,45 @@ fn a_diagonal_crosses_a_corner() {
     put(&mut w, "MAAILMA.A01", 5, 2);
     step(&mut w, "SOUTHEAST");
     assert_eq!(where_(&w), ("MAAILMA.B02".into(), 0, 0));
+}
+
+// ---- searches across a sheet edge (M 6.10) ----
+
+fn cell(w: &World, sheet: &str, x: i32, y: i32) -> Pos {
+    Pos { map: w.s.map_id(sheet).unwrap(), x, y }
+}
+
+fn named(w: &World, cells: &[Pos]) -> Vec<(String, i32, i32)> {
+    cells.iter().map(|p| (w.s.maps[p.map].name.clone(), p.x, p.y)).collect()
+}
+
+#[test]
+fn distances_reach_across_one_edge() {
+    let m = clean(&game(&corridor()));
+    let mut w = started(&m);
+    w.load_nearby(w.s.map_id("MAAILMA.B01").unwrap()).unwrap();
+    let (a, b, c) = (cell(&w, "MAAILMA.A01", 5, 2), cell(&w, "MAAILMA.B01", 0, 2), cell(&w, "MAAILMA.C01", 0, 2));
+    assert_eq!(w.dist(a, b), 1);
+    assert_eq!(w.dist(b, a), 1);
+    assert_eq!(w.dist(cell(&w, "MAAILMA.A01", 0, 0), cell(&w, "MAAILMA.B02", 5, 2)), 11, "diagonal neighbours");
+    assert_eq!(w.dist(a, c), i64::MAX, "two edges away is out of reach");
+    assert_eq!(w.region_cells(a.map).len(), 4 * 18, "A01 and its three neighbours");
+    assert_eq!(w.region_cells(b.map).len(), 6 * 18);
+}
+
+#[test]
+fn a_line_a_route_and_a_flight_cross_the_edge() {
+    let m = clean(&game(&corridor()));
+    let w = started(&m);
+    let (from, to) = (cell(&w, "MAAILMA.A01", 4, 2), cell(&w, "MAAILMA.B01", 2, 2));
+    let along = [("MAAILMA.A01".to_string(), 4, 2), ("MAAILMA.A01".into(), 5, 2), ("MAAILMA.B01".into(), 0, 2), ("MAAILMA.B01".into(), 1, 2), ("MAAILMA.B01".into(), 2, 2)];
+    assert_eq!(named(&w, &w.line_across(from, to)), along);
+    let route = named(&w, &w.route(from, &[to], None));
+    assert_eq!((route.len(), &route[0], route.last().unwrap()), (4, &along[1], &along[4]), "{route:?}");
+    assert_eq!(named(&w, &w.ray(from, to, None, 0, None)), along[1..]);
+    // a flight goes on past the target and stops at the water of the missing C01
+    let ray = w.ray(from, to, None, 10, None);
+    assert_eq!(named(&w, &ray).last().unwrap(), &("MAAILMA.B01".to_string(), 5, 2));
+    // a route around the water through the missing sheet below is closed
+    assert!(w.route(from, &[cell(&w, "MAAILMA.B01", 1, 0)], None).is_empty(), "B01's top row is water");
 }

@@ -304,10 +304,10 @@ impl<'m> Runner<'m> {
                         Value::Command(c) => Some(c),
                         _ => self.rest(),
                     }
-                } else if at.distance(lat) <= self.fields.follow_distance {
+                } else if self.w.dist(at, lat) <= self.fields.follow_distance {
                     self.rest()
                 } else {
-                    let near: Vec<Pos> = Dir::ALL.into_iter().map(|d| lat.step(d)).filter(|&p| p != at).collect();
+                    let near: Vec<Pos> = Dir::ALL.into_iter().map(|d| self.w.across(lat.step(d))).filter(|&p| p != at).collect();
                     let known = self.known_cells(at.map);
                     match self.w.route_within(at, &near, Some(t.member), Some(&known)).first() {
                         Some(&next) => self.walk_step(t.member, at, next)?,

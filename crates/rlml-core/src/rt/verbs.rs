@@ -202,8 +202,8 @@ impl World<'_> {
                             v => self.area(&v, &env, p.pos).map(|a| a.cells().to_vec()).unwrap_or_default(),
                         },
                     };
-                    candidates.retain(|c| at.distance(*c) <= range);
-                    candidates.sort_by_key(|c| (at.distance(*c), c.y, c.x));
+                    candidates.retain(|c| self.dist(at, *c) <= range);
+                    candidates.sort_by_key(|c| (self.dist(at, *c), c.y, c.x));
                     candidates.dedup();
                     Ask::Aim { name: p.name.clone(), range, candidates }
                 }
@@ -308,7 +308,7 @@ impl World<'_> {
                     Value::Number(n) => n,
                     _ => return Ok(None),
                 };
-                if at.distance(c) > range {
+                if self.dist(at, c) > range {
                     return Ok(None);
                 }
                 if let Some(w) = within {

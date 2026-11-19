@@ -1401,22 +1401,19 @@ impl World<'_> {
                     _ => (0, Some(1)),
                 };
                 let Some(first) = a.cells().first() else { return Ok(Value::Area(Area::default())) };
-                let m = &self.s.maps[first.map];
+                // on an atlas the nearby region's cells count (M 6.10)
                 let mut cells = Vec::new();
-                for y in 0..m.height {
-                    for x in 0..m.width {
-                        let p = Cell { map: first.map, x, y };
-                        let d = a.cells().iter().map(|c| c.distance(p)).min().unwrap_or(i64::MAX);
-                        if d >= lo && hi.is_none_or(|h| d <= h) {
-                            cells.push(p);
-                        }
+                for p in self.region_cells(first.map) {
+                    let d = a.cells().iter().map(|c| self.dist(*c, p)).min().unwrap_or(i64::MAX);
+                    if d >= lo && hi.is_none_or(|h| d <= h) {
+                        cells.push(p);
                     }
                 }
                 Value::Area(Area::new(cells))
             }
             "distance" => {
                 let (x, y) = (self.area(&a0, env, pos)?, self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?);
-                let d = x.cells().iter().flat_map(|p| y.cells().iter().map(move |q| p.distance(*q))).min().unwrap_or(i64::MAX);
+                let d = x.cells().iter().flat_map(|p| y.cells().iter().map(|q| self.dist(*p, *q))).min().unwrap_or(i64::MAX);
                 Value::Number(d)
             }
             "nearest" => {
@@ -1425,7 +1422,7 @@ impl World<'_> {
                 let mut best: Option<(i64, Value)> = None;
                 for it in items {
                     let ia = self.area(&it, env, pos)?;
-                    let d = ia.cells().iter().flat_map(|p| to.cells().iter().map(move |q| p.distance(*q))).min().unwrap_or(i64::MAX);
+                    let d = ia.cells().iter().flat_map(|p| to.cells().iter().map(|q| self.dist(*p, *q))).min().unwrap_or(i64::MAX);
                     if best.as_ref().is_none_or(|(bd, _)| d < *bd) {
                         best = Some((d, it));
                     }
@@ -1490,7 +1487,7 @@ impl World<'_> {
                 let (x, y) = (self.area(&a0, env, pos)?, self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?);
                 match (x.cells().first(), y.cells().first()) {
                     // a line keeps its order (M 9.3)
-                    (Some(p), Some(q)) => Value::List(line(*p, *q).into_iter().map(Value::Pos).collect()),
+                    (Some(p), Some(q)) => Value::List(self.line_across(*p, *q).into_iter().map(Value::Pos).collect()),
                     _ => Value::List(vec![]),
                 }
             }
@@ -1970,9 +1967,16 @@ impl World<'_> {
     /// the microstep's end (M 6.1.8, M 6.7).
     pub fn apply_switch(&mut self) {
         if let Some((from, to)) = self.switch.take() {
+            // on an atlas the nearby region moves: the sheets left out
+            // freeze and the new ones thaw (M 6.10)
             let now = self.s.game.time;
-            self.s.maps[from].freeze(now);
-            self.s.maps[to].thaw(now);
+            let (old, new) = (self.s.region(from), self.s.region(to));
+            for m in old.into_iter().filter(|m| !new.contains(m)) {
+                self.s.maps[m].freeze(now);
+            }
+            for m in new {
+                self.s.maps[m].thaw(now);
+            }
         }
     }
 

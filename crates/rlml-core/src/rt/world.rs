@@ -627,9 +627,9 @@ impl<'m> World<'m> {
         Ok(parts)
     }
 
-    /// Loads the sheets next to sheet `map` (M 6.10), so an edge crossing
-    /// finds its target. A sheet loaded here is frozen until the player
-    /// comes to it: only the player's sheet is active for now.
+    /// Loads the sheets next to sheet `map` (M 6.10): with it they form
+    /// its nearby region, which is active when the player is on `map`. A
+    /// sheet loads when it first comes into a nearby region.
     pub fn load_nearby(&mut self, map: MapId) -> RtResult<()> {
         let Some((a, c, r)) = self.s.maps[map].sheet.clone() else { return Ok(()) };
         for (dc, dr) in [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)] {
@@ -639,8 +639,7 @@ impl<'m> World<'m> {
             }
             let name = a.sheet_name(nc, nr);
             if self.s.map_id(&name).is_none() {
-                let id = self.load_map(&name)?;
-                self.s.maps[id].freeze(self.s.game.time);
+                self.load_map(&name)?;
             }
         }
         Ok(())
@@ -672,6 +671,60 @@ impl<'m> World<'m> {
             Some(id) => Pos { map: id, x: p.x - dc * w, y: p.y - dr * h },
             None => p,
         }
+    }
+
+    /// A cell in the coordinates of map `origin` (M 6.10): on a neighbour
+    /// sheet of the same atlas its coordinates go past `origin`'s edges.
+    /// `None` for a cell of another map.
+    pub fn frame(&self, origin: MapId, p: Pos) -> Option<(i32, i32)> {
+        if p.map == origin {
+            return Some((p.x, p.y));
+        }
+        match (&self.s.maps[origin].sheet, &self.s.maps[p.map].sheet) {
+            (Some((a, c1, r1)), Some((b, c2, r2))) if a.name == b.name && (c1 - c2).abs() <= 1 && (r1 - r2).abs() <= 1 => {
+                Some((p.x + (c2 - c1) * a.sheet.0, p.y + (r2 - r1) * a.sheet.1))
+            }
+            _ => None,
+        }
+    }
+
+    /// A cell of `origin`'s coordinates as a cell of its map or of a
+    /// neighbour sheet; outside the nearby region it stays outside the map.
+    pub fn unframe(&self, origin: MapId, x: i32, y: i32) -> Pos {
+        self.across(Pos { map: origin, x, y })
+    }
+
+    /// Is the cell on its map: inside it, not dropped past an edge?
+    pub fn on_map(&self, p: Pos) -> bool {
+        self.s.maps[p.map].inside(p.x, p.y)
+    }
+
+    /// Chebyshev distance (D 8.8) across one sheet edge on an atlas
+    /// (M 6.10); cells of maps that are not neighbours are infinitely far.
+    pub fn dist(&self, a: Pos, b: Pos) -> i64 {
+        match self.frame(a.map, b) {
+            Some((x, y)) => ((a.x - x).abs().max((a.y - y).abs())) as i64,
+            None => i64::MAX,
+        }
+    }
+
+    /// Every cell of a map's nearby region (M 6.10), in reading order of
+    /// each map.
+    pub fn region_cells(&self, map: MapId) -> Vec<Pos> {
+        let mut out = Vec::new();
+        for m in self.s.region(map) {
+            let (w, h) = (self.s.maps[m].width, self.s.maps[m].height);
+            out.extend((0..h).flat_map(|y| (0..w).map(move |x| Pos { map: m, x, y })));
+        }
+        out
+    }
+
+    /// Bresenham's line from `a` to `b` (M 9.3), across one sheet edge on an
+    /// atlas; cells past the nearby region drop out. Empty when `b` is on a
+    /// map that is not `a`'s nor its neighbour.
+    pub fn line_across(&self, a: Pos, b: Pos) -> Vec<Pos> {
+        let Some((x, y)) = self.frame(a.map, b) else { return vec![] };
+        super::eval::line(a, Pos { map: a.map, x, y }).into_iter().map(|p| self.unframe(a.map, p.x, p.y)).filter(|p| self.on_map(*p)).collect()
     }
 
     /// Are `a` and `b` neighbour sheets of one atlas, diagonals included?
