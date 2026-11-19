@@ -389,3 +389,67 @@ fn a_line_a_route_and_a_flight_cross_the_edge() {
     // a route around the water through the missing sheet below is closed
     assert!(w.route(from, &[cell(&w, "MAAILMA.B01", 1, 0)], None).is_empty(), "B01's top row is water");
 }
+
+// ---- senses across a sheet edge (M 6.10) ----
+
+#[test]
+fn the_view_reaches_the_neighbour_sheet() {
+    let m = clean(&game(&corridor()));
+    let mut w = started(&m);
+    put(&mut w, "MAAILMA.A01", 4, 2);
+    let a = w.s.map_id("MAAILMA.A01").unwrap();
+    let view = w.shared_view(a).unwrap();
+    assert!(view.contains(&(6, 2)) && view.contains(&(9, 2)), "B01's corridor in A01's coordinates: {view:?}");
+    let b01 = cell(&w, "MAAILMA.B01", 3, 2);
+    let p = w.s.player.unwrap();
+    assert!(w.sees(p, &[b01]));
+    // what is seen there is remembered by B01
+    w.render(a);
+    let b = w.s.map_id("MAAILMA.B01").unwrap();
+    assert!(w.s.maps[b].remembered.contains(&(3, 2)));
+    assert!(!w.s.maps[a].remembered.iter().any(|&(x, _)| x >= 6), "A01 keeps only its own cells");
+}
+
+#[test]
+fn a_rat_on_the_neighbour_sheet_hunts_across_the_edge() {
+    use rlml_core::rt::run::{Runner, Status};
+    let world = corridor().replace("~~~~~~\n......\n......\n```", "~~~~~~\n......\n..x...\n```");
+    let m = clean(&game(&world));
+    let mut w = started(&m);
+    put(&mut w, "MAAILMA.A01", 4, 2);
+    let p = w.s.player.unwrap();
+    let rat = (0..w.s.entities.len()).find(|&e| w.s.get(e).kind == "RAT").unwrap();
+    let mut r = Runner::new(w);
+    let mut crossed = false;
+    for _ in 0..8 {
+        if r.run(0).unwrap() != Status::Input {
+            break;
+        }
+        r.player(&CommandValue { name: "STD.WAIT".into(), args: vec![] }).unwrap();
+        let at = r.w.s.at(rat).unwrap();
+        crossed |= r.w.s.maps[at.map].name == "MAAILMA.A01";
+    }
+    let hp = r.w.s.get(p).get("STD.HP").and_then(|c| c.get("now")).cloned();
+    assert!(crossed, "the rat came over to A01");
+    assert_ne!(hp, Some(rlml_core::rt::value::Value::Number(10)), "and bit the player");
+}
+
+#[test]
+fn a_sound_carries_across_the_edge() {
+    use rlml_core::rt::world::Noise;
+    let m = clean(&game(&corridor()));
+    let mut w = started(&m);
+    put(&mut w, "MAAILMA.A01", 4, 2);
+    let p = w.s.player.unwrap();
+    w.listen(p);
+    w.load_nearby(w.s.map_id("MAAILMA.B01").unwrap()).unwrap();
+    // a fight three steps away on B01 is heard; one on C01, two edges away, is not
+    for (sheet, x) in [("MAAILMA.B01", 1), ("MAAILMA.C01", 4)] {
+        let at = cell(&w, sheet, x, 2);
+        w.sounds.push(Noise { at, kind: "STD.SOUND.FIGHT".into(), source: None, time: w.s.game.time });
+        w.sounds_made += 1;
+    }
+    let heard = w.listen(p);
+    assert_eq!(heard.len(), 1, "{heard:?}");
+    assert_eq!(w.s.maps[heard[0].at.map].name, "MAAILMA.B01");
+}

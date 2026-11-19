@@ -127,10 +127,12 @@ impl World<'_> {
     pub fn render_cells(&mut self, map: MapId) -> Vec<Vec<Look>> {
         let view = self.player_view(map);
         let (w, h) = (self.s.maps[map].width, self.s.maps[map].height);
-        // what the player now sees is remembered (M 7.2)
-        for &cell in &view {
-            if !self.s.maps[map].remembered.contains(&cell) {
-                self.s.maps[map].remembered.push(cell);
+        // what the player now sees is remembered (M 7.2), on a neighbour
+        // sheet by that sheet (M 6.10)
+        for &(x, y) in &view {
+            let p = self.unframe(map, x, y);
+            if self.on_map(p) && !self.s.maps[p.map].remembered.contains(&(p.x, p.y)) {
+                self.s.maps[p.map].remembered.push((p.x, p.y));
             }
         }
         let remembered: BTreeSet<(i32, i32)> = self.s.maps[map].remembered.iter().copied().collect();

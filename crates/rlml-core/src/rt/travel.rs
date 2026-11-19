@@ -124,19 +124,26 @@ impl<'m> Runner<'m> {
     /// an actor coming into view stops a travel).
     pub fn actors_in_view(&self, map: MapId) -> BTreeSet<EntityId> {
         let Some(view) = self.w.shared_view(map) else { return BTreeSet::new() };
+        // on an atlas the actors on the nearby region's sheets count (M 6.10)
         self.w
             .s
-            .entities_on(map)
+            .region(map)
             .into_iter()
+            .flat_map(|m| self.w.s.entities_on(m))
             .filter(|&e| self.w.s.get(e).alive && self.w.s.is_actor(e) && !self.w.s.is_member(e))
-            .filter(|&e| self.w.s.at(e).is_some_and(|p| view.contains(&(p.x, p.y))))
+            .filter(|&e| self.w.s.at(e).and_then(|p| self.w.frame(map, p)).is_some_and(|c| view.contains(&c)))
             .collect()
     }
 
     /// The cells the players see or remember on `map`: a route passes only
     /// these (M 8.1).
     fn known_cells(&self, map: MapId) -> BTreeSet<(i32, i32)> {
-        let mut known: BTreeSet<(i32, i32)> = self.w.s.maps[map].remembered.iter().copied().collect();
+        // in `map`'s coordinates, with what the nearby region's sheets remember
+        let mut known = BTreeSet::new();
+        for m in self.w.s.region(map) {
+            let cells: BTreeSet<(i32, i32)> = self.w.s.maps[m].remembered.iter().copied().collect();
+            known.extend(self.w.reframe(&cells, m, map));
+        }
         if let Some(view) = self.w.shared_view(map) {
             known.extend(view);
         }

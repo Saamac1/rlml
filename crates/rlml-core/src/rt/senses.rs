@@ -127,48 +127,68 @@ impl World<'_> {
         false
     }
 
+    /// Does a cell in `map`'s coordinates block sight? On an atlas the
+    /// coordinates reach the neighbour sheets; past the nearby region
+    /// everything blocks (M 6.10).
     fn blocks_sight(&self, map: MapId, x: i32, y: i32) -> bool {
-        self.blocks(Pos { map, x, y }, "sight", None, true)
+        self.blocks(self.unframe(map, x, y), "sight", None, true)
+    }
+
+    /// A set of cells in `from`'s coordinates in `to`'s coordinates; cells
+    /// of no map of the nearby region drop out.
+    pub fn reframe(&self, cells: &BTreeSet<(i32, i32)>, from: MapId, to: MapId) -> BTreeSet<(i32, i32)> {
+        if from == to {
+            return cells.clone();
+        }
+        let Some((ox, oy)) = self.frame(to, Pos { map: from, x: 0, y: 0 }) else { return BTreeSet::new() };
+        cells.iter().map(|&(x, y)| (x + ox, y + oy)).collect()
     }
 
     /// Is a cell lit: a `lit` tile in it or next to it, or a `light`
     /// source's reach (M 7.2)?
+    /// On an atlas a lit tile or a light source on a neighbour sheet lights
+    /// across the edge (M 6.10).
     pub fn lit(&self, p: Pos) -> bool {
-        let m = &self.s.maps[p.map];
         for dx in -1..=1 {
             for dy in -1..=1 {
-                let (x, y) = (p.x + dx, p.y + dy);
-                if (0..m.layers.len()).any(|l| m.tile(l, x, y).is_some_and(|t| self.tile_flag(t, "lit"))) {
+                let q = self.unframe(p.map, p.x + dx, p.y + dy);
+                let m = &self.s.maps[q.map];
+                if (0..m.layers.len()).any(|l| m.tile(l, q.x, q.y).is_some_and(|t| self.tile_flag(t, "lit"))) {
                     return true;
                 }
             }
         }
-        for e in self.s.entities_on(p.map) {
+        for e in self.s.region(p.map).into_iter().flat_map(|m| self.s.entities_on(m)) {
             let Some(light) = self.s.get(e).get("light") else { continue };
             let r = light.get("radius").and_then(Value::as_number).unwrap_or(0);
             let Some(at) = self.s.at(e) else { continue };
-            if at.distance(p) <= r && line_of_sight((at.x, at.y), r, &|x, y| self.blocks_sight(p.map, x, y)).contains(&(p.x, p.y)) {
+            let Some(target) = self.frame(at.map, p) else { continue };
+            if self.dist(at, p) <= r && line_of_sight((at.x, at.y), r, &|x, y| self.blocks_sight(at.map, x, y)).contains(&target) {
                 return true;
             }
         }
         false
     }
 
-    /// The cells an entity sees (M 7.2); `None` when it has no `sight`.
+    /// The cells an entity sees (M 7.2), in the coordinates of its map;
+    /// `None` when it has no `sight`. On an atlas the view reaches across
+    /// one sheet edge, so cells of neighbour sheets lie past the map's
+    /// edges (M 6.10).
     pub fn field_of_view(&self, e: EntityId) -> Option<BTreeSet<(i32, i32)>> {
         let sight = self.s.get(e).get("sight")?;
         let at = self.s.at(e)?;
         let num = |f: &str, d: i64| sight.get(f).and_then(Value::as_number).unwrap_or(d);
         let (radius, dark) = (num("radius", 0), num("dark", 1));
         let in_sight = line_of_sight((at.x, at.y), radius.max(dark), &|x, y| self.blocks_sight(at.map, x, y));
-        let m = &self.s.maps[at.map];
         Some(
             in_sight
                 .into_iter()
-                .filter(|&(x, y)| m.inside(x, y))
                 .filter(|&(x, y)| {
-                    let p = Pos { map: at.map, x, y };
-                    let d = at.distance(p);
+                    let p = self.unframe(at.map, x, y);
+                    if !self.on_map(p) {
+                        return false;
+                    }
+                    let d = ((x - at.x).abs().max((y - at.y).abs())) as i64;
                     d == 0 || d <= dark || (d <= radius && self.lit(p))
                 })
                 .collect(),
@@ -178,17 +198,21 @@ impl World<'_> {
     /// The shared view on `map` (M 7.2): the union of the living members'
     /// views there; a member without `sight` sees the whole map. `None`
     /// when no member is on the map.
+    /// The view is in `map`'s coordinates; on an atlas the members on
+    /// the sheets of its nearby region count too (M 6.10).
     pub fn shared_view(&self, map: MapId) -> Option<BTreeSet<(i32, i32)>> {
-        let on_map: Vec<EntityId> = self.s.players().into_iter().filter(|&e| self.s.at(e).is_some_and(|p| p.map == map)).collect();
-        if on_map.is_empty() {
+        let region = self.s.region(map);
+        let near: Vec<(EntityId, MapId)> = self.s.players().into_iter().filter_map(|e| self.s.at(e).map(|p| (e, p.map))).filter(|(_, m)| region.contains(m)).collect();
+        if !near.iter().any(|(_, m)| *m == map) {
             return None;
         }
         let m = &self.s.maps[map];
         let mut view = BTreeSet::new();
-        for e in on_map {
+        for (e, on) in near {
             match self.field_of_view(e) {
-                Some(v) => view.extend(v),
-                None => return Some((0..m.height).flat_map(|y| (0..m.width).map(move |x| (x, y))).collect()),
+                Some(v) => view.extend(self.reframe(&v, on, map)),
+                None if on == map => return Some((0..m.height).flat_map(|y| (0..m.width).map(move |x| (x, y))).collect()),
+                None => {}
             }
         }
         Some(view)
@@ -209,7 +233,7 @@ impl World<'_> {
     /// shared view without members (M 7.2).
     pub fn in_view(&mut self, cells: &[Pos]) -> bool {
         match self.current_view() {
-            Some((map, view)) => cells.iter().any(|p| p.map == map && view.contains(&(p.x, p.y))),
+            Some((map, view)) => cells.iter().any(|p| self.frame(map, *p).is_some_and(|c| view.contains(&c))),
             None => false,
         }
     }
@@ -221,7 +245,7 @@ impl World<'_> {
         let member = self.s.is_member(a) || self.s.player == Some(a);
         if member && !self.s.get(a).alive {
             return match &self.last_view {
-                Some((map, view)) => cells.iter().any(|p| p.map == *map && view.contains(&(p.x, p.y))),
+                Some((map, view)) => cells.iter().any(|p| self.frame(*map, *p).is_some_and(|c| view.contains(&c))),
                 None => false,
             };
         }
@@ -231,7 +255,7 @@ impl World<'_> {
             self.current_view();
         }
         match self.field_of_view(a) {
-            Some(view) => cells.iter().any(|p| p.map == at.map && view.contains(&(p.x, p.y))),
+            Some(view) => cells.iter().any(|p| self.frame(at.map, *p).is_some_and(|c| view.contains(&c))),
             None => member && cells.iter().any(|p| p.map == at.map),
         }
     }
@@ -252,7 +276,8 @@ impl World<'_> {
     }
 
     /// Steps from a sound's cell to each cell it reaches, stopped by `sound`
-    /// blocking (M 6.8).
+    /// blocking (M 6.8), in the coordinates of the sound's map; on an atlas
+    /// a sound spreads across one sheet edge (M 6.10).
     fn spread(&self, from: Pos, max: i64) -> BTreeMap<(i32, i32), i64> {
         let mut dist = BTreeMap::new();
         dist.insert((from.x, from.y), 0);
@@ -265,7 +290,7 @@ impl World<'_> {
             for dir in Dir::ALL {
                 let (dx, dy) = dir.delta();
                 let n = (x + dx, y + dy);
-                if dist.contains_key(&n) || self.blocks(Pos { map: from.map, x: n.0, y: n.1 }, "sound", None, true) {
+                if dist.contains_key(&n) || self.blocks(self.unframe(from.map, n.0, n.1), "sound", None, true) {
                     continue;
                 }
                 dist.insert(n, d + 1);
@@ -289,12 +314,13 @@ impl World<'_> {
         let first = self.sounds_made - self.sounds.len() as u64;
         let mut out = Vec::new();
         for (k, n) in self.sounds.clone().into_iter().enumerate() {
-            if first + (k as u64) < from || n.at.map != at.map {
+            if first + (k as u64) < from {
                 continue;
             }
+            let Some(here) = self.frame(n.at.map, at) else { continue };
             let level = self.sound_level(&n.kind);
             let reach = self.spread(n.at, level.max(0));
-            let Some(d) = reach.get(&(at.x, at.y)) else { continue };
+            let Some(d) = reach.get(&here) else { continue };
             let heard = level - d + acuity;
             if heard > 0 {
                 out.push(Sound { kind: n.kind.clone(), at: n.at, source: n.source, level: heard });

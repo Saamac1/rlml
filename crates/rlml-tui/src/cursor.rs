@@ -31,15 +31,17 @@ pub fn moved(w: &World, p: Pos, d: Dir) -> Pos {
 /// shared view, nearest to `from` first, then in reading order (M 8.1).
 pub fn visible(w: &World, from: Pos) -> Vec<Pos> {
     let Some(view) = w.shared_view(from.map) else { return vec![] };
+    // on an atlas the nearby region's sheets count (M 6.10)
     let mut cells: Vec<Pos> = w
         .s
-        .entities_on(from.map)
+        .region(from.map)
         .into_iter()
+        .flat_map(|m| w.s.entities_on(m))
         .filter(|&e| w.s.get(e).alive && w.s.get(e).get("render").is_some())
         .filter_map(|e| w.s.at(e))
-        .filter(|p| view.contains(&(p.x, p.y)) && *p != from)
+        .filter(|p| w.frame(from.map, *p).is_some_and(|c| view.contains(&c)) && *p != from)
         .collect();
-    cells.sort_by_key(|p| (from.distance(*p), p.y, p.x));
+    cells.sort_by_key(|p| (w.dist(from, *p), p.y, p.x));
     cells.dedup();
     cells
 }
