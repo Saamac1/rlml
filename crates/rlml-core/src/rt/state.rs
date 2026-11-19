@@ -91,6 +91,8 @@ pub struct MapState {
     pub tiles: Vec<Vec<Option<String>>>,
     /// Cell labels and their cells in reading order (D 8.5).
     pub labels: Vec<(String, Vec<(i32, i32)>)>,
+    /// Named areas (D 8.11).
+    pub areas: crate::areas::Areas,
     pub wires: Vec<((i32, i32), String)>,
     pub vars: Vec<(String, Value)>,
     /// Cells the player remembers (M 7.2).
@@ -115,6 +117,7 @@ impl MapState {
             tiles: layers.iter().map(|_| vec![None; cells]).collect(),
             layers,
             labels: vec![],
+            areas: Default::default(),
             wires: vec![],
             vars: vec![],
             remembered: vec![],

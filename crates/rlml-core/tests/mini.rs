@@ -84,7 +84,7 @@ fn exit_label_is_checked_in_the_target_map() {
 fn start_search() {
     let mut f = mini();
     edit(&mut f, "game.rlml", "- at SPAWN", "- at SPAWNN");
-    expect_error(&run(&f), "map `CAVE_A` has no label `SPAWNN`");
+    expect_error(&run(&f), "map `CAVE_A` has no label or area `SPAWNN`");
     let mut f = mini();
     edit(&mut f, "game.rlml", "- start CAVE_A", "- start CAVE_C");
     expect_error(&run(&f), "`start`: `CAVE_C` is not defined");

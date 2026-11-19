@@ -25,7 +25,17 @@ pub const DEFAULT_COST: i64 = 120;
 pub type RtResult<T> = Result<T, String>;
 
 /// A map block's drawing, legend rows by character and `at:` rows.
-type MapParts = (Vec<String>, Vec<(char, RawItem)>, Vec<RawItem>);
+/// A map block with what it inherits (D 8.10): the drawing, the legend by
+/// character, `at:` rows, `vars:` rows, `areas:` rows (a base's first) and
+/// the written `size`.
+struct MapParts {
+    drawing: Vec<String>,
+    legend: Vec<(char, RawItem)>,
+    at: Vec<RawItem>,
+    vars: Vec<RawItem>,
+    areas: Vec<(String, crate::areas::Rect)>,
+    size: Option<(i32, i32)>,
+}
 
 #[derive(Clone)]
 pub struct World<'m> {
@@ -520,14 +530,7 @@ impl<'m> World<'m> {
         }
         let def = self.m.defs.get(full).ok_or_else(|| format!("no map `{full}`"))?;
         let b = def.block().ok_or_else(|| format!("map `{full}` is generated; generators are not supported yet"))?.clone();
-        let (drawing, mut legend, at_rows) = self.map_parts(&b)?;
-        if let Some(base) = b.arg_after("extends") {
-            let base = self.m.resolve_kind(b.namespace.as_deref(), base, &[Kind::Map])?;
-            let (_, base_legend, _) = self.map_parts(base.block().unwrap())?;
-            let own: Vec<char> = legend.iter().map(|(c, _)| *c).collect();
-            legend = base_legend.into_iter().filter(|(c, _)| !own.contains(c)).chain(legend).collect();
-        }
-        let size = b.arg_after("size").and_then(|s| s.split_once('x')).and_then(|(w, h)| Some((w.parse::<i32>().ok()?, h.parse::<i32>().ok()?)));
+        let MapParts { drawing, legend, at: at_rows, vars, areas, size } = self.map_parts(&b)?;
         let (w, h) = size.unwrap_or((drawing.iter().map(|r| r.chars().count()).max().unwrap_or(0) as i32, drawing.len() as i32));
         let layers = self.layers();
         let default_layer = self.default_layer();
@@ -543,7 +546,8 @@ impl<'m> World<'m> {
                 }
             }
         }
-        for item in b.sub("vars") {
+        map.areas = crate::areas::Areas::build(&areas);
+        for item in &vars {
             let ty = literal_ty(item.rest(1));
             map.vars.push((item.key().to_string(), self.data_value(&ty, item.rest(1), item.namespace.as_deref())?));
         }
@@ -571,18 +575,38 @@ impl<'m> World<'m> {
         Ok(id)
     }
 
-    /// Drawing, legend by character and `at:` rows of a map block.
+    /// A map block's parts with its base's (D 8.10): the base's drawing
+    /// and size; legend rows replace by character, `vars:` rows by name and
+    /// `at:` rows by position, and `areas:` rows are always added.
     fn map_parts(&self, b: &RawBlock) -> RtResult<MapParts> {
-        let mut legend = Vec::new();
+        let mut parts = match b.arg_after("extends") {
+            Some(base) => {
+                let base = self.m.resolve_kind(b.namespace.as_deref(), base, &[Kind::Map])?;
+                self.map_parts(base.block().ok_or_else(|| format!("map `{}` is generated", base.full))?)?
+            }
+            None => {
+                let size = b.arg_after("size").and_then(|s| s.split_once('x')).and_then(|(w, h)| Some((w.parse::<i32>().ok()?, h.parse::<i32>().ok()?)));
+                let none = RawItem::new(&b.file, b.line, b.namespace.clone(), "none").map_err(|d| d.message)?;
+                MapParts { drawing: b.drawing.clone(), legend: vec![(' ', none)], at: vec![], vars: vec![], areas: vec![], size }
+            }
+        };
         for item in b.sub("legend") {
             let (c, rest) = glyph_char(item)?;
-            legend.retain(|(x, _): &(char, RawItem)| *x != c);
-            legend.push((c, rest));
+            parts.legend.retain(|(x, _)| *x != c);
+            parts.legend.push((c, rest));
         }
-        if !legend.iter().any(|(c, _)| *c == ' ') {
-            legend.push((' ', RawItem::new(&b.file, b.line, b.namespace.clone(), "none").map_err(|d| d.message)?));
+        for item in b.sub("vars") {
+            parts.vars.retain(|v| v.key() != item.key());
+            parts.vars.push(item.clone());
         }
-        Ok((b.drawing.clone(), legend, b.sub("at").cloned().collect()))
+        for item in b.sub("at") {
+            parts.at.retain(|v| v.key() != item.key());
+            parts.at.push(item.clone());
+        }
+        for item in b.sub("areas") {
+            parts.areas.push(crate::areas::parse_row(item)?);
+        }
+        Ok(parts)
     }
 
     /// Terrain layers in order: name, `default` and `fill` (D 7.2); one
@@ -747,20 +771,89 @@ impl<'m> World<'m> {
         Ok(w)
     }
 
-    /// A data search on a map: a position, a label or a tile (D 8.8).
+    /// A data search on a map (D 8.8): `KOHDE [near [ANKKURI] [ETÄISYYS]]`
+    /// or `SIIRTYMÄ from ANKKURI`. The target is a position, a label, an
+    /// area or a tile or tileset; the anchor a label or an area.
     pub fn search(&self, map: MapId, target: &str, ns: Option<&str>) -> RtResult<Area> {
-        let words = toks(target);
-        let first = words.first().map(|t| t.text.as_str()).unwrap_or("");
-        if words.len() > 1 {
-            return Err(format!("`at {target}`: `near` and `from` searches are not supported yet"));
+        let words: Vec<String> = toks(target).into_iter().map(|t| t.text).collect();
+        let words: Vec<&str> = words.iter().map(String::as_str).collect();
+        let m = &self.s.maps[map];
+        let fail = |msg: String| format!("`at {target}` on map `{}`: {msg}", m.name);
+        let anchor = |name: &str| self.place_cells(map, name).ok_or_else(|| fail(format!("no label or area `{name}`")));
+        if let Some(i) = words.iter().position(|w| *w == "from") {
+            let [a] = &words[i + 1..] else { return Err(fail("`from` takes one anchor".into())) };
+            let (dx, dy) = match &words[..i] {
+                [off] => off.split_once(',').and_then(|(x, y)| Some((x.parse::<i32>().ok()?, y.parse::<i32>().ok()?))).ok_or_else(|| fail(format!("`{off}` is not an offset `X,Y`")))?,
+                [n, d] => {
+                    let n: i32 = n.parse().map_err(|_| fail(format!("`{n}` is not a distance")))?;
+                    match Dir::parse(d) {
+                        Some(d) => (d.delta().0 * n, d.delta().1 * n),
+                        None if Side::parse(d).is_some() => return Err(fail(format!("the relative direction `{d}` needs the anchor's `facing`, which is not supported yet"))),
+                        None => return Err(fail(format!("`{d}` is not a direction"))),
+                    }
+                }
+                _ => return Err(fail("an offset is `X,Y` or `DISTANCE DIRECTION`".into())),
+            };
+            let cells = anchor(a)?.into_iter().map(|p| Pos { x: p.x + dx, y: p.y + dy, ..p }).filter(|p| m.inside(p.x, p.y));
+            return Ok(Area::new(cells.collect()));
         }
+        let (target_words, near) = match words.iter().position(|w| *w == "near") {
+            Some(i) => (&words[..i], Some(&words[i + 1..])),
+            None => (&words[..], None),
+        };
+        let [first] = target_words else { return Err(fail("the target is one position or name".into())) };
+        let Some(near) = near else { return Ok(Area::new(self.target_cells(map, first, ns))) };
+        // `near [ANCHOR] [DISTANCE]`; without an anchor the target is the anchor
+        let (name, dist) = match near {
+            [] => (None, None),
+            [d] if is_distance(d) => (None, Some(*d)),
+            [a] => (Some(*a), None),
+            [a, d] if is_distance(d) => (Some(*a), Some(*d)),
+            _ => return Err(fail("`near` takes an anchor and a distance".into())),
+        };
+        let (lo, hi) = match dist {
+            None => (0, Some(1)),
+            Some(d) => match d.split_once("..") {
+                Some((a, b)) => (a.parse::<i64>().unwrap_or(0), b.parse::<i64>().ok()),
+                None => (0, d.parse::<i64>().ok()),
+            },
+        };
+        let (cells, anchors) = match name {
+            Some(a) => (self.target_cells(map, first, ns), anchor(a)?),
+            None => ((0..m.height).flat_map(|y| (0..m.width).map(move |x| Pos { map, x, y })).collect(), anchor(first)?),
+        };
+        let near = |p: &Pos| {
+            let d = anchors.iter().map(|a| a.distance(*p)).min().unwrap_or(i64::MAX);
+            d >= lo && hi.is_none_or(|h| d <= h)
+        };
+        Ok(Area::new(cells.into_iter().filter(near).collect()))
+    }
+
+    /// The cells of a label or an area on a map (D 8.8): a label's cells
+    /// and the cells of instances with that `label`, or an area's cells.
+    fn place_cells(&self, map: MapId, name: &str) -> Option<Vec<Pos>> {
+        let m = &self.s.maps[map];
+        let mut cells: Vec<Pos> = m.label(name).iter().map(|(x, y)| Pos { map, x: *x, y: *y }).collect();
+        for e in self.s.entities_on(map) {
+            if self.s.get(e).get("label").and_then(|c| c.get("name")) == Some(&Value::Name(name.to_string())) {
+                cells.extend(self.s.at(e));
+            }
+        }
+        if let Some(a) = m.areas.get(name) {
+            cells.extend(a.cells.iter().map(|(x, y)| Pos { map, x: *x, y: *y }));
+        }
+        (!cells.is_empty() || m.labels.iter().any(|(l, _)| l == name)).then_some(cells)
+    }
+
+    /// A search target's cells: a position, a label, an area, or the cells
+    /// one of whose layers has the tile or a tile of its group (D 8.8).
+    fn target_cells(&self, map: MapId, first: &str, ns: Option<&str>) -> Vec<Pos> {
         let m = &self.s.maps[map];
         if let Some((x, y)) = first.split_once(',').and_then(|(x, y)| Some((x.parse().ok()?, y.parse().ok()?))) {
-            return Ok(Area::one(Pos { map, x, y }));
+            return vec![Pos { map, x, y }];
         }
-        let label = m.label(first);
-        if !label.is_empty() {
-            return Ok(Area::new(label.iter().map(|(x, y)| Pos { map, x: *x, y: *y }).collect()));
+        if let Some(cells) = self.place_cells(map, first) {
+            return cells;
         }
         let tile = self.full_name(first, ns);
         let mut cells = Vec::new();
@@ -771,8 +864,13 @@ impl<'m> World<'m> {
                 }
             }
         }
-        Ok(Area::new(cells))
+        cells
     }
+}
+
+/// A `near` distance: `N` or a range `A..B`, `A..` (D 8.8).
+fn is_distance(s: &str) -> bool {
+    is_int(s) || is_range(s)
 }
 
 impl World<'_> {

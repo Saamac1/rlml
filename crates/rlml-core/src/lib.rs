@@ -1,6 +1,7 @@
 //! RLML loader: parsing, loading and load-time checks (M 2). No I/O: files
 //! come through [`load::Files`].
 
+pub mod areas;
 pub mod check;
 pub mod error;
 pub mod fields;

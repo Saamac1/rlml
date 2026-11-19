@@ -43,7 +43,7 @@ pub const SECTION_KINDS: &[&str] = &[
 /// adds components (D 3.3, D 3.5).
 pub const OPTIONAL_NAME_KINDS: &[&str] = &["game", "profile"];
 
-pub const SUB_BLOCKS: &[&str] = &["legend", "vars", "at"];
+pub const SUB_BLOCKS: &[&str] = &["legend", "vars", "at", "areas"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Modifier {

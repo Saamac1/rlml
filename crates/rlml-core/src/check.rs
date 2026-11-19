@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use unicode_width::UnicodeWidthChar;
 
+use crate::areas::{self, Areas, Overlap, Rect};
 use crate::error::Report;
 use crate::fields::{self, Values, component_fields, is_int, is_pos};
 use crate::model::{Def, Kind, Model, glyph_char};
@@ -33,6 +34,29 @@ struct Drawn {
     width: usize,
     height: usize,
     labels: BTreeSet<String>,
+    /// `areas:` rows, a base map's first (D 8.10, D 8.11).
+    areas: Vec<AreaRow>,
+}
+
+/// A checked `areas:` row and where it was written.
+#[derive(Debug, Clone)]
+struct AreaRow {
+    name: String,
+    rect: Rect,
+    item: RawItem,
+    /// Written on this map, not inherited from its base.
+    own: bool,
+}
+
+impl Drawn {
+    fn has_area(&self, name: &str) -> bool {
+        self.areas.iter().any(|a| a.name == name)
+    }
+
+    /// A label or an area: a place search's target or anchor (D 8.8).
+    fn has_place(&self, name: &str) -> bool {
+        self.labels.contains(name) || self.has_area(name)
+    }
 }
 
 pub fn check(m: &Model, main: &str, r: &mut Report) {
@@ -42,6 +66,7 @@ pub fn check(m: &Model, main: &str, r: &mut Report) {
     c.maps();
     c.entities();
     c.labels();
+    c.areas();
     c.game(main);
     c.settings(main);
     c.tiles_section();
@@ -196,36 +221,69 @@ impl Checker<'_> {
             if b.has_arg("extends") {
                 continue;
             }
-            let drawn = self.drawing(b);
+            let mut drawn = self.drawing(b);
+            drawn.areas = self.area_rows(b, def.kind, drawn.width, drawn.height);
             self.drawn.insert(def.full.clone(), drawn);
         }
-        // extending maps get their base's drawing and labels (D 8.10)
-        for def in defs {
-            let Some(b) = def.block() else { continue };
-            let Some(base) = b.arg_after("extends") else { continue };
-            if !b.drawing.is_empty() {
-                self.r.push(b.err("an extending map takes its base's drawing; it cannot have its own (D 8.10)"));
-            }
-            let base_def = match self.m.resolve_kind(b.namespace.as_deref(), base, &[Kind::Map]) {
-                Ok(d) => d,
-                Err(e) => {
-                    self.r.push(b.err(e));
-                    continue;
-                }
-            };
-            if let Some(cycle) = self.extends_cycle(def, Kind::Map) {
-                self.r.push(b.err(format!("`extends` cycle: {cycle}")));
-                continue;
-            }
-            let mut labels = self.drawn.get(&base_def.full).map(|d| d.labels.clone()).unwrap_or_default();
-            let (w, h) = self.drawn.get(&base_def.full).map(|d| (d.width, d.height)).unwrap_or((0, 0));
-            for item in b.sub("legend") {
-                if let Some(l) = self.legend_row(item, b) {
-                    labels.extend(l);
+        // extending maps get their base's drawing, labels and areas (D 8.10);
+        // a base is read before the maps that extend it
+        let mut pending: Vec<&Def> = defs.into_iter().filter(|d| d.block().is_some_and(|b| b.has_arg("extends"))).collect();
+        while !pending.is_empty() {
+            let before = pending.len();
+            let mut later = Vec::new();
+            for def in pending {
+                let b = def.block().unwrap();
+                let base = b.arg_after("extends").unwrap();
+                match self.m.resolve_kind(b.namespace.as_deref(), base, &[Kind::Map]) {
+                    Ok(base_def) if !self.drawn.contains_key(&base_def.full) && self.extends_cycle(def, Kind::Map).is_none() => later.push(def),
+                    _ => self.extending(def),
                 }
             }
-            self.drawn.insert(def.full.clone(), Drawn { width: w, height: h, labels });
+            if later.len() == before {
+                // only maps whose bases cannot be read are left
+                later.into_iter().for_each(|d| self.extending(d));
+                break;
+            }
+            pending = later;
         }
+    }
+
+    /// An extending map (D 8.10): no drawing of its own, its base's size,
+    /// labels and areas, and its own legend, `at:`, `vars:` and `areas:`
+    /// rows.
+    fn extending(&mut self, def: &Def) {
+        let b = def.block().unwrap();
+        let base = b.arg_after("extends").unwrap();
+        if !b.drawing.is_empty() {
+            self.r.push(b.err("an extending map takes its base's drawing; it cannot have its own (D 8.10)"));
+        }
+        let base_def = match self.m.resolve_kind(b.namespace.as_deref(), base, &[Kind::Map]) {
+            Ok(d) => d,
+            Err(e) => {
+                self.r.push(b.err(e));
+                return;
+            }
+        };
+        if let Some(cycle) = self.extends_cycle(def, Kind::Map) {
+            self.r.push(b.err(format!("`extends` cycle: {cycle}")));
+            return;
+        }
+        let base_drawn = self.drawn.get(&base_def.full);
+        let mut labels = base_drawn.map(|d| d.labels.clone()).unwrap_or_default();
+        let (w, h) = base_drawn.map(|d| (d.width, d.height)).unwrap_or((0, 0));
+        // the base's areas, then the map's own rows
+        let mut areas: Vec<AreaRow> = base_drawn.map(|d| d.areas.clone()).unwrap_or_default();
+        areas.iter_mut().for_each(|a| a.own = false);
+        for item in b.sub("legend") {
+            if let Some(l) = self.legend_row(item, b) {
+                labels.extend(l);
+            }
+        }
+        areas.extend(self.area_rows(b, def.kind, w, h));
+        let mut d = Drawn { width: w, height: h, labels, areas };
+        self.at_rows(b, &mut d);
+        self.vars_rows(b);
+        self.drawn.insert(def.full.clone(), d);
     }
 
     /// Reads a drawn map or prefab: size, characters and legend (D 8.1–8.9).
@@ -288,6 +346,13 @@ impl Checker<'_> {
                 }
             }
         }
+        self.at_rows(b, &mut d);
+        self.vars_rows(b);
+        d
+    }
+
+    /// `at:` rows: each inside the map, one row per position (D 8.9).
+    fn at_rows(&mut self, b: &RawBlock, d: &mut Drawn) {
         let mut seen_at = BTreeSet::new();
         for item in b.sub("at") {
             let pos = item.key();
@@ -306,12 +371,14 @@ impl Checker<'_> {
                 d.labels.extend(labels);
             }
         }
+    }
+
+    fn vars_rows(&mut self, b: &RawBlock) {
         for item in b.sub("vars") {
             if !names::is_name(item.key()) || item.tokens.len() < 2 {
                 self.r.push(item.err("a map variable is `- NAME value`"));
             }
         }
-        d
     }
 
     /// Checks a legend row and returns the labels it gives.
@@ -405,6 +472,84 @@ impl Checker<'_> {
         ok.then_some(labels)
     }
 
+    /// A map's own `areas:` rows, each inside the `width`×`height` map
+    /// (D 8.11). A prefab cannot have areas yet.
+    fn area_rows(&mut self, b: &RawBlock, kind: Kind, width: usize, height: usize) -> Vec<AreaRow> {
+        if kind == Kind::Prefab {
+            if let Some(sub) = b.subs.iter().find(|s| s.name == "areas") {
+                self.r.error(&b.file, sub.line, "a prefab cannot have `areas:` yet: two placements would put one area in two places (D 8.11)");
+            }
+            return vec![];
+        }
+        let mut out = Vec::new();
+        for item in b.sub("areas") {
+            match areas::parse_row(item) {
+                Ok((name, rect)) if rect.inside(width as i32, height as i32) => out.push(AreaRow { name, rect, item: item.clone(), own: true }),
+                Ok((name, rect)) => self.r.push(item.err(format!(
+                    "area `{name}`: {},{} size {}x{} is not inside the {width}x{height} map",
+                    rect.x, rect.y, rect.w, rect.h
+                ))),
+                Err(e) => self.r.push(item.err(e)),
+            }
+        }
+        out
+    }
+
+    /// Area names and their nesting (D 8.11). A name is not a label of the
+    /// same map nor a general name, and `<MAP>.<AREA>` is not a general name
+    /// either, so a text key reads one way (D 10). Areas with the same cells
+    /// and areas that partly overlap are warnings.
+    fn areas(&mut self) {
+        let mut out = Vec::new();
+        for (map, drawn) in &self.drawn {
+            let ns = self.m.defs[map].block().and_then(|b| b.namespace.as_deref());
+            let mut named = BTreeSet::new();
+            for row in drawn.areas.iter().filter(|r| r.own) {
+                if !named.insert(row.name.clone()) {
+                    continue;
+                }
+                if drawn.labels.contains(&row.name) {
+                    out.push(row.item.err(format!("`{}` is both a label and an area on map `{map}` (D 8.11)", row.name)));
+                } else if let Ok(other) = self.m.resolve(ns, &row.name) {
+                    out.push(row.item.err(format!("area `{}` of map `{map}` has the same name as the {} `{}` ({})", row.name, other.kind, other.full, other.place())));
+                } else if let Some(other) = self.m.defs.get(&format!("{map}.{}", row.name)) {
+                    out.push(row.item.err(format!(
+                        "area `{}` of map `{map}`: `{map}.{}` is the {} at {}, so the text key `{map}.{}.NAME` would read two ways (D 10)",
+                        row.name,
+                        row.name,
+                        other.kind,
+                        other.place(),
+                        row.name
+                    )));
+                }
+            }
+            let rows: Vec<(String, Rect)> = drawn.areas.iter().map(|r| (r.name.clone(), r.rect)).collect();
+            let built = Areas::build(&rows);
+            // an inherited pair was reported on the base map
+            let own = |a: &str| drawn.areas.iter().any(|r| r.own && r.name == a);
+            let first = |a: &str| drawn.areas.iter().find(|r| r.name == a).map(|r| &r.item).unwrap();
+            for o in built.overlaps() {
+                let (a, b, same) = match o {
+                    Overlap::Same(a, b) => (a, b, true),
+                    Overlap::Partial(a, b) => (a, b, false),
+                };
+                let (a, b) = (&built.list[a].name, &built.list[b].name);
+                if !own(a) && !own(b) {
+                    continue;
+                }
+                let msg = if same {
+                    format!("areas `{a}` and `{b}` of map `{map}` have the same cells: two names for one place (D 8.11)")
+                } else {
+                    format!("areas `{a}` and `{b}` of map `{map}` share cells, but neither is inside the other (D 8.11)")
+                };
+                out.push(first(b).warn(msg));
+            }
+        }
+        for d in out {
+            self.r.push(d);
+        }
+    }
+
     /// A label must not be a general name that lookup would find (D 2.1).
     fn labels(&mut self) {
         let mut errors = Vec::new();
@@ -417,6 +562,15 @@ impl Checker<'_> {
                         &def.file,
                         def.line,
                         format!("label `{l}` of map `{map}` has the same name as the {} `{}` ({})", other.kind, other.full, other.place()),
+                    ));
+                } else if def.kind == Kind::Map
+                    && let Some(other) = self.m.defs.get(&format!("{map}.{l}"))
+                {
+                    // `<MAP>.<LABEL>.NAME` would read two ways (D 10)
+                    errors.push(crate::error::Diagnostic::error(
+                        &def.file,
+                        def.line,
+                        format!("label `{l}` of map `{map}`: `{map}.{l}` is the {} at {}, so the text key `{map}.{l}.NAME` would read two ways (D 10)", other.kind, other.place()),
                     ));
                 }
             }
@@ -585,14 +739,14 @@ impl Checker<'_> {
         let words: Vec<&str> = item.tokens.iter().map(|t| t.text.as_str()).collect();
         let drawn = self.drawn.get(map);
         let label_or_set = |c: &Self, w: &str| -> Result<(), String> {
-            if drawn.is_some_and(|d| d.labels.contains(w)) {
+            if drawn.is_some_and(|d| d.has_place(w)) {
                 return Ok(());
             }
             match c.m.resolve(ns, w) {
                 Ok(d) if matches!(d.kind, Kind::Tile | Kind::Tileset) => Ok(()),
                 Ok(d) => Err(format!("`{w}` is a {} ({}), not a label, tile or tileset", d.kind, d.place())),
                 Err(_) if names::tile_name(w).is_ok_and(|t| c.m.kind(&names::qualify(ns, &t.base)) == Some(Kind::Tile)) => Ok(()),
-                Err(_) if drawn.is_some() => Err(format!("map `{map}` has no label `{w}`, and no tile or tileset has that name")),
+                Err(_) if drawn.is_some() => Err(format!("map `{map}` has no label or area `{w}`, and no tile or tileset has that name")),
                 Err(e) => Err(e),
             }
         };
@@ -617,7 +771,7 @@ impl Checker<'_> {
                 ["near", tail @ ..] => {
                     let anchor = tail.iter().find(|w| !is_int(w) && !fields::is_range(w));
                     match anchor {
-                        Some(a) if drawn.is_some_and(|d| !d.labels.contains(*a)) => Err(format!("`near`: map `{map}` has no label `{a}`")),
+                        Some(a) if drawn.is_some_and(|d| !d.has_place(a)) => Err(format!("`near`: map `{map}` has no label or area `{a}`")),
                         _ => Ok(()),
                     }
                 }
