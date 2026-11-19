@@ -57,6 +57,12 @@ pub struct World<'m> {
     pub last_view: Option<(MapId, std::collections::BTreeSet<(i32, i32)>)>,
     /// The map area's written cells, read once (M 7.1).
     map_area: crate::model::MapArea,
+    /// Tile looks by tile name, resolved once: the style rows do not change
+    /// during a session, and drawing asks for every cell of every frame.
+    pub(crate) looks: std::cell::RefCell<std::collections::HashMap<String, super::view::Look>>,
+    /// Tile flags (`lit`, `forget`) by tile name and flag, resolved once
+    /// for the same reason (D 7.5).
+    pub(crate) flags: std::cell::RefCell<std::collections::HashMap<(String, String), bool>>,
 }
 
 /// A `log` call: the message key and its text arguments.
@@ -98,7 +104,7 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area() }
+        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area(), looks: Default::default(), flags: Default::default() }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {

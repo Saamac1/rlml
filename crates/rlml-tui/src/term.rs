@@ -3,7 +3,7 @@
 //! (Termplate's terminal layer). The terminal is restored on every exit.
 
 use std::io;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use rlml_core::model::Model;
 use termplate_core::engine::InputEvent;
@@ -43,17 +43,29 @@ fn run(m: &Model, seed: u64, screen: &mut Screen<std::fs::File>) -> Result<(), S
         if app.quit {
             return Ok(());
         }
-        if crossterm::event::poll(app.wait()).map_err(io)?
-            && let Some(ev) = map_event(crossterm::event::read().map_err(io)?)
-        {
-            match ev {
-                InputEvent::Key(code, mods) => app.key(Binding::key(code, mods), start.elapsed())?,
-                InputEvent::Mouse { binding, x, y } => app.mouse_press(binding, x as usize, y as usize, start.elapsed())?,
-                InputEvent::MouseMove { x, y } => app.pointer_at(x as usize, y as usize),
-                InputEvent::Resize(w, h) => {
-                    app.resize(w, h);
-                    screen.invalidate();
+        // every event that is waiting goes before the next frame, and the
+        // pointer's moves count only at their last cell: a moving mouse
+        // sends dozens of moves a second, and a frame for each would queue
+        // the keys behind them
+        if crossterm::event::poll(app.wait()).map_err(io)? {
+            let mut moved = None;
+            loop {
+                match map_event(crossterm::event::read().map_err(io)?) {
+                    Some(InputEvent::MouseMove { x, y }) => moved = Some((x as usize, y as usize)),
+                    Some(ev) => {
+                        if let Some((x, y)) = moved.take() {
+                            app.pointer_at(x, y);
+                        }
+                        handle(&mut app, screen, ev, start.elapsed())?;
+                    }
+                    None => {}
                 }
+                if app.quit || !crossterm::event::poll(Duration::ZERO).map_err(io)? {
+                    break;
+                }
+            }
+            if let Some((x, y)) = moved {
+                app.pointer_at(x, y);
             }
         }
         while let Ok((id, raw)) = pads.try_recv() {
@@ -73,4 +85,18 @@ fn run(m: &Model, seed: u64, screen: &mut Screen<std::fs::File>) -> Result<(), S
         }
         app.tick(start.elapsed())?;
     }
+}
+
+/// One input event other than a pointer move.
+fn handle(app: &mut App<'_>, screen: &mut Screen<std::fs::File>, ev: InputEvent, now: Duration) -> Result<(), String> {
+    match ev {
+        InputEvent::Key(code, mods) => app.key(Binding::key(code, mods), now)?,
+        InputEvent::Mouse { binding, x, y } => app.mouse_press(binding, x as usize, y as usize, now)?,
+        InputEvent::MouseMove { x, y } => app.pointer_at(x as usize, y as usize),
+        InputEvent::Resize(w, h) => {
+            app.resize(w, h);
+            screen.invalidate();
+        }
+    }
+    Ok(())
 }

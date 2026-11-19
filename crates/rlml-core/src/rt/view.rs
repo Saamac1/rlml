@@ -68,6 +68,16 @@ impl World<'_> {
     /// A tile's ASCII look down the ladder of `tiles.glyphs` (D 9.2): its
     /// character and colors.
     pub fn look(&self, tile: &str) -> Look {
+        if let Some(l) = self.looks.borrow().get(tile) {
+            return *l;
+        }
+        let l = self.find_look(tile);
+        self.looks.borrow_mut().insert(tile.to_string(), l);
+        l
+    }
+
+    /// The look of a tile from the style rows, down the ladder (D 9.2).
+    fn find_look(&self, tile: &str) -> Look {
         let style = self.m.settings().get("style").map(|i| i.rest(1).to_string()).unwrap_or_else(|| "ascii".into());
         let mut ladder = vec![tile.to_string()];
         let mut t = tile.to_string();

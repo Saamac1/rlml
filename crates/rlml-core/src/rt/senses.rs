@@ -100,6 +100,16 @@ impl World<'_> {
     /// A tile flag (`lit`, `forget`) down the ladder: the nearest row that
     /// names it, `false` when written `lit false` (D 7.5).
     pub fn tile_flag(&self, tile: &str, flag: &str) -> bool {
+        let key = (tile.to_string(), flag.to_string());
+        if let Some(&v) = self.flags.borrow().get(&key) {
+            return v;
+        }
+        let v = self.find_tile_flag(tile, flag);
+        self.flags.borrow_mut().insert(key, v);
+        v
+    }
+
+    fn find_tile_flag(&self, tile: &str, flag: &str) -> bool {
         let mut ladder = vec![tile.to_string()];
         let mut t = tile.to_string();
         while let Some((head, _)) = t.rsplit_once('.') {
@@ -134,6 +144,12 @@ impl World<'_> {
     /// Is a cell lit: a `lit` tile in it or next to it, or a `light`
     /// source's reach (M 7.2)?
     pub fn lit(&self, p: Pos) -> bool {
+        self.lit_in(p, &self.light_reach(p.map))
+    }
+
+    /// `lit` with the map's light reach computed beforehand, so a view
+    /// casts each light once and not once per cell.
+    fn lit_in(&self, p: Pos, reach: &BTreeSet<(i32, i32)>) -> bool {
         let m = &self.s.maps[p.map];
         for dx in -1..=1 {
             for dy in -1..=1 {
@@ -143,15 +159,24 @@ impl World<'_> {
                 }
             }
         }
-        for e in self.s.entities_on(p.map) {
+        reach.contains(&(p.x, p.y))
+    }
+
+    /// The cells the `light` sources on a map reach: within the radius and
+    /// in the source's line of sight.
+    fn light_reach(&self, map: MapId) -> BTreeSet<(i32, i32)> {
+        let mut out = BTreeSet::new();
+        for e in self.s.entities_on(map) {
             let Some(light) = self.s.get(e).get("light") else { continue };
             let r = light.get("radius").and_then(Value::as_number).unwrap_or(0);
             let Some(at) = self.s.at(e) else { continue };
-            if at.distance(p) <= r && line_of_sight((at.x, at.y), r, &|x, y| self.blocks_sight(p.map, x, y)).contains(&(p.x, p.y)) {
-                return true;
+            for (x, y) in line_of_sight((at.x, at.y), r, &|x, y| self.blocks_sight(map, x, y)) {
+                if at.distance(Pos { map, x, y }) <= r {
+                    out.insert((x, y));
+                }
             }
         }
-        false
+        out
     }
 
     /// The cells an entity sees (M 7.2); `None` when it has no `sight`.
@@ -162,6 +187,7 @@ impl World<'_> {
         let (radius, dark) = (num("radius", 0), num("dark", 1));
         let in_sight = line_of_sight((at.x, at.y), radius.max(dark), &|x, y| self.blocks_sight(at.map, x, y));
         let m = &self.s.maps[at.map];
+        let reach = self.light_reach(at.map);
         Some(
             in_sight
                 .into_iter()
@@ -169,7 +195,7 @@ impl World<'_> {
                 .filter(|&(x, y)| {
                     let p = Pos { map: at.map, x, y };
                     let d = at.distance(p);
-                    d == 0 || d <= dark || (d <= radius && self.lit(p))
+                    d == 0 || d <= dark || (d <= radius && self.lit_in(p, &reach))
                 })
                 .collect(),
         )
