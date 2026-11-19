@@ -976,3 +976,27 @@ fn the_mouse_aims_and_gives_directions() {
     app.mouse_press(click(), sx, sy, ms(30)).unwrap();
     assert_eq!((asked(&app), examined(&app)), (None, 2), "a click gives the direction towards it");
 }
+
+/// The camera shows the nearby region's sheets past the sheet's edge, so
+/// the edge does not show (M 6.10, M 7.1).
+#[test]
+fn the_map_goes_on_onto_the_neighbour_sheet() {
+    let mut f = mini_with(|g| {
+        *g = g.replacen("- start CAVE_A", "- start MAAILMA.A01", 1).replacen("- at SPAWN", "- at START", 1);
+        g.push_str("\ntiles\n- WATER blocks move\n\ntiles.glyphs ascii\n- WATER ~\n");
+    });
+    f.game.insert(
+        "maps/world.rlml".into(),
+        "atlas MAAILMA sheet 6x3 grid 3x2 fill WATER\n\nlegend:\n- ~ WATER\n- . FLOOR\n\nmap MAAILMA.A01\n\n```\n~~~~~~\n~~~~~~\n~~~~..\n```\n\nat:\n- 4,2 as START\n\nmap MAAILMA.B01\n\n```\n~~~~~~\n~~~~~~\n......\n```\n".into(),
+    );
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    let frame = app.draw();
+    let row = frame.rows().into_iter().find(|r| r.contains('@')).unwrap();
+    assert_eq!(row.trim(), "~~~~@.......", "A01's corridor runs on into B01's; C01 is past the nearby region");
+    // a click on B01's corridor in the frame names B01's cell
+    let (y, x) = frame.rows().iter().enumerate().find_map(|(y, r)| r.chars().position(|c| c == '@').map(|x| (y, x))).unwrap();
+    app.pointer_at(x + 3, y);
+    let p = app.pointer_cell().unwrap();
+    assert_eq!((app.r.w.s.maps[p.map].name.as_str(), p.x, p.y), ("MAAILMA.B01", 1, 2));
+}

@@ -126,10 +126,17 @@ impl World<'_> {
     /// the next non-empty layer's below it (D 9.4).
     pub fn render_cells(&mut self, map: MapId) -> Vec<Vec<Look>> {
         let view = self.player_view(map);
+        self.render_view(map, &view)
+    }
+
+    /// Draws a map as cells with colors as `view` shows it, in the map's
+    /// coordinates. A neighbour sheet is drawn with the view that reaches
+    /// it from the player's sheet (M 6.10).
+    pub fn render_view(&mut self, map: MapId, view: &BTreeSet<(i32, i32)>) -> Vec<Vec<Look>> {
         let (w, h) = (self.s.maps[map].width, self.s.maps[map].height);
         // what the player now sees is remembered (M 7.2), on a neighbour
         // sheet by that sheet (M 6.10)
-        for &(x, y) in &view {
+        for &(x, y) in view {
             let p = self.unframe(map, x, y);
             if self.on_map(p) && !self.s.maps[p.map].remembered.contains(&(p.x, p.y)) {
                 self.s.maps[p.map].remembered.push((p.x, p.y));

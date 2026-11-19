@@ -213,7 +213,15 @@ impl View {
     /// (M 7.1): the player kept in the middle or within a margin, a map
     /// smaller than the area centred, the last place kept without a player.
     fn camera(&mut self, world: &World, map: MapId, w: i32, h: i32, follow: Follow) -> (i32, i32) {
-        let (mw, mh) = (world.s.maps[map].width, world.s.maps[map].height);
+        // the area the camera may show: the map, or on an atlas its nearby
+        // region in the map's coordinates (M 6.10)
+        let (mut x_lo, mut y_lo, mut x_hi, mut y_hi) = (0, 0, world.s.maps[map].width, world.s.maps[map].height);
+        for n in world.s.region(map) {
+            if let Some((ox, oy)) = world.frame(map, Pos { map: n, x: 0, y: 0 }) {
+                (x_lo, y_lo) = (x_lo.min(ox), y_lo.min(oy));
+                (x_hi, y_hi) = (x_hi.max(ox + world.s.maps[n].width), y_hi.max(oy + world.s.maps[n].height));
+            }
+        }
         let player = world.s.player.filter(|p| world.s.get(*p).alive).and_then(|p| world.s.at(p)).filter(|p| p.map == map);
         let margin = |size: i32| match follow {
             Follow::Margin(n) => n.min((size - 1) / 2),
@@ -231,10 +239,11 @@ impl View {
             _ => player.map(|p| ((p.x, p.x), (p.y, p.y))),
         };
         let old = self.camera.get(&map).copied();
-        let axis = |len: i32, size: i32, at: Option<(i32, i32)>, old: Option<i32>| -> i32 {
+        let axis = |start: i32, end: i32, size: i32, at: Option<(i32, i32)>, old: Option<i32>| -> i32 {
+            let len = end - start;
             if len <= size {
                 // a smaller map is centred
-                return -((size - len) / 2);
+                return start - (size - len) / 2;
             }
             let Some((lo, hi)) = at else { return old.unwrap_or(0) };
             let wanted = match (follow, old) {
@@ -250,9 +259,9 @@ impl View {
                 }
                 _ => (lo + hi) / 2 - size / 2,
             };
-            wanted.clamp(0, len - size)
+            wanted.clamp(start, end - size)
         };
-        let cam = (axis(mw, w, target.map(|t| t.0), old.map(|o| o.0)), axis(mh, h, target.map(|t| t.1), old.map(|o| o.1)));
+        let cam = (axis(x_lo, x_hi, w, target.map(|t| t.0), old.map(|o| o.0)), axis(y_lo, y_hi, h, target.map(|t| t.1), old.map(|o| o.1)));
         self.camera.insert(map, cam);
         cam
     }
@@ -352,18 +361,26 @@ impl View {
     fn draw_map(&mut self, frame: &mut Frame, world: &mut World, r: Rect, follow: Follow) {
         self.map_rect = Some(r);
         let Some(map) = world.s.active_map() else { return };
-        let cells = world.render_cells(map);
+        // on an atlas the nearby region's sheets go on past the sheet's
+        // edges, each drawn with the view that reaches it (M 6.10, M 7.1)
+        let view = world.player_view(map);
+        let mut drawn: BTreeMap<MapId, Vec<Vec<Look>>> = BTreeMap::new();
+        for n in world.s.region(map) {
+            let v = world.reframe(&view, map, n);
+            drawn.insert(n, world.render_view(n, &v));
+        }
         let (x0, y0) = self.camera(world, map, r.w as i32, r.h as i32, follow);
         for sy in 0..r.h {
             for sx in 0..r.w {
-                let (mx, my) = (x0 + sx as i32, y0 + sy as i32);
-                if let Some(look) = (my >= 0 && mx >= 0).then(|| cells.get(my as usize).and_then(|row| row.get(mx as usize))).flatten() {
+                let p = world.unframe(map, x0 + sx as i32, y0 + sy as i32);
+                let cells = drawn.get(&p.map);
+                if let Some(look) = (p.y >= 0 && p.x >= 0).then(|| cells.and_then(|c| c.get(p.y as usize)).and_then(|row| row.get(p.x as usize))).flatten() {
                     put_look(frame, r.x + sx, r.y + sy, look);
                 }
             }
         }
         // cursors and orders: underlined (M 7.1)
-        for p in self.cursors.iter().filter(|p| p.map == map) {
+        for p in self.cursors.iter().filter_map(|p| world.frame(map, *p)).map(|(x, y)| Pos { map, x, y }) {
             let (sx, sy) = (p.x - x0, p.y - y0);
             if sx >= 0 && sy >= 0 && (sx as usize) < r.w && (sy as usize) < r.h {
                 let i = (r.y + sy as usize) * frame.width + r.x + sx as usize;
@@ -376,7 +393,7 @@ impl View {
         }
         // the turn marker: the member's cell in reverse video, which every
         // terminal shows whatever its colors (M 7.1)
-        if let Some(p) = self.marked.and_then(|e| world.s.at(e)).filter(|p| p.map == map) {
+        if let Some(p) = self.marked.and_then(|e| world.s.at(e)).and_then(|p| world.frame(map, p)).map(|(x, y)| Pos { map, x, y }) {
             let (sx, sy) = (p.x - x0, p.y - y0);
             if sx >= 0 && sy >= 0 && (sx as usize) < r.w && (sy as usize) < r.h {
                 let i = (r.y + sy as usize) * frame.width + r.x + sx as usize;

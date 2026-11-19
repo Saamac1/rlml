@@ -941,7 +941,8 @@ impl<'m> App<'m> {
     pub fn pointer_cell(&self) -> Option<rlml_core::rt::value::Pos> {
         let (x, y) = self.pointer?;
         let map = self.r.w.s.active_map()?;
-        crate::draw::cell_at(&self.view, map, x, y)
+        // on an atlas a cell past the sheet's edge is a neighbour's (M 6.10)
+        crate::draw::cell_at(&self.view, map, x, y).map(|p| self.r.w.unframe(map, p.x, p.y))
     }
 
     /// The pointer moved to screen cell (x, y): the hover follows it.
