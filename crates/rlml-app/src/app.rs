@@ -1142,7 +1142,7 @@ impl<'m> App<'m> {
     fn verb_label(&self, n: SeatId, command: &str) -> String {
         let docked = self.docked.iter().filter(|d| d.verbs).find_map(|d| d.items.iter().find(|it| it.action == ItemAction::Command(command.to_string())).map(|it| format!("{}.{}", d.full, it.key)));
         let key = docked.unwrap_or_else(|| format!("{command}.NAME"));
-        let label = if self.m.texts(&self.lang).contains_key(&key) { self.r.w.text(&self.lang, &key, &[]) } else { command.rsplit('.').next().unwrap_or(command).to_string() };
+        let label = if self.m.has_text(&self.lang, &key) { self.r.w.text(&self.lang, &key, &[]) } else { command.rsplit('.').next().unwrap_or(command).to_string() };
         let device = self.seat_devices.get(&n).copied().unwrap_or(Device::Keyboard(1));
         match self.input.keys.shortcut(&self.contexts(), device, command) {
             Some(k) => format!("{label}  {k}"),
@@ -1365,7 +1365,7 @@ impl<'m> App<'m> {
             args.push(preview);
         }
         let key = format!("{}.SENTENCE", v.command);
-        if self.m.texts(&self.lang).contains_key(&key) {
+        if self.m.has_text(&self.lang, &key) {
             // a parameter not filled shows empty
             for p in self.r.w.verb_params(&v.command) {
                 if !args.iter().any(|(n, _)| *n == p.name) {

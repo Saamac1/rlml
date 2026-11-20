@@ -1674,7 +1674,7 @@ impl World<'_> {
                 let lang = self.m.settings().get("language").map(|i| i.rest(1).to_string()).unwrap_or_default();
                 let named: Vec<(String, Value)> = args.iter().skip(1).filter_map(|(n, v)| n.clone().map(|n| (n, v.clone()))).collect();
                 Value::Text(match &a0 {
-                    Value::Name(key) if self.m.texts(&lang).contains_key(key.as_str()) => self.text(&lang, key, &named),
+                    Value::Name(key) if self.m.has_text(&lang, key) => self.text(&lang, key, &named),
                     Value::None => String::new(),
                     other => self.name_text(&lang, other),
                 })
@@ -1803,18 +1803,13 @@ impl World<'_> {
             t = head.to_string();
         }
         ladder.push("default".into());
+        let rows = self.m.tile_rows();
         for key in ladder {
             let mut found: Option<Vec<String>> = None;
-            for (_, item) in self.m.section_rows("tiles") {
-                let (_, row) = item.marker();
-                let row_key = if row.key() == "default" { "default".to_string() } else { self.full_name(row.key(), row.namespace.as_deref()) };
-                if row_key != key {
-                    continue;
-                }
-                let words: Vec<&str> = row.tokens.iter().skip(1).map(|t| t.text.as_str()).collect();
+            for words in rows.get(&key).into_iter().flatten() {
                 if let Some(i) = words.iter().position(|w| *w == prop) {
-                    let end = (i + 1..words.len()).find(|&j| ["blocks", "only", "lit", "forget"].contains(&words[j])).unwrap_or(words.len());
-                    found = Some(words[i + 1..end].iter().filter(|w| **w != "none").map(|w| w.to_string()).collect());
+                    let end = (i + 1..words.len()).find(|&j| ["blocks", "only", "lit", "forget"].contains(&words[j].as_str())).unwrap_or(words.len());
+                    found = Some(words[i + 1..end].iter().filter(|w| *w != "none").cloned().collect());
                 }
             }
             if let Some(v) = found {
@@ -1983,8 +1978,7 @@ impl World<'_> {
     /// glyph with its look, which a panel draws in the style's colors
     /// (D 10, M 7.3, M 7.7). A missing text is its key.
     pub fn text_runs(&self, lang: &str, key: &str, args: &[(String, Value)]) -> Vec<(String, Option<super::view::Look>)> {
-        let texts = self.m.texts(lang);
-        let Some(item) = texts.get(key) else { return vec![(key.to_string(), None)] };
+        let Some(item) = self.m.text_item(lang, key) else { return vec![(key.to_string(), None)] };
         let mut out: Vec<(String, Option<super::view::Look>)> = Vec::new();
         let plain = |out: &mut Vec<(String, Option<super::view::Look>)>, t: &str| match out.last_mut() {
             Some((last, None)) => last.push_str(t),
@@ -2082,13 +2076,12 @@ impl World<'_> {
     /// The text of the nearest kind that has `first` or `suffix`, `first`
     /// winning on the same level.
     fn kind_text_opt(&self, lang: &str, kind: &str, first: Option<&str>, suffix: &str) -> Option<String> {
-        let texts = self.m.texts(lang);
         let mut cur = Some(kind.to_string());
         for _ in 0..64 {
             let k = cur?;
             for s in first.into_iter().chain([suffix]) {
                 let key = format!("{k}.{s}");
-                if texts.contains_key(&key) {
+                if self.m.has_text(lang, &key) {
                     return Some(self.text(lang, &key, &[]));
                 }
             }

@@ -177,15 +177,7 @@ impl<'m> World<'m> {
     /// variant and index (`STAIR.down` → `STAIR.down` of `STAIR`'s full
     /// name).
     pub fn full_name(&self, written: &str, ns: Option<&str>) -> String {
-        if let Ok(d) = self.m.resolve(ns, written) {
-            return d.full.clone();
-        }
-        if let Ok(t) = names::tile_name(written)
-            && let Ok(full) = self.m.resolve_tile(ns, written)
-        {
-            return written.replacen(&t.base, &full, 1);
-        }
-        written.to_string()
+        self.m.full_name(written, ns)
     }
 
     /// The zero of a type: 0, `false`, `0,0`, `none`, empty (D 5.1).

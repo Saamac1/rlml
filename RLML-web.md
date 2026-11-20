@@ -134,6 +134,25 @@ Tulos (20.11.2026):
   paneelikyselyt joka kuvassa; sitä ei ole vielä varmistettu. Seuraava
   askel on profiloida `App::draw()`.
 
+  Profiloitu (macOS `sample`, `examples/replay.rs`): syy ei ollut
+  paneelit. Noin puolet ajasta meni `tile_property`yn, joka selvitti
+  jokaisen `tiles`-rivin täyden nimen joka kutsulla (näkökentän
+  `blocks sight` joka solulle), ja puolet tekstien hakuun:
+  `Model::texts` rakensi joka tekstille koko kielen taulun. `settings()`
+  kopioi kaikki asetusrivit joka kutsulla. Nyt malli löytää nämä kerran
+  (`OnceLock`: `text_item`, `tile_rows`, `settings`), koska se ei muutu
+  latauksen jälkeen. Lokit ovat ennallaan.
+
+  | `draw`, ms (ka / p95)  | ennen       | jälkeen   |
+  |------------------------|------------:|----------:|
+  | wasm, JavaScriptCore   | 15–27 / 43  | 2,5–3,2 / 5 |
+  | natiivi release        | 18–30 / 46  | 3–3,5 / 5,5 |
+  | natiivi debug          | 62 / 77     | 17–18 / 32 |
+
+  Seuraava kuuma kohta on `State::entities_at`, joka käy läpi kaikki
+  oliot jokaiselle kysytylle solulle. Sen korjaus vaatisi paikkaindeksin
+  tilaan.
+
 ### 5. Loput syötteestä
 
 - Hiiri: pikselit soluiksi, `mouse_press` ja `pointer_at`, liikkeet

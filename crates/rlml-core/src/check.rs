@@ -632,7 +632,7 @@ impl Checker<'_> {
 
     fn settings(&mut self, main: &str) {
         let settings = self.m.settings();
-        for (key, item) in &settings {
+        for (key, item) in settings {
             let v = item.rest(1);
             let bad = match key.as_str() {
                 k if !SETTINGS.contains(&k) => Some(format!("unknown setting `{k}`")),

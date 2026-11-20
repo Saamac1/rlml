@@ -8,6 +8,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::OnceLock;
 
 use crate::error::{Diagnostic, Report};
 use crate::load::{LanguageFile, Loaded};
@@ -130,7 +131,15 @@ pub struct Model {
     /// was replaced.
     overrides: Vec<(String, Kind, String, usize)>,
     replaced: Vec<String>,
+    /// Answers a running game asks for every frame, found once: the
+    /// model does not change after it is built and checked.
+    settings: OnceLock<BTreeMap<String, RawItem>>,
+    text_index: OnceLock<TextIndex>,
+    tile_rows: OnceLock<BTreeMap<String, Vec<Vec<String>>>>,
 }
+
+/// Text keys by language: the file and row of each key's text.
+type TextIndex = BTreeMap<String, BTreeMap<String, (usize, usize)>>;
 
 impl Model {
     pub fn kind(&self, full: &str) -> Option<Kind> {
@@ -168,13 +177,15 @@ impl Model {
     }
 
     /// Merged `settings` rows: the last row of each key wins (D 4.8).
-    pub fn settings(&self) -> BTreeMap<String, RawItem> {
-        let mut out = BTreeMap::new();
-        for (_, item) in self.section_rows("settings") {
-            let (_, item) = item.marker();
-            out.insert(item.key().to_string(), item);
-        }
-        out
+    pub fn settings(&self) -> &BTreeMap<String, RawItem> {
+        self.settings.get_or_init(|| {
+            let mut out = BTreeMap::new();
+            for (_, item) in self.section_rows("settings") {
+                let (_, item) = item.marker();
+                out.insert(item.key().to_string(), item);
+            }
+            out
+        })
     }
 
     pub fn named_game(&self) -> Option<&RawBlock> {
@@ -230,6 +241,54 @@ impl Model {
             }
         }
         MapArea { border: styled, ..MapArea::default() }
+    }
+
+    /// A text key's row in a language, as `texts` merges them (D 10).
+    pub fn text_item(&self, language: &str, key: &str) -> Option<&RawItem> {
+        let index = self.text_index.get_or_init(|| {
+            let mut out = TextIndex::new();
+            for (fi, f) in self.languages.iter().enumerate() {
+                let keys = out.entry(f.language.clone()).or_default();
+                for (ti, t) in f.texts.iter().enumerate() {
+                    keys.insert(qualify(f.namespace.as_deref(), t.key()), (fi, ti));
+                }
+            }
+            out
+        });
+        let &(fi, ti) = index.get(language)?.get(key)?;
+        Some(&self.languages[fi].texts[ti])
+    }
+
+    pub fn has_text(&self, language: &str, key: &str) -> bool {
+        self.text_item(language, key).is_some()
+    }
+
+    /// A written name's full name: a definition, a tile with its variant
+    /// (`WALL.2`), else as written.
+    pub fn full_name(&self, written: &str, ns: Option<&str>) -> String {
+        if let Ok(d) = self.resolve(ns, written) {
+            return d.full.clone();
+        }
+        if let Ok(t) = names::tile_name(written)
+            && let Ok(full) = self.resolve_tile(ns, written)
+        {
+            return written.replacen(&t.base, &full, 1);
+        }
+        written.to_string()
+    }
+
+    /// The `tiles` rows by the full name they are for (`default` as is),
+    /// each row's words after its key, in load order (D 7.1).
+    pub fn tile_rows(&self) -> &BTreeMap<String, Vec<Vec<String>>> {
+        self.tile_rows.get_or_init(|| {
+            let mut out: BTreeMap<String, Vec<Vec<String>>> = BTreeMap::new();
+            for (_, item) in self.section_rows("tiles") {
+                let (_, row) = item.marker();
+                let key = if row.key() == "default" { "default".to_string() } else { self.full_name(row.key(), row.namespace.as_deref()) };
+                out.entry(key).or_default().push(row.tokens.iter().skip(1).map(|t| t.text.clone()).collect());
+            }
+            out
+        })
     }
 
     /// Text keys of one language, merged row by row (D 10).
