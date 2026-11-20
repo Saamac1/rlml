@@ -107,3 +107,28 @@ fn a_too_small_window_says_so() {
     let frame = View::default().draw(&mut s.r.w, "fi", 30, 3);
     assert!(frame.rows()[0].starts_with("The window is too small"), "{:?}", frame.rows());
 }
+
+#[test]
+fn a_panel_fills_its_fields() {
+    let mut f = mini();
+    let ui = f.game["ui/main.rlml"].replace("```\nm\nl\n```\n\nlegend:\n- m map", "```\nms\nll\n```\n\nlegend:\n- m map\n- s SIDE(3) size.width 8");
+    f.game.insert("ui/main.rlml".into(), ui);
+    f.game.insert(
+        "ui/side.rlml".into(),
+        "panel SIDE(n: number)\n\n```\n[TTTTTT]\nA=vvvvvv\nB=ppp\nLLLLLLLL\nLLLLLLLL\nLLLLLLLL\n```\n\nlegend:\n- T text SIDE.TITLE center\n- v value text_of(SIDE.SUM, N: 2 + 2)\n- p param n right\n- L value [text_of(SIDE.TITLE), text_of(n), SIDE.HERO]\n".into(),
+    );
+    let fi = f.game["text/fi.rlml"].clone() + "\nSIDE.TITLE Ohje\nSIDE.SUM yht. {N}\nSIDE.HERO {#GLYPH.HERO} sinä\n";
+    f.game.insert("text/fi.rlml".into(), fi);
+    let m = model(&f);
+    let mut s = Session::start(&m, 7).unwrap();
+    let frame = View::default().draw(&mut s.r.w, "fi", 40, 12);
+    let rows = frame.rows();
+    // 8 columns at the right; the fields are filled by their alignment
+    let side: Vec<String> = rows.iter().take(6).map(|r| r.chars().skip(32).collect()).collect();
+    // a list shows one member a line (M 7.7)
+    assert_eq!(side, ["[ Ohje ]", "A=yht. 4", "B=  3   ", "Ohje    ", "3       ", "@ sinä  "], "{rows:#?}");
+    // a text key as a name shows `{#TILE}` as the tile's glyph in its
+    // colors (D 10, M 7.7)
+    assert_eq!(fg(&frame, 32, 5), Some(rlml_tui::draw::rgb([255, 255, 255])));
+    assert_eq!(fg(&frame, 34, 5), None);
+}

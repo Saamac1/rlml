@@ -4,6 +4,12 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 20.11.2026 (klikkaus kohteeseen):** klikkausmatka entiteettiin, joka estää liikkeen, päättyy sen viereen ja askeleeseen sitä kohti, joten klikkaus kävelee päin ja käyttää kohdetta. Matka ei astu reitin varrella olevaan estävään entiteettiin, ja `walk_avoid` pitää reitin pois pelin välttämistä ruuduista. Osoittimen ruutu merkitään kartalle kursorin tyylillä (luku [8.1](08-syote.md#81-hiiri)). Tarkistus kattaa kentän `walk_avoid` (luku [2.5](02-lataus.md#25-tarkistukset)).
+
+**Muutokset 20.11.2026 (tilen merkki tekstissä):** `{#TILE}` näyttää tilen merkin esitystavan haulla, paneelissa tyylin värein ja muualla pelkkänä merkkinä. Paneelin nimiarvo, joka on tekstiavain, näyttää avaimen tekstin merkkeineen, ja kentän teksti piirretään `panels`-värien päälle (luvut [7.3](07-esitys.md#73-tekstit) ja [7.7](07-esitys.md#77-paneelit)). Datamuoto on dataformaattien luvussa [10](../dataformaatit/10-tekstit.md).
+
+**Muutokset 20.11.2026 (paneelin lista):** paneelin kenttä näyttää listan tai kokoelman jäsenet: monirivisessä kentässä kukin jäsen omalta riviltään, yksirivisessä pilkuin eroteltuna (luku [7.7](07-esitys.md#77-paneelit)). Datamuoto on dataformaattien luvussa [11.5](../dataformaatit/11-kayttoliittyman-data.md#115-paneelit).
+
 **Muutokset 18.11.2026 (atlaksen lähialue):** lehti ja sen naapurit muodostavat lähialueen, joka on kokonaan aktiivinen ja jossa haut, reitit, näkö, valo ja ääni ulottuvat yhden lehtirajan yli, joten raja ei ole pakotie. Lähialue siirtyy pelaajan mukana, ja lataus varoittaa lehteä suuremmista säteistä (luvut [6.1.8](06-ajo.md#618-aktiiviset-kartat-ja-jäädytys), [6.10](06-ajo.md#610-atlas) ja [7.1](07-esitys.md#71-asettelu)). Avoimeksi jää ulottuma kahden rajan yli (luku [11](11-avoimet-kysymykset.md)).
 
 **Muutokset 18.11.2026 (atlas):** atlaksen lehden reunan ylitys siirtää kulkijan naapurilehden vastaavaan ruutuun, myös vinottain, siirron tapahtumin ja jäädytyssäännöin; puuttuva lehti luodaan `fill`-tilestä (luku [6.10](06-ajo.md#610-atlas)). Kamera voi jatkaa näkymää naapurilehdelle (luku [7.1](07-esitys.md#71-asettelu)), ja lehtirajan yli ulottuvat haut ovat avoin kysymys (luku [11](11-avoimet-kysymykset.md)). Datamuoto on dataformaattien luvussa [8.12](../dataformaatit/08-kartat-ja-prefabit.md#812-atlas-karttalehdet).

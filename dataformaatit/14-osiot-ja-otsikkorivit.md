@@ -4,7 +4,7 @@
 
 | Otsikko | Muoto | Luku |
 | --- | --- | --- |
-| `game` | `game NIMI`, rivit `- start KARTTA \| NOSTO`, `- at HAKU`, `- seed N`, `- call_depth N`, `- loop_steps N`, `- keys KONTEKSTI`, `- title VALIKKO`, `- layout ASETTELU`, `- naming KYSELY`, `- walk KOMENTO`, `- walk_stop KYSELY`, `- leader KYSELY`, `- rest KOMENTO`, `- follow_distance N`, `- follow_ai TEKOÄLY`, `- masking N`, `- seats a..b`, `- party switch \| each`, `- leash on \| off` ja `- KOMPONENTTI kentät`; lyhyt muoto `game NIMI start … at …` | 3.3, 5.5 |
+| `game` | `game NIMI`, rivit `- start KARTTA \| NOSTO`, `- at HAKU`, `- seed N`, `- call_depth N`, `- loop_steps N`, `- keys KONTEKSTI`, `- title VALIKKO`, `- layout ASETTELU`, `- naming KYSELY`, `- walk KOMENTO`, `- walk_stop KYSELY`, `- walk_avoid KYSELY`, `- leader KYSELY`, `- rest KOMENTO`, `- follow_distance N`, `- follow_ai TEKOÄLY`, `- masking N`, `- seats a..b`, `- party switch \| each`, `- leash on \| off` ja `- KOMPONENTTI kentät`; lyhyt muoto `game NIMI start … at …` | 3.3, 5.5 |
 | `profile` | `profile NIMI`, rivit `- KOMPONENTTI kentät` | 3.5 |
 | `include` | `include POLKU.PÄÄTE` (jokerit `*`, `**`) | 3 |
 | `namespace` | `namespace NIMI` tiedoston alussa | 4.2 |

@@ -31,6 +31,9 @@ pub struct Area {
     pub follow: Follow,
     /// A docked menu's name as written: `- v menu VERBS` (D 11.1).
     pub menu: Option<String>,
+    /// The map area's `cursor TYYLI` as written: `underline`, `reverse`,
+    /// `bold` or `bg COLOR` (D 11.1).
+    pub cursor: Vec<String>,
 }
 
 /// A docked menu's row as the app gives it to draw (M 7.1, M 8.1).
@@ -68,7 +71,8 @@ pub struct View {
     /// The `hover` area's text: what is under the pointer (M 8.1); the app
     /// sets it.
     pub hover: Option<String>,
-    /// Cells to mark on the map: open cursors and orders' targets (M 7.1).
+    /// Cells to mark on the map: open cursors, orders' targets and the
+    /// mouse pointer's cell (M 7.1, M 8.1).
     pub cursors: Vec<rlml_core::rt::value::Pos>,
     /// Docked menus by full name, as the app sets them, and where each was
     /// last drawn, inside its border, for the mouse.
@@ -122,9 +126,15 @@ fn areas(rows: &[RawItem]) -> (Vec<Area>, Dims) {
         let dim = |v: Option<&str>| v.and_then(|s| Dim::parse(s).ok()).flatten();
         let size: (Option<Dim>, Option<Dim>) = (dim(sw), dim(sh));
         let mut follow = Follow::Center;
+        let mut cursor = Vec::new();
         let mut i = 1;
         while i < words.len() {
             match words[i] {
+                "cursor" => {
+                    let n = if words.get(i + 1) == Some(&"bg") { 2 } else { 1 };
+                    cursor = words.iter().skip(i + 1).take(n).map(|w| w.to_string()).collect();
+                    i += 1 + n;
+                }
                 "follow" => {
                     follow = match (words.get(i + 1), words.get(i + 2).and_then(|n| n.parse().ok())) {
                         (Some(&"margin"), Some(n)) => Follow::Margin(n),
@@ -138,7 +148,7 @@ fn areas(rows: &[RawItem]) -> (Vec<Area>, Dims) {
         dims.insert(ch, size);
         let source = words.first().copied().unwrap_or("").to_string();
         let menu = (source == "menu").then(|| words.get(1).map(|w| w.to_string())).flatten();
-        out.push(Area { ch, source, follow, menu });
+        out.push(Area { ch, source, follow, menu, cursor });
     }
     (out, dims)
 }
@@ -200,7 +210,7 @@ fn paint(frame: &mut Frame, r: Rect, style: Style) {
     }
 }
 
-fn put_look(frame: &mut Frame, x: usize, y: usize, look: &Look) {
+pub(crate) fn put_look(frame: &mut Frame, x: usize, y: usize, look: &Look) {
     frame.put(x, y, look.ch, Role::Normal);
     if x < frame.width && y < frame.height {
         let i = y * frame.width + x;
@@ -271,7 +281,18 @@ impl View {
                 match layout::analyze(&b.drawing) {
                     Ok(mut grid) => {
                         let _ = grid.set_sizes(&dims);
-                        let solved = grid.solve(&BTreeMap::<char, AreaSize>::new(), width, height);
+                        // a panel's drawing and border are its area's least
+                        // size (D 11.1, D 11.5)
+                        let mut content = BTreeMap::<char, AreaSize>::new();
+                        for a in &areas {
+                            let name = a.source.split('(').next().unwrap_or("");
+                            if let Some(pb) = crate::panel::block(world, name) {
+                                let (pw, ph) = crate::panel::size(pb);
+                                let edge = if panel_style(world, name).0 != Border::None { 2 } else { 0 };
+                                content.insert(a.ch, AreaSize { min_width: pw + edge, min_height: ph + edge });
+                            }
+                        }
+                        let solved = grid.solve(&content, width, height);
                         (areas, solved)
                     }
                     Err(e) => {
@@ -284,7 +305,7 @@ impl View {
             None => {
                 let mut rects = BTreeMap::new();
                 rects.insert('m', Rect::new(0, 0, width, height));
-                (vec![Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None }], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 })
+                (vec![Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None, cursor: vec![] }], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 })
             }
         };
         if solved.too_small {
@@ -322,7 +343,7 @@ impl View {
                 rect
             };
             match area.source.as_str() {
-                "map" => self.draw_map(&mut frame, world, inner, area.follow),
+                "map" => self.draw_map(&mut frame, world, inner, area.follow, &area.cursor),
                 "hover" => {
                     if let Some(t) = &self.hover {
                         frame.text(inner.x, inner.y, inner.w, t, Role::Normal);
@@ -342,14 +363,19 @@ impl View {
                 _ => {
                     if world.m.resolve(None, &name).is_ok_and(|d| d.kind == Kind::Log) {
                         draw_log(&mut frame, world, lang, &name, inner);
+                    } else if let Some(pb) = crate::panel::block(world, &name) {
+                        world.holding_view(|w| crate::panel::draw(&mut frame, w, lang, pb, &area.source, inner));
                     }
                 }
             }
+            // written text resets its cells' style: the area's colors go
+            // under it again, and the content's own colors win
+            paint(&mut frame, inner, style);
         }
         frame
     }
 
-    fn draw_map(&mut self, frame: &mut Frame, world: &mut World, r: Rect, follow: Follow) {
+    fn draw_map(&mut self, frame: &mut Frame, world: &mut World, r: Rect, follow: Follow, cursor: &[String]) {
         self.map_rect = Some(r);
         let Some(map) = world.s.active_map() else { return };
         let cells = world.render_cells(map);
@@ -362,14 +388,20 @@ impl View {
                 }
             }
         }
-        // cursors and orders: underlined (M 7.1)
+        // cursors, orders and the pointer: the area's `cursor` style,
+        // underlined without one (M 7.1)
         for p in self.cursors.iter().filter(|p| p.map == map) {
             let (sx, sy) = (p.x - x0, p.y - y0);
             if sx >= 0 && sy >= 0 && (sx as usize) < r.w && (sy as usize) < r.h {
                 let i = (r.y + sy as usize) * frame.width + r.x + sx as usize;
                 if let Some(cell) = frame.cells.get_mut(i) {
                     let mut style = cell.style.unwrap_or_default();
-                    style.attrs.underline = true;
+                    match cursor.first().map(String::as_str) {
+                        Some("reverse") => style.attrs.reverse = true,
+                        Some("bold") => style.attrs.bold = true,
+                        Some("bg") => style.bg = cursor.get(1).and_then(|c| world.color(c, None)).map(rgb).or(style.bg),
+                        _ => style.attrs.underline = true,
+                    }
                     cell.style = Some(style);
                 }
             }

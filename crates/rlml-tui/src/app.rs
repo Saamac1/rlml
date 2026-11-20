@@ -1400,6 +1400,13 @@ impl<'m> App<'m> {
         if let Some(Asking { ui: AskUi::Aim { pos, .. }, .. }) = &self.asking {
             out.push(*pos);
         }
+        // the mouse pointer's map cell, when no menu is over the map (M 8.1)
+        if !self.menus.is_open()
+            && let Some(p) = self.pointer_cell()
+            && !out.contains(&p)
+        {
+            out.push(p);
+        }
         for o in self.r.orders.values() {
             match o.goal {
                 OrderGoal::Cell(p) => out.push(p),

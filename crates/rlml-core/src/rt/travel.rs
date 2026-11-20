@@ -78,6 +78,7 @@ pub enum Stop {
 pub struct TravelFields {
     pub walk: Option<String>,
     pub walk_stop: Option<String>,
+    pub walk_avoid: Option<String>,
     pub leader: Option<String>,
     pub rest: Option<String>,
     pub follow_distance: i64,
@@ -96,6 +97,7 @@ impl TravelFields {
         TravelFields {
             walk: field("walk", &[Kind::Command]),
             walk_stop: field("walk_stop", &[Kind::Query]),
+            walk_avoid: field("walk_avoid", &[Kind::Query]),
             leader: field("leader", &[Kind::Query]),
             rest: field("rest", &[Kind::Command]),
             follow_distance: distance.unwrap_or(1).max(1),
@@ -192,8 +194,8 @@ impl<'m> Runner<'m> {
                 if self.fields.walk.is_none() || to == at {
                     return Ok(false);
                 }
-                let known = self.known_cells(at.map);
-                if self.w.route_within(at, &[to], Some(member), Some(&known)).is_empty() {
+                let known = self.route_cells(member, to)?;
+                if self.w.route_within(at, &self.ends(member, at, to), Some(member), Some(&known)).is_empty() && !self.bumps(member, at, to) {
                     return Ok(false);
                 }
                 Goal::Cell(to)
@@ -290,8 +292,21 @@ impl<'m> Runner<'m> {
                 if at == to {
                     return Ok(Some(Stop::Arrived));
                 }
-                let known = self.known_cells(at.map);
-                let Some(&next) = self.w.route_within(at, &[to], Some(t.member), Some(&known)).first() else { return Ok(Some(Stop::NoRoute)) };
+                // a cell an entity blocks: the last step walks into it,
+                // so the game's walk uses the thing as a press would
+                if self.bumps(t.member, at, to) {
+                    let Some(cmd) = self.walk_step(t.member, at, to)? else { return Ok(Some(Stop::Game)) };
+                    t.steps += 1;
+                    return Ok(Some(if self.input(n, &cmd)? { Stop::Arrived } else { Stop::Failed }));
+                }
+                let known = self.route_cells(t.member, to)?;
+                let Some(&next) = self.w.route_within(at, &self.ends(t.member, at, to), Some(t.member), Some(&known)).first() else { return Ok(Some(Stop::NoRoute)) };
+                // a route passes a blocking actor that may move away, but
+                // the step does not walk into it: walking into a thing
+                // uses it (M 8.1)
+                if self.w.blocks_entities(next, "move", Some(t.member)) {
+                    return Ok(Some(Stop::Failed));
+                }
                 self.walk_step(t.member, at, next)?
             }
             Goal::Follow(leader) => {
@@ -322,6 +337,48 @@ impl<'m> Runner<'m> {
             return Ok(Some(Stop::Failed));
         }
         Ok(None)
+    }
+
+    /// The cells a travel's route to `to` may pass: the known ones, less
+    /// those the game's `walk_avoid(who, cell)` avoids, `to` itself kept
+    /// (D 3.3, M 8.1).
+    fn route_cells(&mut self, who: EntityId, to: Pos) -> RtResult<BTreeSet<(i32, i32)>> {
+        let mut known = self.known_cells(to.map);
+        let Some(q) = self.fields.walk_avoid.clone() else { return Ok(known) };
+        let mut env = super::eval::Env::new(super::eval::BodyKind::Handler, "walk_avoid", None, "<engine>");
+        env.map = Some(to.map);
+        let mut avoided = Vec::new();
+        for &(x, y) in known.iter().filter(|&&c| c != (to.x, to.y)) {
+            let cell = Pos { map: to.map, x, y };
+            if matches!(self.w.call_function(&q, vec![(None, Value::Entity(who)), (None, Value::Pos(cell))], &mut env.clone())?, Value::Bool(true)) {
+                avoided.push((x, y));
+            }
+        }
+        for c in avoided {
+            known.remove(&c);
+        }
+        Ok(known)
+    }
+
+    /// Does an entity in `to` block `who`'s move: then a travel there
+    /// ends next to it, with a step into it (M 8.1).
+    fn blocked_by_entity(&self, who: EntityId, to: Pos) -> bool {
+        self.w.blocks_entities(to, "move", Some(who)) && !self.w.blocks_tiles(to, "move", Some(who))
+    }
+
+    /// The cells a travel to `to` heads for: `to`, or the cells next to it
+    /// when an entity there blocks the way.
+    fn ends(&self, who: EntityId, at: Pos, to: Pos) -> Vec<Pos> {
+        if !self.blocked_by_entity(who, to) {
+            return vec![to];
+        }
+        Dir::ALL.into_iter().map(|d| to.step(d)).filter(|&p| p != at && !self.w.blocks(p, "move", Some(who), true)).collect()
+    }
+
+    /// Is `who` next to `to`, in which an entity blocks it: the travel's
+    /// last step walks into it.
+    fn bumps(&self, who: EntityId, at: Pos, to: Pos) -> bool {
+        at.map == to.map && at.distance(to) == 1 && self.blocked_by_entity(who, to)
     }
 
     fn rest(&self) -> Option<CommandValue> {

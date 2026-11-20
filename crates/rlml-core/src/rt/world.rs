@@ -63,6 +63,10 @@ pub struct World<'m> {
     /// Tile flags (`lit`, `forget`) by tile name and flag, resolved once
     /// for the same reason (D 7.5).
     pub(crate) flags: std::cell::RefCell<std::collections::HashMap<(String, String), bool>>,
+    /// The shared view held while the presentation evaluates queries,
+    /// which cannot change the state: `in_view` reads it instead of
+    /// casting the view again for each call (M 7.7).
+    pub(crate) held_view: Option<(MapId, std::collections::BTreeSet<(i32, i32)>)>,
 }
 
 /// A `log` call: the message key and its text arguments.
@@ -104,7 +108,7 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area(), looks: Default::default(), flags: Default::default() }
+        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area(), looks: Default::default(), flags: Default::default(), held_view: None }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {

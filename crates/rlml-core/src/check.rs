@@ -23,7 +23,7 @@ pub const ENGINE_ACTIONS: &[&str] = &[
 pub const ENGINE_EVENTS: &[&str] = &["begin", "turn", "wake", "created", "removed", "enter", "leave", "arrive", "depart", "hear", "join", "part"];
 
 const GAME_FIELDS: &[&str] =
-    &["start", "at", "seed", "call_depth", "loop_steps", "keys", "title", "layout", "naming", "walk", "walk_stop", "leader", "rest", "follow_distance", "follow_ai", "masking", "seats", "party", "leash"];
+    &["start", "at", "seed", "call_depth", "loop_steps", "keys", "title", "layout", "naming", "walk", "walk_stop", "walk_avoid", "leader", "rest", "follow_distance", "follow_ai", "masking", "seats", "party", "leash"];
 
 const SETTINGS: &[&str] = &["language", "style", "round", "idle", "external", "external_timeout", "mouse", "targeting"];
 
@@ -499,6 +499,7 @@ impl Checker<'_> {
             ("naming", &[Kind::Query]),
             ("walk", &[Kind::Command]),
             ("walk_stop", &[Kind::Query]),
+            ("walk_avoid", &[Kind::Query]),
             ("leader", &[Kind::Query]),
             ("rest", &[Kind::Command]),
             ("follow_ai", &[Kind::Ai]),
@@ -1122,10 +1123,10 @@ fn is_joining(c: char) -> bool {
     matches!(c as u32, 0x0300..=0x036F | 0x1AB0..=0x1AFF | 0x1DC0..=0x1DFF | 0x20D0..=0x20FF | 0xFE20..=0xFE2F | 0x200D | 0xFE00..=0xFE0F | 0xE0100..=0xE01EF)
 }
 
-/// `{NAME}`, `{NAME:SUFFIX}` and `{NAME.DESC}` placeholders; `{@KEY}` and
-/// `{^ACTION}` are not parameters.
+/// `{NAME}`, `{NAME:SUFFIX}` and `{NAME.DESC}` placeholders; `{@KEY}`,
+/// `{^ACTION}` and `{#TILE}` are not parameters.
 pub(crate) fn placeholders(text: &str) -> Vec<String> {
-    braces(text).into_iter().filter(|p| !p.starts_with('@') && !p.starts_with('^')).collect()
+    braces(text).into_iter().filter(|p| !p.starts_with('@') && !p.starts_with('^') && !p.starts_with('#')).collect()
 }
 
 fn refs(text: &str) -> Vec<String> {

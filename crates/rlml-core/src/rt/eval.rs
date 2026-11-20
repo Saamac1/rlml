@@ -1667,6 +1667,18 @@ impl World<'_> {
                     _ => Value::List(vec![]),
                 }
             }
+            "text_of" => {
+                // a key's text in the chosen language with its named
+                // arguments as placeholders; a name, number or entity
+                // shows as its placeholder would (RS 2.6, M 7.3)
+                let lang = self.m.settings().get("language").map(|i| i.rest(1).to_string()).unwrap_or_default();
+                let named: Vec<(String, Value)> = args.iter().skip(1).filter_map(|(n, v)| n.clone().map(|n| (n, v.clone()))).collect();
+                Value::Text(match &a0 {
+                    Value::Name(key) if self.m.texts(&lang).contains_key(key.as_str()) => self.text(&lang, key, &named),
+                    Value::None => String::new(),
+                    other => self.name_text(&lang, other),
+                })
+            }
             other => return Err(self.rt_err(env, pos, format!("engine function `{other}` is not implemented yet"))),
         })
     }
@@ -1964,22 +1976,44 @@ impl World<'_> {
     /// A text key's text in a language, with placeholders filled; a
     /// missing text shows as its key (M 7.3).
     pub fn text(&self, lang: &str, key: &str, args: &[(String, Value)]) -> String {
+        self.text_runs(lang, key, args).into_iter().map(|(t, _)| t).collect()
+    }
+
+    /// A text key's text as runs: plain text, and `{#TILE}` as the tile's
+    /// glyph with its look, which a panel draws in the style's colors
+    /// (D 10, M 7.3, M 7.7). A missing text is its key.
+    pub fn text_runs(&self, lang: &str, key: &str, args: &[(String, Value)]) -> Vec<(String, Option<super::view::Look>)> {
         let texts = self.m.texts(lang);
-        let Some(item) = texts.get(key) else { return key.to_string() };
-        let src = item.rest(1);
-        let mut out = String::new();
-        let mut rest = src;
+        let Some(item) = texts.get(key) else { return vec![(key.to_string(), None)] };
+        let mut out: Vec<(String, Option<super::view::Look>)> = Vec::new();
+        let plain = |out: &mut Vec<(String, Option<super::view::Look>)>, t: &str| match out.last_mut() {
+            Some((last, None)) => last.push_str(t),
+            _ => out.push((t.to_string(), None)),
+        };
+        let mut rest = item.rest(1);
         while let Some(open) = rest.find('{') {
-            out.push_str(&rest[..open]);
+            plain(&mut out, &rest[..open]);
             let Some(close) = rest[open..].find('}') else {
-                out.push_str(&rest[open..]);
+                plain(&mut out, &rest[open..]);
                 return out;
             };
             let inner = &rest[open + 1..open + close];
-            out.push_str(&self.placeholder(lang, inner, args));
+            if let Some(tile) = inner.strip_prefix('#') {
+                let look = self.look(tile);
+                out.push((look.ch.to_string(), Some(look)));
+            } else if let Some(key) = inner.strip_prefix('@') {
+                for (t, look) in self.text_runs(lang, key, &[]) {
+                    match look {
+                        None => plain(&mut out, &t),
+                        Some(_) => out.push((t, look)),
+                    }
+                }
+            } else {
+                plain(&mut out, &self.placeholder(lang, inner, args));
+            }
             rest = &rest[open + close + 1..];
         }
-        out.push_str(rest);
+        plain(&mut out, rest);
         out
     }
 
@@ -2019,7 +2053,17 @@ impl World<'_> {
             }
             Value::Name(n) => {
                 if self.m.kind(n) == Some(Kind::Entity) || suffix != "NAME" {
-                    self.kind_text(lang, n, suffix)
+                    // a tile's variant and index have no text keys of
+                    // their own: the base name covers them (D 7.1), so
+                    // `HULL.window` reads `HULL.DESC`
+                    let mut base = n.as_str();
+                    while self.kind_text_opt(lang, base, None, suffix).is_none()
+                        && let Some((head, last)) = base.rsplit_once('.')
+                        && last.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+                    {
+                        base = head;
+                    }
+                    self.kind_text(lang, base, suffix)
                 } else {
                     self.text(lang, n, &[])
                 }

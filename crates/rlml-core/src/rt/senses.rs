@@ -223,6 +223,9 @@ impl World<'_> {
     /// The shared view on the active map, kept as the last shared view for
     /// when no member is left (M 7.2).
     pub fn current_view(&mut self) -> Option<(MapId, BTreeSet<(i32, i32)>)> {
+        if let Some(v) = &self.held_view {
+            return Some(v.clone());
+        }
         if let Some(map) = self.s.active_map()
             && let Some(v) = self.shared_view(map)
         {
@@ -234,10 +237,22 @@ impl World<'_> {
     /// `in_view(x)`: some cell of `x` is in the shared view, or in the last
     /// shared view without members (M 7.2).
     pub fn in_view(&mut self, cells: &[Pos]) -> bool {
+        if let Some((map, view)) = &self.held_view {
+            return cells.iter().any(|p| p.map == *map && view.contains(&(p.x, p.y)));
+        }
         match self.current_view() {
             Some((map, view)) => cells.iter().any(|p| p.map == map && view.contains(&(p.x, p.y))),
             None => false,
         }
+    }
+
+    /// Runs `f` with the shared view cast once and held: for the
+    /// presentation's queries, which leave the state as it is (M 7.7).
+    pub fn holding_view<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.held_view = self.current_view();
+        let out = f(self);
+        self.held_view = None;
+        out
     }
 
     /// `sees(a, b)`: some cell of `b` is in `a`'s view. A member without

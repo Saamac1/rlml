@@ -40,7 +40,7 @@ Datatiedostot viittaavat pelilogiikkaan muutamassa kohdassa. Näiden kohtien pai
 | valikon `then`, `with` ja listavalikko | valikko | askel ja sidotut nimet |
 | paneelin `value` ja parametrit | paneeli | kyselylauseke |
 | `naming` | `game`-lohko | kysely, joka antaa entiteetin nimen pelin tilasta |
-| `walk` ja `walk_stop` | `game`-lohko | klikkausmatkan kävelykomento ja pelin oma pysähtymisehto |
+| `walk`, `walk_stop` ja `walk_avoid` | `game`-lohko | klikkausmatkan kävelykomento, välteltävät ruudut ja pelin oma pysähtymisehto |
 | paikalliset osiot | karttatiedosto | säännöt ja muut kartan vyöhykkeen osiot |
 | `collection ... modifies` | kokoelmakenttä | jäsenten muunnokset kantajaan |
 | checkpoint | tallennus (luku [3.2](03-tiedostot-ja-include.md#32-pelaajan-oma-data)) | milloin tilannekuva otetaan ja milloin se ladataan |

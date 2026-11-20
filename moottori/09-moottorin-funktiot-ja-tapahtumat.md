@@ -16,7 +16,7 @@ Kaikki moottorin nimet ovat pieniä.
 | hiiren nimet | `click`, `rclick`, `mclick`, `wheel.up`, `wheel.down` (luku [8.1](08-syote.md#81-hiiri)) |
 | asettelun lähteet | `map`, `hover`, `sentence`, `menu` (luku [7.1](07-esitys.md#71-asettelu)) |
 | kontekstinimet | `self`, `holder`, `actor`, `it`, `player`, `players`, `game`, `profile`, `map`, `camera` |
-| `game`-kentät | `start`, `at`, `seed`, `turn`, `time`, `call_depth`, `loop_steps`, `keys`, `title`, `layout`, `naming`, `masking`, `walk`, `walk_stop`, `leader`, `rest`, `follow_distance`, `follow_ai`, `seats`, `party`, `leash` |
+| `game`-kentät | `start`, `at`, `seed`, `turn`, `time`, `call_depth`, `loop_steps`, `keys`, `title`, `layout`, `naming`, `masking`, `walk`, `walk_stop`, `walk_avoid`, `leader`, `rest`, `follow_distance`, `follow_ai`, `seats`, `party`, `leash` |
 | entiteetin kentät | `at`, `map`, `kind`, `slot`, `stack` |
 | tilen ominaisuudet | `blocks`, `only`, `lit`, `forget` ([D 7.5](../dataformaatit/07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#75-tilen-ominaisuudet-tiles)) |
 | valikon määreet | `list`, `final`, `verbs` ([D 11.2](../dataformaatit/11-kayttoliittyman-data.md#112-valikot)) |

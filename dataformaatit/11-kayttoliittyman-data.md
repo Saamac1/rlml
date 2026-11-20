@@ -36,7 +36,7 @@ legend:
 
 **Vuoron merkki.** Kun jäseniä on useampi, moottori korostaa vuorossa olevan jäsenen ruudun. Kartta-alueen rivin määre `turn TYYLI` valitsee korostuksen, esimerkiksi `- m map follow center turn reverse`, ja ilman määrettä korostus on käänteiset värit.
 
-**Kursorit.** Kartta-alueen rivin määre `cursor TYYLI` valitsee pysyvien katselukursorien ja ennakkokäskyjen merkin (`- m map turn reverse cursor underline`). Ilman määrettä merkki on alleviivaus (moottoridokumentti, luku [8.1](../moottori/08-syote.md#81-hiiri)).
+**Kursorit.** Kartta-alueen rivin määre `cursor TYYLI` valitsee katselukursorien, ennakkokäskyjen ja hiiren osoittimen ruudun merkin (`- m map turn reverse cursor underline`). Tyyli on `underline`, `reverse`, `bold` tai `bg VÄRI`, joka vaihtaa ruudun taustavärin (`cursor bg CURSOR`, väri luvun [9.1](09-ulkoasu.md#91-värit) mukaan). Ilman määrettä merkki on alleviivaus (moottoridokumentti, luku [8.1](../moottori/08-syote.md#81-hiiri)).
 
 **Ruudukkomuoto.** Asettelun voi kirjoittaa myös alueiden nimistä koottuna ruudukkona, kun merkkipiirros on hankala. Tämä tekee saman asettelun kuin esimerkki yllä:
 
@@ -270,7 +270,7 @@ legend:
 - **Kirjaimelliset merkit.** Piirroksen merkki, jota legendi ei mainitse, on osa kuvaa ja piirretään sellaisenaan. Yllä `(`, `)` ja `/` ovat kuvaa. Legendin merkit kannattaa siksi valita niin, ettei kuva käytä niitä.
 - **Kenttälajit.**
   - `text AVAIN` näyttää tekstiavaimen valitulla kielellä, joten piirrokseen ei kirjoiteta käännettäviä sanoja. Avaimen paikkamerkit annetaan kuten listavalikon `row`-rivillä.
-  - `value LAUSEKE` näyttää kyselylausekkeen arvon. Nimiarvo näkyy tekstinä (luku [10](10-tekstit.md)).
+  - `value LAUSEKE` näyttää kyselylausekkeen arvon. Nimiarvo näkyy tekstinä (luku [10](10-tekstit.md)). Lista tai kokoelma näkyy monirivisessä kentässä jäsen riviä kohden ja yksirivisessä pilkuin eroteltuna, joten esimerkiksi näkyvien asioiden selite on yksi kenttä.
   - `param NIMI` näyttää otsikon parametrin arvon sellaisenaan. Se on lyhyt muoto lausekkeelle `value NIMI`, ja lataus tarkistaa, että nimi on otsikon parametri.
 - **Tasaus.** Kentän perään kirjoitetaan `left` (oletus), `right` tai `center`. Mahtumaton teksti katkaistaan merkillä `…`.
 - **Parametrit.** Otsikko voi saada parametreja RogueScriptin muodossa kuten listavalikko (`panel GRAVE(who: text, cause: name, gold: number)`). Asettelussa parametrit annetaan alueen legendissä (luku [11.1](#111-asettelu)), ja modaalisena paneeli avataan logiikasta tai valikosta muodolla `open PANEELI(…)`.

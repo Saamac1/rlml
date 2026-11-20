@@ -305,3 +305,36 @@ fn follow_ai_lets_the_ai_choose_the_steps() {
     assert!((a.0 - b.0).abs() <= 2, "FOLLOWER keeps up, a step behind after the leader's move: {a:?} {b:?}");
     assert!(b.0 > 2, "the follower went east: {b:?}");
 }
+
+/// The corridor with a crate in seat 1's row at x 6.
+fn with_crate(fields: &str) -> MemFiles {
+    let src = CORRIDOR
+        .replace("FIELDS", fields)
+        .replace("#A.................#", "#A....C............#")
+        .replace("- . FLOOR\n", "- . FLOOR\n- C FLOOR with CRATE\n")
+        .replace("entity RAT\n", "entity CRATE\n- blocks move\n\nentity RAT\n")
+        .replace("ai STILL:", "query AT_X3(who: entity, p: pos) -> bool:\n    return p.x == 3\n\nai STILL:");
+    files(&src)
+}
+
+#[test]
+fn travel_to_a_blocking_thing_ends_with_a_step_into_it() {
+    let m = model(&with_crate(""));
+    let mut r = start(&m);
+    explored(&mut r);
+    assert!(r.travel_to(1, cell(6, 1)).unwrap(), "a thing's cell is a goal (M 8.1)");
+    let stops = drive(&mut r, 20);
+    // the step into the crate is the walk's bump; STD.MOVE fails on it
+    assert_eq!(stops, [(1, Stop::Failed)]);
+    assert_eq!(at(&r, 1), (5, 1), "next to the crate, in the row it walked");
+}
+
+#[test]
+fn walk_avoid_keeps_the_route_off_cells() {
+    let m = model(&with_crate("- walk_avoid AT_X3"));
+    let mut r = start(&m);
+    explored(&mut r);
+    assert!(!r.travel_to(1, cell(5, 1)).unwrap(), "both cells at x 3 are avoided: no route");
+    assert!(r.travel_to(1, cell(3, 1)).unwrap(), "the goal itself may be avoided");
+    assert_eq!(drive(&mut r, 10), [(1, Stop::Arrived)]);
+}

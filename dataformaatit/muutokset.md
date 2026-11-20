@@ -4,6 +4,12 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 20.11.2026 (klikkaus kohteeseen):** `game`-lohkon kenttä `walk_avoid KYSELY` pitää klikkausmatkan reitin pois ruuduista, esimerkiksi uloskäynneiltä (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)). Kartta-alueen `cursor TYYLI` on `underline`, `reverse`, `bold` tai `bg VÄRI`, ja se merkitsee myös hiiren osoittimen ruudun (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)). Moottorin käytös on moottoridokumentin luvussa [8.1](../moottori/08-syote.md#81-hiiri).
+
+**Muutokset 20.11.2026 (tilen merkki tekstissä):** paikkamerkki `{#TILE}` näyttää tilen merkin, paneelissa tyylin värein (luku [10](10-tekstit.md)). Moottorin käytös on moottoridokumentin luvuissa [7.3](../moottori/07-esitys.md#73-tekstit) ja [7.7](../moottori/07-esitys.md#77-paneelit).
+
+**Muutokset 20.11.2026 (paneelin lista):** paneelin `value`-kenttä näyttää listan tai kokoelman monirivisessä kentässä jäsen riviä kohden ja yksirivisessä pilkuin eroteltuna (luku [11.5](11-kayttoliittyman-data.md#115-paneelit)). Moottorin käytös on moottoridokumentin luvussa [7.7](../moottori/07-esitys.md#77-paneelit).
+
 **Muutokset 18.11.2026 (atlaksen lähialue):** haut ja aistit ulottuvat yhden lehtirajan yli, ja lehden on oltava vähintään suurimman säteen kokoinen (luku [8.12](08-kartat-ja-prefabit.md#812-atlas-karttalehdet); moottoridokumentti, luku [6.10](../moottori/06-ajo.md#610-atlas)).
 
 **Muutokset 18.11.2026 (atlas):** iso maailma karttalehtinä: `atlas NIMI sheet LxK grid SxR [fill TILE]`, lehdet karttoina `NIMI.<sarake><rivi>` (kirjain on sarake, numero rivi), lehtien perimä legendi, muuttujat ja alueet, atlaksen alueet atlaksen koordinaateissa sekä puuttuvat lehdet (luku [8.12](08-kartat-ja-prefabit.md#812-atlas-karttalehdet)). Tekstiavaimet `<ATLAS>.NAME` ja `<ATLAS>.<ALUE>.NAME` (luku [10](10-tekstit.md)), otsikkorivi (luku [14](14-osiot-ja-otsikkorivit.md)) ja avoin kysymys lehtirajan yli ulottuvista hauista (luku [13](13-avoimet-kysymykset.md)). Reunan ylitys on moottoridokumentin luvussa [6.10](../moottori/06-ajo.md#610-atlas). Muoto kokeiltiin ensin karttageneraattorissa.
