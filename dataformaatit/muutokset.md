@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 20.11.2026 (moottorin valikon tekstit):** moottorin valikon kohtien tekstiavaimet `ENGINE.NEW_GAME` ja `ENGINE.EXIT` (luku [10](10-tekstit.md)).
+
 **Muutokset 20.11.2026 (klikkaus kohteeseen):** `game`-lohkon kenttä `walk_avoid KYSELY` pitää klikkausmatkan reitin pois ruuduista, esimerkiksi uloskäynneiltä (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)). Kartta-alueen `cursor TYYLI` on `underline`, `reverse`, `bold` tai `bg VÄRI`, ja se merkitsee myös hiiren osoittimen ruudun (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)). Moottorin käytös on moottoridokumentin luvussa [8.1](../moottori/08-syote.md#81-hiiri).
 
 **Muutokset 20.11.2026 (tilen merkki tekstissä):** paikkamerkki `{#TILE}` näyttää tilen merkin, paneelissa tyylin värein (luku [10](10-tekstit.md)). Moottorin käytös on moottoridokumentin luvuissa [7.3](../moottori/07-esitys.md#73-tekstit) ja [7.7](../moottori/07-esitys.md#77-paneelit).

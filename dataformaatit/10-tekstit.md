@@ -30,6 +30,7 @@ Avaimet tulevat määrittelyistä:
 | `<VALIKKO>.ROW`, `<VALIKKO>.EMPTY` | listavalikon rivi ja tyhjä lista |
 | `<KOHTAUS>.<KOHTA>` | dialogin valinta (RogueScript, luku [9.7](../roguescript/09-kohtaukset-ja-aikajanat.md#97-dialogit)) |
 | `<KOMENTO>.SENTENCE`, `<KOMENTO>.NO_TARGET` | verbin lauserivi, paikkamerkkeinä komennon parametrit, ja kelpaamattoman kohteen ilmoitus (luku [11.2](11-kayttoliittyman-data.md#112-valikot)) |
+| `ENGINE.NEW_GAME`, `ENGINE.EXIT` | moottorin valikko, kun pelillä ei ole omaa alkuvalikkoa (moottoridokumentti, luku [8](../moottori/08-syote.md)) |
 | `<LOKI>.MORE` | lokin sivutuksen kehote (luku [11.4](11-kayttoliittyman-data.md#114-viestit-ja-loki)) |
 | `MESSAGE.*` tai muu viestin avain | viesti (luku [11.4](11-kayttoliittyman-data.md#114-viestit-ja-loki)) |
 | `<KARTTA>.NAME` | kartan näkyvä nimi (luku [8.1](08-kartat-ja-prefabit.md#81-karttatiedosto)) |
