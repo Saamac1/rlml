@@ -116,8 +116,8 @@ fn fitted(line: &[Cell], width: usize, align: Align) -> Vec<Cell> {
 }
 
 /// Draws panel `b` into `r`; `call` is the area's source as written, with
-/// its arguments (`STATS(player)`).
-pub fn draw(frame: &mut Frame, w: &mut World, lang: &str, b: &RawBlock, call: &str, r: Rect) {
+/// its arguments (`STATS(player)`); `truecolor` as for `draw::rgb`.
+pub fn draw(frame: &mut Frame, w: &mut World, lang: &str, b: &RawBlock, call: &str, r: Rect, truecolor: bool) {
     let fields = fields(b);
     let names: Vec<String> = fields.iter().map(|f| f.ch.to_string()).collect();
     let refs: Vec<&str> = names.iter().map(String::as_str).collect();
@@ -173,7 +173,7 @@ pub fn draw(frame: &mut Frame, w: &mut World, lang: &str, b: &RawBlock, call: &s
             for (x, (ch, look)) in fitted(line, width, f.align).into_iter().enumerate() {
                 let (sx, sy) = (r.x + rect.x + x, r.y + rect.y + i);
                 match look {
-                    Some(look) => crate::draw::put_look(frame, sx, sy, &Look { ch, ..look }),
+                    Some(look) => crate::draw::put_look(frame, sx, sy, &Look { ch, ..look }, truecolor),
                     None => frame.put(sx, sy, ch, Role::Normal),
                 }
             }

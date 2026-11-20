@@ -62,10 +62,21 @@ fn the_layout_map_and_colors() {
     // the player sees its own room only: the wall at column 5 hides the rest
     assert_eq!(rows[0][10..30].trim_end(), "######");
     assert_eq!(rows[2].chars().nth(12), Some('@'), "{rows:#?}");
-    assert_eq!(fg(&frame, 10, 0), Some(rlml_tui::draw::rgb([0x7a, 0x7a, 0x8e])), "WALL fg STONE");
-    assert_eq!(bg(&frame, 10, 0), Some(rlml_tui::draw::rgb([0x1a, 0x1a, 0x22])), "WALL bg DARK");
-    assert_eq!(fg(&frame, 11, 1), Some(rlml_tui::draw::rgb([0x4a, 0x4a, 0x5a])), "FLOOR");
+    assert_eq!(fg(&frame, 10, 0), Some(rlml_tui::draw::rgb([0x7a, 0x7a, 0x8e], false)), "WALL fg STONE");
+    assert_eq!(bg(&frame, 10, 0), Some(rlml_tui::draw::rgb([0x1a, 0x1a, 0x22], false)), "WALL bg DARK");
+    assert_eq!(fg(&frame, 11, 1), Some(rlml_tui::draw::rgb([0x4a, 0x4a, 0x5a], false)), "FLOOR");
     assert!(rows[9..].iter().all(|r| r.trim().is_empty()), "an empty log");
+}
+
+#[test]
+fn truecolor_is_the_front_ends_choice() {
+    let f = mini();
+    let m = model(&f);
+    let mut s = Session::start(&m, 7).unwrap();
+    // without the flag the 256-color palette, with it 24 bits
+    assert!(matches!(fg(&View::default().draw(&mut s.r.w, "fi", 40, 12), 10, 0), Some(Color::Ansi(_))));
+    let mut view = View { truecolor: true, ..View::default() };
+    assert_eq!(fg(&view.draw(&mut s.r.w, "fi", 40, 12), 10, 0), Some(Color::Rgb(0x7a, 0x7a, 0x8e)));
 }
 
 #[test]
@@ -129,6 +140,6 @@ fn a_panel_fills_its_fields() {
     assert_eq!(side, ["[ Ohje ]", "A=yht. 4", "B=  3   ", "Ohje    ", "3       ", "@ sinä  "], "{rows:#?}");
     // a text key as a name shows `{#TILE}` as the tile's glyph in its
     // colors (D 10, M 7.7)
-    assert_eq!(fg(&frame, 32, 5), Some(rlml_tui::draw::rgb([255, 255, 255])));
+    assert_eq!(fg(&frame, 32, 5), Some(rlml_tui::draw::rgb([255, 255, 255], false)));
     assert_eq!(fg(&frame, 34, 5), None);
 }

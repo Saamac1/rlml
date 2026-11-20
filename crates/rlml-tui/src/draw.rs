@@ -80,15 +80,16 @@ pub struct View {
     pub docked_rects: BTreeMap<String, Rect>,
     /// The `sentence` area's text (M 8.1); the app sets it.
     pub sentence: Option<String>,
+    /// Colors as 24 bits, else the nearest of the 256-color palette; the
+    /// front end sets it (`rgb`).
+    pub truecolor: bool,
 }
 
-/// A style color for the terminal: 24-bit when the terminal says it takes
-/// it (`COLORTERM` is `truecolor` or `24bit`), else the nearest color of
-/// the 256-color palette, which every common terminal shows. macOS
-/// Terminal before version 26, for one, shows no 24-bit colors.
-pub fn rgb(c: Rgb) -> Color {
-    static TRUECOLOR: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    let truecolor = *TRUECOLOR.get_or_init(|| std::env::var("COLORTERM").is_ok_and(|v| v == "truecolor" || v == "24bit"));
+/// A style color: 24-bit when the front end takes it (a terminal whose
+/// `COLORTERM` is `truecolor` or `24bit`, a browser), else the nearest
+/// color of the 256-color palette, which every common terminal shows.
+/// macOS Terminal before version 26, for one, shows no 24-bit colors.
+pub fn rgb(c: Rgb, truecolor: bool) -> Color {
     if truecolor { Color::Rgb(c[0], c[1], c[2]) } else { Color::Ansi(ansi256(c)) }
 }
 
@@ -106,8 +107,8 @@ pub fn ansi256(c: Rgb) -> u8 {
     if dist([grey_v; 3]) < dist(cube) { 232 + grey as u8 } else { (16 + 36 * r + 6 * g + b) as u8 }
 }
 
-fn style_of(look: &Look) -> Style {
-    Style { fg: look.fg.map(rgb), bg: look.bg.map(rgb), ..Style::default() }
+fn style_of(look: &Look, tc: bool) -> Style {
+    Style { fg: look.fg.map(|c| rgb(c, tc)), bg: look.bg.map(|c| rgb(c, tc)), ..Style::default() }
 }
 
 /// The layout in use: `game.layout` or the only one (D 11.1).
@@ -154,7 +155,7 @@ fn areas(rows: &[RawItem]) -> (Vec<Area>, Dims) {
 }
 
 /// A panel style row for an area name: border and colors (D 9.3).
-fn panel_style(w: &World, name: &str) -> (Border, Style) {
+fn panel_style(w: &World, name: &str, tc: bool) -> (Border, Style) {
     let mut border = Border::None;
     let mut style = Style::default();
     for (_, item) in w.m.section_rows("panels") {
@@ -165,8 +166,8 @@ fn panel_style(w: &World, name: &str) -> (Border, Style) {
         }
         let words: Vec<&str> = row.tokens.iter().map(|t| t.text.as_str()).collect();
         let after = |k: &str| words.iter().position(|x| *x == k).and_then(|i| words.get(i + 1));
-        style.fg = after("fg").and_then(|c| w.color(c, ns)).map(rgb).or(style.fg);
-        style.bg = after("bg").and_then(|c| w.color(c, ns)).map(rgb).or(style.bg);
+        style.fg = after("fg").and_then(|c| w.color(c, ns)).map(|c| rgb(c, tc)).or(style.fg);
+        style.bg = after("bg").and_then(|c| w.color(c, ns)).map(|c| rgb(c, tc)).or(style.bg);
     }
     if let Some(b) = w.m.panel_border(name).and_then(Border::parse) {
         border = b;
@@ -175,7 +176,7 @@ fn panel_style(w: &World, name: &str) -> (Border, Style) {
 }
 
 /// A message key's color by the most specific `logs` row (D 11.4).
-fn log_color(w: &World, key: &str) -> Option<Color> {
+fn log_color(w: &World, key: &str, tc: bool) -> Option<Color> {
     let mut best: Option<(usize, Rgb)> = None;
     for (_, item) in w.m.section_rows("logs") {
         let (_, row) = item.marker();
@@ -192,7 +193,7 @@ fn log_color(w: &World, key: &str) -> Option<Color> {
             best = Some((row.key().len(), c));
         }
     }
-    best.map(|(_, c)| rgb(c))
+    best.map(|(_, c)| rgb(c, tc))
 }
 
 /// Paints a rectangle's cells with a style.
@@ -210,11 +211,11 @@ fn paint(frame: &mut Frame, r: Rect, style: Style) {
     }
 }
 
-pub(crate) fn put_look(frame: &mut Frame, x: usize, y: usize, look: &Look) {
+pub(crate) fn put_look(frame: &mut Frame, x: usize, y: usize, look: &Look, tc: bool) {
     frame.put(x, y, look.ch, Role::Normal);
     if x < frame.width && y < frame.height {
         let i = y * frame.width + x;
-        frame.cells[i].style = Some(style_of(look));
+        frame.cells[i].style = Some(style_of(look, tc));
     }
 }
 
@@ -270,6 +271,7 @@ impl View {
     /// Draws the game into a frame of the window's size.
     pub fn draw(&mut self, world: &mut World, lang: &str, width: usize, height: usize) -> Frame {
         let mut frame = Frame::new(width, height);
+        let tc = self.truecolor;
         // set again when the map is drawn: a too small window has none
         self.map_rect = None;
         self.docked_rects.clear();
@@ -288,7 +290,7 @@ impl View {
                             let name = a.source.split('(').next().unwrap_or("");
                             if let Some(pb) = crate::panel::block(world, name) {
                                 let (pw, ph) = crate::panel::size(pb);
-                                let edge = if panel_style(world, name).0 != Border::None { 2 } else { 0 };
+                                let edge = if panel_style(world, name, self.truecolor).0 != Border::None { 2 } else { 0 };
                                 content.insert(a.ch, AreaSize { min_width: pw + edge, min_height: ph + edge });
                             }
                         }
@@ -320,7 +322,7 @@ impl View {
                 _ => area.source.split('(').next().unwrap_or("").to_string(),
             };
             frame.set_area(vec![name.clone()]);
-            let (mut border, style) = panel_style(world, &name);
+            let (mut border, style) = panel_style(world, &name, self.truecolor);
             // a written cell size is the map's view (M 7.1): the area may be
             // larger, since the last track takes the spare room (D 11.1), so
             // the map area is cut to it once, before its paint and border,
@@ -362,9 +364,9 @@ impl View {
                 }
                 _ => {
                     if world.m.resolve(None, &name).is_ok_and(|d| d.kind == Kind::Log) {
-                        draw_log(&mut frame, world, lang, &name, inner);
+                        draw_log(&mut frame, world, lang, &name, inner, tc);
                     } else if let Some(pb) = crate::panel::block(world, &name) {
-                        world.holding_view(|w| crate::panel::draw(&mut frame, w, lang, pb, &area.source, inner));
+                        world.holding_view(|w| crate::panel::draw(&mut frame, w, lang, pb, &area.source, inner, tc));
                     }
                 }
             }
@@ -384,7 +386,7 @@ impl View {
             for sx in 0..r.w {
                 let (mx, my) = (x0 + sx as i32, y0 + sy as i32);
                 if let Some(look) = (my >= 0 && mx >= 0).then(|| cells.get(my as usize).and_then(|row| row.get(mx as usize))).flatten() {
-                    put_look(frame, r.x + sx, r.y + sy, look);
+                    put_look(frame, r.x + sx, r.y + sy, look, self.truecolor);
                 }
             }
         }
@@ -399,7 +401,7 @@ impl View {
                     match cursor.first().map(String::as_str) {
                         Some("reverse") => style.attrs.reverse = true,
                         Some("bold") => style.attrs.bold = true,
-                        Some("bg") => style.bg = cursor.get(1).and_then(|c| world.color(c, None)).map(rgb).or(style.bg),
+                        Some("bg") => style.bg = cursor.get(1).and_then(|c| world.color(c, None)).map(|c| rgb(c, self.truecolor)).or(style.bg),
                         _ => style.attrs.underline = true,
                     }
                     cell.style = Some(style);
@@ -451,14 +453,14 @@ pub fn docked_at(view: &View, x: usize, y: usize) -> Option<(String, usize)> {
 
 /// The log's newest messages that fit, wrapped at word gaps, each in its
 /// `logs` color (D 11.4, M 7.4).
-fn draw_log(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect) {
+fn draw_log(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, tc: bool) {
     let history = world.m.defs.get(name).and_then(|d| d.block()).and_then(|b| b.arg_after("history")).and_then(|n| n.parse::<usize>().ok()).unwrap_or(usize::MAX);
     let selects = log_rows(world, name);
     let mut lines: Vec<(String, Option<Color>)> = Vec::new();
     let entries: Vec<_> = world.log.iter().filter(|l| selects.is_empty() || selects.iter().any(|s| l.key == *s || l.key.starts_with(&format!("{s}.")))).collect();
     for l in entries.iter().rev().take(history).rev() {
         let text = world.text(lang, &l.key, &l.args);
-        let color = log_color(world, &l.key);
+        let color = log_color(world, &l.key, tc);
         for part in wrap(&text, r.w.max(1)) {
             lines.push((part, color));
         }

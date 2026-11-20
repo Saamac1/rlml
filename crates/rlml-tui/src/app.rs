@@ -290,7 +290,7 @@ impl<'m> App<'m> {
         w.begin()?;
         self.r = Runner::new(w);
         self.seed = seed;
-        self.view = View::default();
+        self.view = View { truecolor: self.view.truecolor, ..View::default() };
         self.menus.clear();
         self.frames.clear();
         self.last_frame = None;

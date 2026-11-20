@@ -30,6 +30,7 @@ fn run(m: &Model, seed: u64, screen: &mut Screen<std::fs::File>) -> Result<(), S
     let io = |e: io::Error| e.to_string();
     let start = Instant::now();
     let mut app = App::new(m, seed, terminal_size())?;
+    app.view.truecolor = std::env::var("COLORTERM").is_ok_and(|v| v == "truecolor" || v == "24bit");
     // pads come from their own thread, as raw events (M 8.2)
     let pads = crate::pad::spawn();
     let mut pad_states: std::collections::BTreeMap<usize, crate::pad::PadState> = Default::default();
