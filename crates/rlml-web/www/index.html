@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RLML</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; }
+  #message {
+    position: fixed; inset: 0; margin: 0; padding: 16px; overflow: auto;
+    color: #c8c8c8; font: 14px/1.4 Menlo, Monaco, "DejaVu Sans Mono", Consolas, monospace;
+    white-space: pre-wrap;
+  }
+  #message.error { color: #ff7070; }
+  #message[hidden] { display: none; }
+  #stats {
+    position: fixed; right: 8px; bottom: 8px; padding: 4px 8px;
+    color: #c8c8c8; background: rgba(0, 0, 0, 0.7);
+    font: 12px/1.3 Menlo, Monaco, "DejaVu Sans Mono", Consolas, monospace;
+    white-space: pre; pointer-events: none;
+  }
+  #stats[hidden] { display: none; }
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<pre id="message">Ladataan…</pre>
+<pre id="stats" hidden></pre>
+<script type="module" src="main.js"></script>
+</body>
+</html>

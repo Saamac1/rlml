@@ -96,6 +96,44 @@ Selain antaa aina `true`.
   1 ja lokissa on samat rivit kuin `rlml run` samoilla näppäimillä.
   Mittaa `draw()`- ja `tick()`-ajat ja kirjaa ne tähän tiedostoon.
 
+Tulos (20.11.2026):
+
+- Ajo: `crates/rlml-web/build.sh ~/kapteeni-aaltola/roguelike` ja
+  `python3 -m http.server -d crates/rlml-web/www 8000`, sitten
+  <http://localhost:8000/> (`?seed=N`, `?stats` näyttää ajat kulmassa).
+  Tarvitsee `wasm-bindgen-cli`n samassa versiossa kuin `Cargo.toml`
+  (0.2.130). `web-sys`iä ei tarvittu: canvas, fetch ja ajastimet ovat
+  JavaScriptissä, wasm saa paketin `JSON.parse`n oliona.
+- Rust-puoli on natiivisti testattava (`keys`, `cells`, `bundle`,
+  `game`); vain `wasm.rs` on `cfg(target_arch = "wasm32")`.
+  Wasm-riippuvuudet ovat vain wasm-kohteelle, joten
+  `cargo test --workspace` ei käännä niitä.
+- Pääsäie lataa saman wasm-moduulin vain `key_binding`ia varten, jotta
+  `preventDefault` osuu synkronisesti pelin sitomiin näppäimiin (worker
+  lähettää niiden nimet latauksen jälkeen). Cmd-yhdistelmät jäävät
+  selaimelle.
+- Loki: `jsc/smoke.sh` ajaa oikean wasm-moduulin ja `game.json`in
+  workerin kutsuilla macOS:n JavaScriptCoressa. Kaikki neljä
+  `testit/*.keys`-läpipeluuta ja pikasiirto 1 antavat rivilleen saman
+  lokin kuin `rlml run`. Selaimessa pelaamista en ole voinut kokeilla.
+- Ajat, 100×34 solua, wasm JavaScriptCoressa (release), ms:
+
+  | läpipeluu            | draw ka | p95 | max | input ka | max | tick |
+  |----------------------|--------:|----:|----:|---------:|----:|-----:|
+  | lapipeluu            | 23 | 33 | 38 | 1,7 |  8 | < 0,01 |
+  | kotimatka            | 27 | 43 | 70 | 1,7 |  8 | < 0,01 |
+  | kuoppa-ja-paineaalto | 14 | 16 | 27 | 2,2 | 26 | < 0,01 |
+  | maito-ei-riita       | 15 | 18 | 26 | 1,9 | 15 | < 0,01 |
+
+  `draw` = `App::draw()` ja muuttuneiden solujen koodaus; koodaus on
+  alle 1 % siitä (`examples/replay.rs` natiivisti: `draw` ka 29,8 ms,
+  pelkkä `App::draw()` 29,7 ms). `input` on näppäimet ja vuoro. Natiivi
+  release ei ole nopeampi kuin wasm. **Piirto on pullonkaula:** 15–30
+  ms kuvaa kohden (enimmillään 70 ms) näkyy viiveenä, kun kuvia tulee
+  peräkkäin (kävely, välikuvat). Suunnitelma arveli syyksi
+  paneelikyselyt joka kuvassa; sitä ei ole vielä varmistettu. Seuraava
+  askel on profiloida `App::draw()`.
+
 ### 5. Loput syötteestä
 
 - Hiiri: pikselit soluiksi, `mouse_press` ja `pointer_at`, liikkeet

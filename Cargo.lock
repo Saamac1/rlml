@@ -348,6 +348,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rlml-web"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "rlml-app",
+ "rlml-core",
+ "termplate-core",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "rustix"
 version = "0.38.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"

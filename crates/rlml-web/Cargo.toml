@@ -1,0 +1,21 @@
+[package]
+name = "rlml-web"
+version = "0.1.0"
+edition = "2024"
+
+# RLML in a browser: the game in a Web Worker, cells on a canvas. Build
+# and serve with build.sh. The browser glue builds for wasm32 only, so
+# `cargo test --workspace` tests the rest natively.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rlml-app = { path = "../rlml-app" }
+rlml-core = { path = "../rlml-core" }
+# Termplate's frame, styles and keys (github.com/Saamac1/termplate)
+termplate-core = { git = "https://github.com/Saamac1/termplate", rev = "bebd8e356589ba6809732429b46c45d2da995a28" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# the same version as the wasm-bindgen CLI that build.sh runs
+wasm-bindgen = "=0.2.130"
+js-sys = "0.3"
