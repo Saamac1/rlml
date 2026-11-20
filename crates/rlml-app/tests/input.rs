@@ -5,7 +5,7 @@ use std::path::Path;
 use rlml_core::load::MemFiles;
 use rlml_core::model::Model;
 use rlml_core::rt::value::{CommandValue, Value};
-use rlml_tui::input::{Action, Effect, Input, Keys};
+use rlml_app::input::{Action, Effect, Input, Keys};
 use termplate_core::keys::{Binding, KeyCode, Mods, parse_binding};
 
 fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<String, String>) {
@@ -219,13 +219,13 @@ fn ryhma() -> MemFiles {
     f
 }
 
-fn pad(s: &str) -> rlml_tui::input::PadPress {
-    rlml_tui::input::PadPress::parse(s).unwrap()
+fn pad(s: &str) -> rlml_app::input::PadPress {
+    rlml_app::input::PadPress::parse(s).unwrap()
 }
 
 #[test]
 fn keyboard_parts_and_pads() {
-    use rlml_tui::input::{Device, Press};
+    use rlml_app::input::{Device, Press};
     let m = model(&ryhma());
     let keys = Keys::from_model(&m);
     let game = stack(&["GAME"]);
@@ -247,14 +247,14 @@ fn keyboard_parts_and_pads() {
     assert_eq!(on(Device::Pad(0), Press::Key(key("w"))), None, "a pad presses no keys");
     assert_eq!(pad("rb+lb+start"), pad("lb+rb+start"), "a chord's held buttons are sorted");
     assert_ne!(pad("start+lb"), pad("lb+start"), "the last button is the one pressed");
-    assert!(rlml_tui::input::PadPress::parse("lb+jump").is_err());
+    assert!(rlml_app::input::PadPress::parse("lb+jump").is_err());
     assert_eq!(keys.deadzone(&game), 0.4, "`pad GAME deadzone 40%`");
     assert_eq!(keys.deadzone(&stack(&["MENU"])), 0.5, "the default");
 }
 
 #[test]
 fn pad_events_make_presses() {
-    use rlml_tui::pad::{PadState, Raw};
+    use rlml_app::pad::{PadState, Raw};
     let mut s = PadState::default();
     let b = |name: &str, down| Raw::Button { name: name.into(), down };
     let ax = |name: &str, value| Raw::Axis { name: name.into(), value };

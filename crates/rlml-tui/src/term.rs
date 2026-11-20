@@ -5,13 +5,13 @@
 use std::io;
 use std::time::{Duration, Instant};
 
+use rlml_app::app::App;
+use rlml_app::events::{Event, Feed};
 use rlml_core::model::Model;
 use termplate_core::engine::InputEvent;
 use termplate_core::keys::Binding;
 use termplate_core::style::StyleSheet;
 use termplate_term::{Screen, TtyGuard, map_event, no_color_from_env, terminal_size};
-
-use crate::app::App;
 
 /// Plays a new game in the terminal until the player quits. A runtime
 /// error ends the game and is returned after the terminal is restored.
@@ -33,7 +33,7 @@ fn run(m: &Model, seed: u64, screen: &mut Screen<std::fs::File>) -> Result<(), S
     app.view.truecolor = std::env::var("COLORTERM").is_ok_and(|v| v == "truecolor" || v == "24bit");
     // pads come from their own thread, as raw events (M 8.2)
     let pads = crate::pad::spawn();
-    let mut pad_states: std::collections::BTreeMap<usize, crate::pad::PadState> = Default::default();
+    let mut feed = Feed::default();
     loop {
         // in-between frames first, each shown `frame` long (M 7.2)
         for f in std::mem::take(&mut app.frames) {
@@ -44,60 +44,30 @@ fn run(m: &Model, seed: u64, screen: &mut Screen<std::fs::File>) -> Result<(), S
         if app.quit {
             return Ok(());
         }
-        // every event that is waiting goes before the next frame, and the
-        // pointer's moves count only at their last cell: a moving mouse
-        // sends dozens of moves a second, and a frame for each would queue
-        // the keys behind them
+        // every event that is waiting goes before the next frame
+        let mut events = Vec::new();
         if crossterm::event::poll(app.wait()).map_err(io)? {
-            let mut moved = None;
             loop {
-                match map_event(crossterm::event::read().map_err(io)?) {
-                    Some(InputEvent::MouseMove { x, y }) => moved = Some((x as usize, y as usize)),
-                    Some(ev) => {
-                        if let Some((x, y)) = moved.take() {
-                            app.pointer_at(x, y);
-                        }
-                        handle(&mut app, screen, ev, start.elapsed())?;
-                    }
-                    None => {}
-                }
-                if app.quit || !crossterm::event::poll(Duration::ZERO).map_err(io)? {
+                events.extend(map_event(crossterm::event::read().map_err(io)?).map(event));
+                if !crossterm::event::poll(Duration::ZERO).map_err(io)? {
                     break;
                 }
             }
-            if let Some((x, y)) = moved {
-                app.pointer_at(x, y);
-            }
         }
-        while let Ok((id, raw)) = pads.try_recv() {
-            match raw {
-                crate::pad::Raw::Connected => app.pad_connected(id),
-                crate::pad::Raw::Disconnected => {
-                    pad_states.remove(&id);
-                    app.pad_disconnected(id);
-                }
-                raw => {
-                    let deadzone = app.input.keys.deadzone(&app.contexts());
-                    if let Some(p) = pad_states.entry(id).or_default().event(&raw, deadzone) {
-                        app.pad(id, p, start.elapsed())?;
-                    }
-                }
-            }
+        events.extend(pads.try_iter().map(|(id, raw)| Event::Pad(id, raw)));
+        if feed.apply(&mut app, events, start.elapsed())? {
+            screen.invalidate();
         }
         app.tick(start.elapsed())?;
     }
 }
 
-/// One input event other than a pointer move.
-fn handle(app: &mut App<'_>, screen: &mut Screen<std::fs::File>, ev: InputEvent, now: Duration) -> Result<(), String> {
+/// A terminal event in the app's terms.
+fn event(ev: InputEvent) -> Event {
     match ev {
-        InputEvent::Key(code, mods) => app.key(Binding::key(code, mods), now)?,
-        InputEvent::Mouse { binding, x, y } => app.mouse_press(binding, x as usize, y as usize, now)?,
-        InputEvent::MouseMove { x, y } => app.pointer_at(x as usize, y as usize),
-        InputEvent::Resize(w, h) => {
-            app.resize(w, h);
-            screen.invalidate();
-        }
+        InputEvent::Key(code, mods) => Event::Key(Binding::key(code, mods)),
+        InputEvent::Mouse { binding, x, y } => Event::Press { binding, x, y },
+        InputEvent::MouseMove { x, y } => Event::Move { x, y },
+        InputEvent::Resize(w, h) => Event::Resize(w, h),
     }
-    Ok(())
 }

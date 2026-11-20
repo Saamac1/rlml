@@ -320,6 +320,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rlml-app"
+version = "0.1.0"
+dependencies = [
+ "rlml-core",
+ "termplate-core",
+]
+
+[[package]]
 name = "rlml-core"
 version = "0.1.0"
 dependencies = [
@@ -333,6 +341,7 @@ version = "0.1.0"
 dependencies = [
  "crossterm",
  "gilrs",
+ "rlml-app",
  "rlml-core",
  "termplate-core",
  "termplate-term",

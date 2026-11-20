@@ -7,7 +7,7 @@ use rlml_core::load::MemFiles;
 use rlml_core::model::Model;
 use rlml_core::rt::eval::{BodyKind, Env};
 use rlml_core::rt::run::Status;
-use rlml_tui::app::App;
+use rlml_app::app::App;
 use termplate_core::keys::{Binding, KeyCode, Mods, parse_binding};
 
 fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<String, String>) {
@@ -280,7 +280,7 @@ fn one_member_has_no_turn_marker() {
 
 #[test]
 fn colors_fit_the_256_color_palette() {
-    use rlml_tui::draw::ansi256;
+    use rlml_app::draw::ansi256;
     assert_eq!(ansi256([0, 0, 0]), 16);
     assert_eq!(ansi256([255, 255, 255]), 231);
     assert_eq!(ansi256([0xf0, 0xd0, 0x40]), 221, "the example's seat 1 yellow");
@@ -338,8 +338,8 @@ fn the_map_shows_its_written_size_in_a_wide_window() {
         let p = app.r.w.s.at(app.r.w.s.player.unwrap()).unwrap();
         let (sx, sy) = ((p.x - cx) as usize, (p.y - cy) as usize);
         assert_eq!(rows[sy].chars().nth(sx), Some('@'), "{rows:#?}");
-        assert_eq!(rlml_tui::draw::cell_at(&app.view, 0, sx, sy), Some(p));
-        assert_eq!(rlml_tui::draw::cell_at(&app.view, 0, 30, sy), None, "beside the map is no map cell");
+        assert_eq!(rlml_app::draw::cell_at(&app.view, 0, sx, sy), Some(p));
+        assert_eq!(rlml_app::draw::cell_at(&app.view, 0, 30, sy), None, "beside the map is no map cell");
     }
     // a window too small for the layout draws no map, and keeps no rect
     let mut app = App::new(&m, 7, (80, 24)).unwrap();
@@ -351,7 +351,7 @@ fn the_map_shows_its_written_size_in_a_wide_window() {
 
 #[test]
 fn each_seat_plays_from_its_own_device() {
-    use rlml_tui::input::{Device, PadPress};
+    use rlml_app::input::{Device, PadPress};
     let f = ryhma();
     let m = model(&f);
     let mut app = App::new(&m, 7, (80, 24)).unwrap();
@@ -376,7 +376,7 @@ fn each_seat_plays_from_its_own_device() {
 
 #[test]
 fn a_pad_takes_the_first_seat_without_a_device() {
-    use rlml_tui::input::{Device, PadPress};
+    use rlml_app::input::{Device, PadPress};
     let f = {
         let mut f = ryhma();
         let ui = f.game.get_mut("ui/main.rlml").unwrap();
@@ -763,10 +763,10 @@ fn the_verbs_menu_from_the_keys() {
     press(&mut app, "j k enter");
     assert!(app.focus.is_none(), "choosing gives the keys back");
     // from the keys, EXAMINE asks its target in a list (M 8)
-    assert!(app.menus.layers.last().is_some_and(|l| l.menu.full == rlml_tui::app::ASK_MENU), "the list of what to examine");
+    assert!(app.menus.layers.last().is_some_and(|l| l.menu.full == rlml_app::app::ASK_MENU), "the list of what to examine");
     let (rob, _) = robin(&app);
     let i = match &app.asking.as_ref().unwrap().ui {
-        rlml_tui::app::AskUi::List { choices, .. } => choices.iter().position(|v| *v == rlml_core::rt::value::Value::Entity(rob)).unwrap(),
+        rlml_app::app::AskUi::List { choices, .. } => choices.iter().position(|v| *v == rlml_core::rt::value::Value::Entity(rob)).unwrap(),
         other => panic!("{other:?}"),
     };
     let letter = (b'a' + i as u8) as char;
@@ -794,7 +794,7 @@ fn the_verb_belongs_to_the_turn() {
 // ---- the verb coin and the mouse in menus (M 8.1) ----
 
 fn coin_open(app: &App) -> bool {
-    app.menus.layers.last().is_some_and(|l| l.menu.full == rlml_tui::app::COIN_MENU)
+    app.menus.layers.last().is_some_and(|l| l.menu.full == rlml_app::app::COIN_MENU)
 }
 
 #[test]
@@ -886,16 +886,16 @@ fn ryhma_asking(targeting: &str) -> MemFiles {
 
 fn asked(app: &App) -> Option<String> {
     app.asking.as_ref().map(|a| match &a.ui {
-        rlml_tui::app::AskUi::None => "none".to_string(),
-        rlml_tui::app::AskUi::List { .. } => "list".to_string(),
-        rlml_tui::app::AskUi::Aim { .. } => "aim".to_string(),
-        rlml_tui::app::AskUi::Direction { .. } => "direction".to_string(),
+        rlml_app::app::AskUi::None => "none".to_string(),
+        rlml_app::app::AskUi::List { .. } => "list".to_string(),
+        rlml_app::app::AskUi::Aim { .. } => "aim".to_string(),
+        rlml_app::app::AskUi::Direction { .. } => "direction".to_string(),
     })
 }
 
 fn aim_at(app: &App) -> Option<(i32, i32)> {
     match app.asking.as_ref().map(|a| &a.ui) {
-        Some(rlml_tui::app::AskUi::Aim { pos, .. }) => Some((pos.x, pos.y)),
+        Some(rlml_app::app::AskUi::Aim { pos, .. }) => Some((pos.x, pos.y)),
         _ => None,
     }
 }
@@ -975,4 +975,25 @@ fn the_mouse_aims_and_gives_directions() {
     press(&mut app, "o");
     app.mouse_press(click(), sx, sy, ms(30)).unwrap();
     assert_eq!((asked(&app), examined(&app)), (None, 2), "a click gives the direction towards it");
+}
+
+#[test]
+fn a_batch_of_events_cuts_pointer_moves_to_their_last_cell() {
+    use rlml_app::events::{Event, Feed};
+    let f = mini_with(|_| {});
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    let mut feed = Feed::default();
+    let x0 = player_x(&app);
+    let moves = (0..30).map(|i| Event::Move { x: i % 20, y: 3 });
+    let resized = feed.apply(&mut app, moves.chain([Event::Key(key("l")), Event::Move { x: 5, y: 6 }, Event::Resize(60, 20)]), ms(10)).unwrap();
+    assert!(resized);
+    assert_eq!(player_x(&app), x0 + 1, "the key between the moves goes in its place");
+    assert_eq!(app.pointer, Some((5, 6)), "the last move before the resize");
+    assert_eq!(app.draw().width, 60);
+    // the batch ends where the app quits
+    let quit = Event::Key(Binding::key(KeyCode::Char('c'), Mods { ctrl: true, ..Mods::default() }));
+    assert!(!feed.apply(&mut app, [quit, Event::Resize(30, 10)], ms(20)).unwrap());
+    assert!(app.quit);
+    assert_eq!(app.draw().width, 60);
 }
