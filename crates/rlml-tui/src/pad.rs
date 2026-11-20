@@ -17,55 +17,11 @@ pub fn spawn() -> std::sync::mpsc::Receiver<(usize, Raw)> {
         }
         loop {
             let Some(ev) = gilrs.next_event_blocking(Some(std::time::Duration::from_millis(100))) else { continue };
-            let Some(raw) = raw(ev.event) else { continue };
+            let Some(raw) = rlml_app::pad::from_gilrs(ev.event) else { continue };
             if tx.send((usize::from(ev.id), raw)).is_err() {
                 return;
             }
         }
     });
     rx
-}
-
-fn raw(ev: gilrs::EventType) -> Option<Raw> {
-    use gilrs::{Axis, Button, EventType};
-    let button = |b: Button| {
-        Some(match b {
-            Button::South => "south",
-            Button::East => "east",
-            Button::West => "west",
-            Button::North => "north",
-            Button::LeftTrigger => "lb",
-            Button::RightTrigger => "rb",
-            Button::LeftTrigger2 => "lt",
-            Button::RightTrigger2 => "rt",
-            Button::Start => "start",
-            Button::Select => "select",
-            Button::LeftThumb => "lstick",
-            Button::RightThumb => "rstick",
-            Button::DPadUp => "dpad.up",
-            Button::DPadDown => "dpad.down",
-            Button::DPadLeft => "dpad.left",
-            Button::DPadRight => "dpad.right",
-            _ => return None,
-        })
-    };
-    Some(match ev {
-        EventType::ButtonPressed(b, _) => Raw::Button { name: button(b)?.to_string(), down: true },
-        EventType::ButtonReleased(b, _) => Raw::Button { name: button(b)?.to_string(), down: false },
-        EventType::AxisChanged(a, value, _) => {
-            let name = match a {
-                Axis::LeftStickX => "lstick.x",
-                Axis::LeftStickY => "lstick.y",
-                Axis::RightStickX => "rstick.x",
-                Axis::RightStickY => "rstick.y",
-                Axis::DPadX => "dpad.x",
-                Axis::DPadY => "dpad.y",
-                _ => return None,
-            };
-            Raw::Axis { name: name.to_string(), value }
-        }
-        EventType::Connected => Raw::Connected,
-        EventType::Disconnected => Raw::Disconnected,
-        _ => return None,
-    })
 }

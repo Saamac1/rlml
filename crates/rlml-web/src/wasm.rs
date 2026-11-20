@@ -1,5 +1,6 @@
-//! The JavaScript side's calls (`wasm-bindgen`): the page maps its keys
-//! with `key_binding`, and the worker plays a `WebGame`.
+//! The JavaScript side's calls (`wasm-bindgen`): the page names its keys
+//! and mouse buttons and reads the pads (`Pads`), and the worker plays a
+//! `WebGame`.
 
 use std::time::Duration;
 
@@ -15,6 +16,56 @@ use crate::game::Game;
 #[wasm_bindgen]
 pub fn key_binding(key: &str, code: &str, ctrl: bool, alt: bool, shift: bool) -> Option<String> {
     crate::keys::binding(key, code, ctrl, alt, shift).map(|b| b.name())
+}
+
+/// The binding name of a `mousedown` (`click`, `shift+rclick`), or
+/// `undefined` for a button without one.
+#[wasm_bindgen]
+pub fn mouse_binding(button: i32, ctrl: bool, alt: bool, shift: bool) -> Option<String> {
+    crate::keys::mouse(button, ctrl, alt, shift).map(|b| b.name())
+}
+
+/// The binding name of one wheel step (`wheel.up`, `wheel.down`).
+#[wasm_bindgen]
+pub fn wheel_binding(up: bool, ctrl: bool, alt: bool, shift: bool) -> String {
+    crate::keys::wheel(up, ctrl, alt, shift).name()
+}
+
+/// The pads on the page, through gilrs and the Gamepad API (`pads.rs`).
+/// Without pad support the page plays from the keyboard and mouse.
+#[wasm_bindgen]
+pub struct Pads {
+    gilrs: Option<gilrs::Gilrs>,
+    first: Vec<String>,
+}
+
+#[wasm_bindgen]
+impl Pads {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Pads {
+        let gilrs = gilrs::Gilrs::new().ok();
+        let first = gilrs.iter().flat_map(|g| g.gamepads()).map(|(id, _)| crate::pads::encode(usize::from(id), &rlml_app::pad::Raw::Connected)).collect();
+        Pads { gilrs, first }
+    }
+
+    /// The raw events since the last poll, as words; once a frame.
+    pub fn poll(&mut self) -> Vec<String> {
+        let mut out = std::mem::take(&mut self.first);
+        if let Some(g) = &mut self.gilrs {
+            while let Some(ev) = g.next_event() {
+                if let Some(raw) = rlml_app::pad::from_gilrs(ev.event) {
+                    out.push(crate::pads::encode(usize::from(ev.id), &raw));
+                }
+            }
+        }
+        out
+    }
+}
+
+impl Default for Pads {
+    fn default() -> Self {
+        Pads::new()
+    }
 }
 
 fn ms(t: f64) -> Duration {
@@ -68,6 +119,30 @@ impl WebGame {
     pub fn key(&mut self, name: &str) {
         if let Ok(b) = parse_binding(name) {
             self.g.push(Event::Key(b));
+        }
+    }
+
+    /// A mouse button or wheel by its binding name at cell (x, y).
+    pub fn press(&mut self, name: &str, x: usize, y: usize) {
+        if let Ok(binding) = parse_binding(name) {
+            self.g.push(Event::Press { binding, x, y });
+        }
+    }
+
+    /// The pointer moved to cell (x, y).
+    pub fn pointer(&mut self, x: usize, y: usize) {
+        self.g.push(Event::Move { x, y });
+    }
+
+    /// The window's new size in cells; the next frame is whole.
+    pub fn resize(&mut self, cols: usize, rows: usize) {
+        self.g.push(Event::Resize(cols, rows));
+    }
+
+    /// A pad's raw event as `Pads::poll` gives it.
+    pub fn pad(&mut self, words: &str) {
+        if let Some((id, raw)) = crate::pads::decode(words) {
+            self.g.push(Event::Pad(id, raw));
         }
     }
 

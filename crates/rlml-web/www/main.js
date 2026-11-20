@@ -1,11 +1,13 @@
 // The page: the game runs in a worker (worker.js), and the page draws
-// the cells it sends on a canvas, as a terminal would, and sends it the
-// keys by their binding names (`k`, `ctrl+q`, `space`).
+// the cells it sends on a canvas, as a terminal would. It sends the
+// worker the keys and mouse buttons by their binding names (`k`,
+// `ctrl+q`, `click`), the pointer's cell, the window's size in cells and
+// the pads' raw events, which only the page can read.
 //
 // URL parameters: `seed=N` (default 1, as `rlml run`), `stats` shows the
 // times of draw and the steps in the corner.
 
-import init, { key_binding } from './pkg/rlml_web.js';
+import init, { key_binding, mouse_binding, wheel_binding, Pads } from './pkg/rlml_web.js';
 
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed') ?? 1) >>> 0;
@@ -19,6 +21,8 @@ const LINE = 1.2;
 const FAMILY = 'Menlo, Monaco, "SF Mono", "DejaVu Sans Mono", Consolas, "Liberation Mono", monospace';
 // cells.rs: the flags over the character's 21 bits
 const CHAR = (1 << 21) - 1, BOLD = 1 << 21, DIM = 1 << 22, ITALIC = 1 << 23, UNDERLINE = 1 << 24, WIDE = 1 << 25;
+// one wheel step: a line, or this many pixels of a trackpad's scrolling
+const WHEEL_PX = 40;
 
 function show(text, error) {
   message.textContent = text;
@@ -26,17 +30,24 @@ function show(text, error) {
   message.hidden = false;
 }
 
-// cell size in device pixels, from the font's own measures
-const dpr = window.devicePixelRatio || 1;
-const fontPx = Math.round(FONT_PX * dpr);
+// cell size in device pixels, from the font's own measures; measured
+// again when the pixel ratio changes (zoom, another screen)
+let dpr, fontPx, cellW, cellH;
 function font(flags) {
   return `${flags & ITALIC ? 'italic ' : ''}${flags & BOLD ? 'bold ' : ''}${fontPx}px ${FAMILY}`;
 }
-ctx.font = font(0);
-const cellW = Math.ceil(ctx.measureText('M').width);
-const cellH = Math.ceil(fontPx * LINE);
-const cols = Math.max(20, Math.floor((window.innerWidth * dpr) / cellW));
-const rows = Math.max(10, Math.floor((window.innerHeight * dpr) / cellH));
+function measure() {
+  dpr = window.devicePixelRatio || 1;
+  fontPx = Math.round(FONT_PX * dpr);
+  ctx.font = font(0);
+  cellW = Math.ceil(ctx.measureText('M').width);
+  cellH = Math.ceil(fontPx * LINE);
+}
+function grid() {
+  return [Math.max(20, Math.floor((window.innerWidth * dpr) / cellW)), Math.max(10, Math.floor((window.innerHeight * dpr) / cellH))];
+}
+measure();
+let [cols, rows] = grid();
 
 function size(w, h) {
   canvas.width = w * cellW;
@@ -59,7 +70,7 @@ function hex(c) {
 // cells.rs: [width, height, full, then per cell: index, char | flags, fg, bg]
 function paint(buf) {
   const w = buf[0], h = buf[1];
-  if (canvas.width !== w * cellW || canvas.height !== h * cellH) size(w, h);
+  if (buf[2] || canvas.width !== w * cellW || canvas.height !== h * cellH) size(w, h);
   let lastFont = '';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -95,15 +106,93 @@ function statsText(s) {
 
 let bound = new Set();
 let worker = null;
+const send = (m) => worker && worker.postMessage(m);
 
+// keys
 addEventListener('keydown', (e) => {
   // the browser's own (cmd+r, cmd+w) and keys still being composed
   if (!worker || e.metaKey || e.isComposing) return;
   const name = key_binding(e.key, e.code, e.ctrlKey, e.altKey, e.shiftKey);
   if (name === undefined) return;
   if (bound.has(name)) e.preventDefault();
-  worker.postMessage({ t: 'key', name });
+  send({ t: 'key', name });
 });
+
+// the mouse: a pixel's cell on the canvas, or none outside it
+function cellAt(e) {
+  const r = canvas.getBoundingClientRect();
+  if (r.width === 0 || r.height === 0) return null;
+  const px = ((e.clientX - r.left) * canvas.width) / r.width;
+  const py = ((e.clientY - r.top) * canvas.height) / r.height;
+  const x = Math.floor(px / cellW), y = Math.floor(py / cellH);
+  const w = canvas.width / cellW, h = canvas.height / cellH;
+  return x >= 0 && y >= 0 && x < w && y < h ? [x, y] : null;
+}
+
+// the pointer's moves go only when its cell changes; the worker keeps the
+// last of those that came before a frame
+let pointed = null;
+addEventListener('mousemove', (e) => {
+  const c = cellAt(e);
+  if (!c || (pointed && pointed[0] === c[0] && pointed[1] === c[1])) return;
+  pointed = c;
+  send({ t: 'move', x: c[0], y: c[1] });
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  const c = cellAt(e);
+  const name = mouse_binding(e.button, e.ctrlKey, e.altKey, e.shiftKey);
+  if (!c || name === undefined) return;
+  // no text selection, no middle-button scrolling
+  e.preventDefault();
+  send({ t: 'press', name, x: c[0], y: c[1] });
+});
+// the right button is the game's
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+let wheelPx = 0;
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const c = cellAt(e);
+  if (!c) return;
+  // lines and pages are steps; a trackpad's pixels add up to them
+  let steps;
+  if (e.deltaMode !== 0) {
+    steps = Math.sign(e.deltaY);
+  } else {
+    wheelPx += e.deltaY;
+    steps = Math.trunc(wheelPx / WHEEL_PX);
+    wheelPx -= steps * WHEEL_PX;
+  }
+  const name = wheel_binding(steps < 0, e.ctrlKey, e.altKey, e.shiftKey);
+  for (let i = 0; i < Math.min(Math.abs(steps), 5); i++) send({ t: 'press', name, x: c[0], y: c[1] });
+}, { passive: false });
+
+// the window's size in cells
+new ResizeObserver(() => {
+  const ratio = window.devicePixelRatio || 1;
+  const remeasured = ratio !== dpr;
+  if (remeasured) measure();
+  const [c, r] = grid();
+  if (c === cols && r === rows && !remeasured) return;
+  cols = c;
+  rows = r;
+  // a new cell size draws every cell again, as a new size does
+  send({ t: 'resize', cols, rows });
+}).observe(document.documentElement);
+
+// pads: gilrs reads the Gamepad API once a frame; the browser shows a
+// pad only after one of its buttons is pressed on the page
+function pollPads(pads) {
+  try {
+    const events = pads.poll();
+    if (events.length) send({ t: 'pad', events });
+  } catch (e) {
+    console.warn('rlml-web: pads stop:', e);
+    return;
+  }
+  requestAnimationFrame(() => pollPads(pads));
+}
 
 async function start() {
   await init();
@@ -119,6 +208,11 @@ async function start() {
         bound = new Set(m.keys);
         message.hidden = true;
         statsBox.hidden = !params.has('stats');
+        try {
+          pollPads(new Pads());
+        } catch (err) {
+          console.warn('rlml-web: no pads:', err);
+        }
         break;
       case 'cells':
         paint(new Uint32Array(m.cells));

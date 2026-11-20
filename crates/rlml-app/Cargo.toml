@@ -5,7 +5,12 @@ edition = "2024"
 
 # The game as a front end drives it: no terminal, no threads, no clock of
 # its own, so it builds for wasm32 too.
+[features]
+# gilrs events as raw pad events (`pad::from_gilrs`)
+gilrs = ["dep:gilrs"]
+
 [dependencies]
+gilrs = { version = "0.11", optional = true }
 rlml-core = { path = "../rlml-core" }
 # Termplate's frame, layout, styles and keys (github.com/Saamac1/termplate)
 termplate-core = { git = "https://github.com/Saamac1/termplate", rev = "bebd8e356589ba6809732429b46c45d2da995a28" }

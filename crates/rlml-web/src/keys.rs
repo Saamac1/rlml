@@ -1,12 +1,13 @@
 //! Browser keys as the terminal names them: a `KeyboardEvent`'s `key`
 //! becomes the `KeyCode` that `termplate-term`'s `map_event` gives for
 //! the same key from crossterm, so a game's `h j k l`, arrows, `esc` and
-//! `.` work the same in both.
+//! `.` work the same in both. Mouse buttons and the wheel get
+//! crossterm's names too.
 
 use std::collections::BTreeSet;
 
 use rlml_app::input::Keys;
-use termplate_core::keys::{Binding, KeyCode, Mods};
+use termplate_core::keys::{Binding, KeyCode, Mods, Mouse};
 
 /// The binding of a key press: `key` and `code` as the browser gives
 /// them, with the modifiers held. `None` for a key the terminal has no
@@ -48,6 +49,23 @@ pub fn binding(key: &str, code: &str, ctrl: bool, alt: bool, shift: bool) -> Opt
         _ => return None,
     };
     Some(Binding::key(KeyCode::Char(ch), mods))
+}
+
+/// The binding of a `mousedown`: `MouseEvent.button` 0 is `click`, 1
+/// `mclick`, 2 `rclick`; the others have no name.
+pub fn mouse(button: i32, ctrl: bool, alt: bool, shift: bool) -> Option<Binding> {
+    let m = match button {
+        0 => Mouse::Click,
+        1 => Mouse::MiddleClick,
+        2 => Mouse::RightClick,
+        _ => return None,
+    };
+    Some(Binding::Mouse(m, Mods { ctrl, alt, shift }))
+}
+
+/// The binding of one wheel step, `wheel.up` or `wheel.down`.
+pub fn wheel(up: bool, ctrl: bool, alt: bool, shift: bool) -> Binding {
+    Binding::Mouse(if up { Mouse::WheelUp } else { Mouse::WheelDown }, Mods { ctrl, alt, shift })
 }
 
 /// `KeyA` → `a`, `Digit1` → `1`.

@@ -2,8 +2,9 @@
 // timers in place of waiting (game.rs).
 //
 //   1. in-between frames, one each frame_ms, then the frame of now;
-//   2. wait: wait_ms, or until a key comes;
-//   3. the keys that came, then a tick; back to 1.
+//   2. wait: wait_ms, or until an event comes (a key, the mouse, a new
+//      size, a pad);
+//   3. the events that came, then a tick; back to 1.
 //
 // Time is performance.now(). Each frame goes to the page as its changed
 // cells (cells.rs).
@@ -12,8 +13,10 @@ import init, { WebGame } from './pkg/rlml_web.js';
 
 let game = null;
 let timer = null;
-// in-between frames are showing: keys wait for them to end
+// in-between frames are showing: events wait for them to end
 let showing = false;
+// a new size that came while the game was loading
+let size = null;
 
 const SAMPLES = 300;
 const times = { draw: [], input: [], tick: [] };
@@ -59,7 +62,7 @@ function later(ms) {
   timer = setTimeout(step, ms);
 }
 
-// 3: the keys, then a tick
+// 3: the events, then a tick
 function step() {
   timer = null;
   if (!game) return;
@@ -112,14 +115,24 @@ onmessage = async (e) => {
     try {
       await init();
       game = new WebGame(JSON.parse(m.bundle), m.seed, m.cols, m.rows);
+      if (size) game.resize(size.cols, size.rows);
     } catch (err) {
       postMessage({ t: 'error', text: `Pelin lataus ei onnistunut:\n\n${err && err.message ? err.message : err}` });
       return;
     }
     postMessage({ t: 'ready', keys: game.bound_keys() });
     show();
-  } else if (m.t === 'key' && game) {
-    game.key(m.name);
+  } else if (m.t === 'resize' && !game) {
+    size = m;
+  } else if (game) {
+    switch (m.t) {
+      case 'key': game.key(m.name); break;
+      case 'press': game.press(m.name, m.x, m.y); break;
+      case 'move': game.pointer(m.x, m.y); break;
+      case 'resize': game.resize(m.cols, m.rows); break;
+      case 'pad': for (const words of m.events) game.pad(words); break;
+      default: return;
+    }
     if (!showing) later(0);
   }
 };

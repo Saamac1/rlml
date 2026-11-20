@@ -19,3 +19,6 @@ termplate-core = { git = "https://github.com/Saamac1/termplate", rev = "bebd8e35
 # the same version as the wasm-bindgen CLI that build.sh runs
 wasm-bindgen = "=0.2.130"
 js-sys = "0.3"
+# pads through the Gamepad API, on the page (pads.rs)
+gilrs = "0.11"
+rlml-app = { path = "../rlml-app", features = ["gilrs"] }

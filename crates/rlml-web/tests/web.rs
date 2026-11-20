@@ -154,3 +154,77 @@ fn the_workers_loop_plays_the_game() {
     assert_eq!(x(&g), x0);
     assert_eq!(g.draw()[2], 0, "the window keeps its cells");
 }
+
+#[test]
+fn mouse_buttons_and_the_wheel_have_the_terminals_names() {
+    use rlml_web::keys::{mouse, wheel};
+    assert_eq!(mouse(0, false, false, false).unwrap().name(), "click");
+    assert_eq!(mouse(1, false, false, false).unwrap().name(), "mclick");
+    assert_eq!(mouse(2, false, false, true).unwrap().name(), "shift+rclick");
+    assert_eq!(mouse(3, false, false, false), None, "back and forward have no names");
+    assert_eq!(wheel(true, false, false, false).name(), "wheel.up");
+    assert_eq!(wheel(false, true, false, false).name(), "ctrl+wheel.down");
+    for b in [mouse(2, false, false, true).unwrap(), wheel(false, true, false, false)] {
+        assert_eq!(parse_binding(&b.name()).unwrap(), b);
+    }
+}
+
+#[test]
+fn pads_raw_events_go_to_the_worker_as_words() {
+    use rlml_app::pad::Raw;
+    use rlml_web::pads::{decode, encode};
+    for (id, raw) in [
+        (0, Raw::Connected),
+        (3, Raw::Disconnected),
+        (1, Raw::Button { name: "dpad.up".into(), down: true }),
+        (1, Raw::Button { name: "south".into(), down: false }),
+        (2, Raw::Axis { name: "lstick.x".into(), value: -0.625 }),
+    ] {
+        assert_eq!(decode(&encode(id, &raw)), Some((id, raw)));
+    }
+    assert_eq!(decode("1 b south"), None);
+    assert_eq!(decode("x c"), None);
+}
+
+#[test]
+fn clicks_hover_and_a_new_size_in_the_workers_loop() {
+    let mut f = mini();
+    let g = f.game.get_mut("game.rlml").unwrap();
+    *g = g.replace("- PLAYER HERO\n", "- PLAYER HERO\n- walk STD.MOVE\n");
+    let m = Box::leak(Box::new(rlml_web::bundle::load(&f, "game.rlml").unwrap()));
+    let mut g = Game::new(m, 7, (40, 12)).unwrap();
+    g.draw();
+    let at = |g: &Game| {
+        let p = g.app.r.w.s.at(g.app.r.w.s.player.unwrap()).unwrap();
+        (p.x, p.y)
+    };
+    let (x, y) = at(&g);
+    let r = g.app.view.map_rect.unwrap();
+    let (cx, cy) = g.app.view.camera[&g.app.r.w.s.active_map().unwrap()];
+    let (sx, sy) = (r.x + (x + 2 - cx) as usize, r.y + (y - cy) as usize);
+    // the pointer's moves count at their last cell, which the hover follows
+    g.push(Event::Move { x: 0, y: 0 });
+    g.push(Event::Move { x: sx, y: sy });
+    g.step(Duration::from_millis(10)).unwrap();
+    assert_eq!(g.app.pointer, Some((sx, sy)));
+    // a click travels there, a step at a time
+    g.push(Event::Press { binding: parse_binding("click").unwrap(), x: sx, y: sy });
+    let mut now = 20;
+    g.step(Duration::from_millis(now)).unwrap();
+    while at(&g) != (x + 2, y) && now < 5000 {
+        now += 100;
+        g.step(Duration::from_millis(now)).unwrap();
+    }
+    assert_eq!(at(&g), (x + 2, y), "the travel arrived");
+    // a new size: the next frame is whole and of that size
+    while g.next_frame().is_some() {}
+    g.draw();
+    g.push(Event::Resize(50, 16));
+    g.step(Duration::from_millis(now + 10)).unwrap();
+    let f = g.draw();
+    assert_eq!(&f[..3], &[50, 16, 1]);
+    // the same size again redraws every cell, as a new cell size needs
+    g.push(Event::Resize(50, 16));
+    g.step(Duration::from_millis(now + 20)).unwrap();
+    assert_eq!(g.draw()[2], 1);
+}

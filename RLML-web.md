@@ -145,6 +145,31 @@ Tulos (20.11.2026):
   JavaScriptissä tuottaa samat `Raw`-tapahtumat.
 - `exit` palaa alkuun, koska välilehteä ei voi sulkea.
 
+Tulos (20.11.2026):
+
+- Hiiri: canvasin pikseli → solu (`canvas.width / rect.width` huomioi
+  `devicePixelRatio`n). `mousedown` → `click`/`mclick`/`rclick`
+  muokkausnäppäimineen, rulla → `wheel.up`/`wheel.down` (rivit
+  askelina, kosketuslevyn pikselit 40 px:n askelina). Liike lähetetään
+  vain solun vaihtuessa, ja worker antaa ne `Feed`ille, joka ottaa
+  kuvaa kohden viimeisen. Oikean napin valikko on estetty canvasilla.
+- Koko: `ResizeObserver` → sarakkeet ja rivit → `Event::Resize`, jonka
+  jälkeen kuva tulee kokonaan. Pikselisuhteen muutos (zoom, toinen
+  näyttö) mittaa solun uudelleen ja piirtää kaiken.
+- Peliohjain: gilrs kääntyy wasmiksi ja lukee Gamepad APIa. Aika tulee
+  `js_sys::Date`sta eikä `SystemTime::now()`ista, joka kaatuisi.
+  `navigator.getGamepads()` on vain pääsäikeessä, joten `Pads` pollataan
+  sivulla joka `requestAnimationFrame`ssa ja raakatapahtumat menevät
+  workerille sanoina (`pads.rs`). `pad::from_gilrs` on nyt
+  `rlml-app`in `gilrs`-ominaisuuden takana, ja terminaali ja selain
+  käyttävät samaa. Oikealla ohjaimella tätä ei ole kokeiltu. Selain
+  näyttää ohjaimen vasta, kun sen nappia painetaan sivulla.
+- `exit` ja ctrl+c aloittavat uuden pelin samassa ikkunassa (tehty jo
+  vaiheessa 4).
+- Klikkausmatka, hover ja koon muutos on testattu natiivisti
+  (`tests/web.rs`) ja JavaScriptCoressa oikean wasmin kautta
+  Kapteeni Aaltolassa.
+
 ## Ei tässä vaiheessa
 
 Pelivalikko usealle pelille, File System Access API, OPFS ja `Store`-trait
