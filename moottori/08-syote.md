@@ -11,6 +11,7 @@
   | --- | --- | --- | --- |
   | `MENU`, `DIALOGUE` | `cursor.north`, `cursor.south` | `up` `k`, `down` `j` | `dpad` |
   | `MENU`, `DIALOGUE` | `confirm`, `back` | `enter` `space`, `esc` `backspace` | `south`, `east` |
+  | `MENU` | `page.up`, `page.down`, `first`, `last` | `pageup`, `pagedown`, `home`, `end` | `lb`, `rb`, –, – |
   | `SCENE` | `confirm`, `skip`, `restart`, `rewind` | `enter` `space`, `tab`, `r`, `backspace` | `south`, `start`, –, `east` |
   | `AIM` | `cursor.north` … `cursor.northwest` | nuolet, `hjklyubn`, numeronäppäimistö | `dpad`, vasen tikku |
   | `AIM` | `next`, `prev` | `tab`, `shift+tab` | `rb`, `lb` |
@@ -19,7 +20,7 @@
   | `LOOK` | `confirm`, `back` | `enter` `space`, `esc` | `south`, `east` |
   | pelin peruskonteksti | `travel_to`, `verbs` | `click`, `rclick` | – |
 
-  Näppäinnimet `tab`, `enter`, `space`, `esc`, `backspace` ja muunnin `shift+` kuuluvat moottorin nimistöön ([D 11.3](../dataformaatit/11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad)). Hiiren nimet ja niiden oletuskäytös valikoissa ovat luvussa [8.1](#81-hiiri). Toiminnoille `look`, `cursor`, `follow` ja `focus` moottori ei anna oletusnäppäintä, koska peruskonteksti on pelin oma; peli sitoo ne (`- look x`, `- follow f`, `- focus VERBS v`, peliohjaimella esimerkiksi `north`).
+  Näppäinnimet `tab`, `enter`, `space`, `esc`, `backspace` ja muunnin `shift+` kuuluvat moottorin nimistöön ([D 11.3](../dataformaatit/11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad)). Hiiren nimet ja niiden oletuskäytös valikoissa ovat luvussa [8.1](#81-hiiri). Toiminnoille `look`, `cursor`, `follow`, `focus`, `read` ja `tab` moottori ei anna oletusnäppäintä, koska peruskonteksti on pelin oma; peli sitoo ne (`- look x`, `- follow f`, `- focus VERBS v`, peliohjaimella esimerkiksi `north`).
 - Pelaajan sidonnat tulevat `overrides/keys.rlml`-tiedostosta, ja ne paikkaavat pelin sidonnat riveittäin ([D 3.2](../dataformaatit/03-tiedostot-ja-include.md#32-pelaajan-oma-data), [D 4.8](../dataformaatit/04-nimiavaruudet.md#48-lohkojen-yhdistäminen-patch-new-ja-drop)). Valikot ennen peliä: moottorin oma valikko valitsee pelin. Jos game-lohkossa on kenttä title, moottori avaa sitten pelin oman alkuvalikon, jonka kohdat käyttävät moottorin toimintoja new\_game, load\_game ja exit. Muuten moottorin valikko tarjoaa uuden pelin, tallennukset ja profiilin nollauksen (luku [5.6](05-aloitus-tallennus-ja-checkpointit.md#56-profiili)). quit palaa pelin alkuvalikkoon, jos sellainen on, ja muuten moottorin valikkoon. Moottorin valikon nimi on `ENGINE`, ja sen kohtien tekstit ovat avaimissa `ENGINE.NEW_GAME` ja `ENGINE.EXIT`, jotka peli kääntää kielitiedostossaan ([D 10](../dataformaatit/10-tekstit.md)). Ilman avainta kohta näkyy avaimen viimeisenä osana sanoina (`New game`, `Exit`).
 - **Uusi peli pelin aikana.** `new_game` on sallittu kaikissa valikoissa. Pelin aikana moottori päättää nykyisen pelikerran kuten `quit`, eli tallentaa `quit`-rivin mukaan (luku [5.4](05-aloitus-tallennus-ja-checkpointit.md#54-automaattinen-tallennus)), ja laskee sitten uuden pelin uudella siemenellä (luku [5.1](05-aloitus-tallennus-ja-checkpointit.md#51-uusi-peli)) ohittaen alkuvalikot. Kiinteä `seed` ([D 3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)) antaa saman aloituksen uudelleen.
 
@@ -60,6 +61,9 @@
 | `follow` | aloittaa seuraamisen (luku [8.1](#81-hiiri)) |
 | `verbs` | avaa osoittimen tai kursorin ruutuun kelpaavien verbien valikon (luku [8.1](#81-hiiri)) |
 | `focus ALUE` | siirtää näppäinfokuksen asettelun telakoituun valikkoon (luku [7.1](07-esitys.md#71-asettelu)) |
+| `read LOKI` | avaa lokin lukunäkymän, jossa voi selata alkuun asti (luku [7.4](07-esitys.md#74-loki-ja-dialogit)) |
+| `tab NIMI`, `tab.next`, `tab.prev` | vaihtaa välilehtialueen välilehteä (luku [7.1](07-esitys.md#71-asettelu)) |
+| `page.up`, `page.down`, `first`, `last` | vierittävät lukunäkymää ja valikkoa sivun verran tai alkuun ja loppuun; kontekstissa `MENU` oletuksena `pageup`, `pagedown`, `home` ja `end` |
 | `join` | liittää laitteen uudeksi istuimeksi (luku [8.2](#82-istuimet-ja-laitteet)) |
 | `leave_seat` | poistaa laitteen istuimen; piilossa, kun istuimia on enintään alaraja (luku [8.2](#82-istuimet-ja-laitteet)) |
 
@@ -71,7 +75,7 @@ Hiiri on valinnainen syöte: kaiken, minkä hiirellä voi tehdä, voi tehdä my�
 
 - **Nimet ja sidonnat.** Hiiren tapahtumat ovat näppäinnimiä: `click` (vasen), `rclick` (oikea), `mclick` (keski), `wheel.up` ja `wheel.down`, ja niihin käyvät muuntimet (`shift+click`). Ne sidotaan `keys`-riveillä kuten näppäimet (`- confirm enter click`), ja pelaajan `overrides/keys.rlml` paikkaa niitä samoin. Tuntematon hiiren nimi on latausvirhe (luku [2.5](02-lataus.md#25-tarkistukset)).
 - **Osoitin.** Moottori pitää kirjaa osoittimen ruudusta: kartta-alueella se on kartan ruutu kameran mukaan, muualla asettelun alue ja sen rivi. Kartta-alueella osoittimen ruutu merkitään kursorin tyylillä ([D 11.1](../dataformaatit/11-kayttoliittyman-data.md#111-asettelu)), kun valikko ei ole kartan päällä. Osoitin ei kuulu pelin tilaan eikä tallennukseen. Kun katselukursori tai tähtäyksen kohdistin on auki, hiiren osoitin ja kursori ovat sama: hiiren liike siirtää kursoria, ja näppäimet siirtävät sitä edelleen.
-- **Valikot ja paneelit.** Osoitin korostaa valikon tai listavalikon rivin, jonka päällä se on, ja `click` valitsee sen kuten `confirm`. `wheel.up` ja `wheel.down` vierittävät valikkoa, lokia ja monirivistä paneelin kenttää. `click` valikon ulkopuolella on `back`. Modaalisessa paneelissa `click` on `confirm`. Säädettävällä kohdalla (luku [7.5](07-esitys.md#75-valikot)) rulla muuttaa arvoa.
+- **Valikot ja paneelit.** Osoitin korostaa valikon tai listavalikon rivin, jonka päällä se on, ja `click` valitsee sen kuten `confirm`. `wheel.up` ja `wheel.down` vierittävät valikkoa, lokia ja monirivistä paneelin kenttää. Kosketusnäytöllä napautus on `click`, ja pystysuora pyyhkäisy vierittää samoja kuin rulla. `click` valikon ulkopuolella on `back`. Modaalisessa paneelissa `click` on `confirm`. Säädettävällä kohdalla (luku [7.5](07-esitys.md#75-valikot)) rulla muuttaa arvoa.
 - **Kysyvät lähteet.** Kontekstissa `AIM` osoitin siirtää kohdistimen ruutuunsa kantaman sisällä ja `click` vahvistaa sen. Kontekstissa `DIRECTION` `click` antaa suunnan pelaajasta klikattuun ruutuun päin (lähin kahdeksasta suunnasta) ja tyypillä `pos` sen ruudun, joka on pelaajan vieressä tuohon suuntaan. Luku- ja tekstikenttään hiiri ei kirjoita.
 
 **Hover.** Kun osoitin on kartta-alueen ruudun päällä, moottori kirjoittaa asettelun `hover`-alueeseen (luku [7.1](07-esitys.md#71-asettelu)) kuvauksen siitä, mitä ruudussa näkyy:

@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 22.11.2026 (asettelu ikkunan mukaan):** `game`-lohkon `layout`-kenttiä voi olla useita, ja `when`-ehto valitsee asettelun ikkunan koon (`width < N`, `height < N`) ja suunnan (`portrait`, `landscape`) mukaan; ehdoton rivi on oletus, ja `view_width()` luetaan siitä (luvut [3.3](03-tiedostot-ja-include.md#33-aloitus) ja [11.1](11-kayttoliittyman-data.md#111-asettelu)). Uudet: välilehtialue `- t tabs NIMI …` ja toiminnot `tab`, `tab.next` ja `tab.prev` (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)), paneelin nappi `button TOIMINTO text AVAIN` (luku [11.5](11-kayttoliittyman-data.md#115-paneelit)), lokin lukunäkymä `read LOKI`, `history all` sekä toiminnot `page.up`, `page.down`, `first` ja `last` (luvut [11.3](11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad) ja [11.4](11-kayttoliittyman-data.md#114-viestit-ja-loki)).
+
 **Muutokset 22.11.2026 (himmennykset ja näppäinohje):** `fog`-kerroksen `alpha P%` ja `color VÄRI` himmentävät muistetut ruudut näkökentän ulkopuolella (luku [9.5](09-ulkoasu.md#95-konsolin-kerrokset)). Lokialueen `panels`-rivin `fade P%` himmentää vanhemmat viestit, ja uusin on kirkkain (luku [9.3](09-ulkoasu.md#93-paneelit-lokit-ja-esitys)). Telakoidun valikon rivi näyttää minkä tahansa toiminnon sidonnan, joten valikko toimii klikattavana näppäinohjeena (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)).
 
 **Muutokset 20.11.2026 (moottorin valikon tekstit):** moottorin valikon kohtien tekstiavaimet `ENGINE.NEW_GAME` ja `ENGINE.EXIT` (luku [10](10-tekstit.md)).

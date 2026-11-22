@@ -21,7 +21,7 @@ legend:
 - l LOG size.height 3
 ```
 
-- **Valinta.** `game`-lohkon kenttä `layout ASETTELU` valitsee käytettävän asettelun (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)). Jos pelissä on yksi asettelu, se on oletus eikä kenttää tarvita. Useampi asettelu ilman kenttää on latausvirhe, joka luettelee asettelut.
+- **Valinta.** `game`-lohkon kenttä `layout ASETTELU [when EHTO]` valitsee käytettävän asettelun (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)). Kenttiä voi olla useita, ja ehto valitsee asettelun ikkunan koon ja suunnan mukaan (**Kokoehto** alla). Jos pelissä on yksi asettelu, se on oletus eikä kenttää tarvita. Useampi asettelu ilman kenttää on latausvirhe, joka luettelee asettelut.
 - **Muoto:** jokaisen alueen täytyy olla suorakulmio. Asettelun ei tarvitse olla jaettavissa suorilla viivoilla.
 - **Raidat:** asettelu on ruudukko sarakkeita ja rivejä. Sarakkeen tai rivin raja on jokaisessa kohdassa, jossa jonkin alueen reuna on piirroksessa, joten piirroksessa kohdakkain olevat reunat ovat kohdakkain myös ruudulla. Esimerkissä `s` ja `i` ovat samassa sarakkeessa, ja `h` ja `l` ulottuvat kummankin sarakkeen yli.
 - **Mitat:** legendin `size.width` ja `size.height` (luku [2.4](02-yleinen-syntaksi.md#24-arvot)) antavat alueen raitojen koon. Kun alue kattaa useamman raidan, mitta jaetaan niille raidoille, joilla ei vielä ole mittaa, niiden piirrosleveyden suhteessa. Ristiriitaiset mitat ja solumäärien ja prosenttien sekoittaminen samoilla raidoilla ovat latausvirheitä.
@@ -31,6 +31,45 @@ legend:
 - **Lauserivi.** Pieni nimi `sentence` on moottorin lähde, johon moottori kirjoittaa valitun verbin ja kohteen lauseen tekstistä `<KOMENTO>.SENTENCE` (luvut [10](10-tekstit.md) ja [11.2](#112-valikot)). Asettelussa saa olla yksi `sentence`-alue.
 - **Telakoitu valikko.** `- v menu NIMI` piirtää valikon alueeseen pysyvästi. Valikko ei ole modaalinen: hiiri valitsee sen rivejä suoraan, ja näppäimistö saa sen fokukseen toiminnolla `focus NIMI` (luku [11.3](#113-näppäimet-hiiri-ja-gamepad)). Rivi näyttää kohdan toiminnon ensimmäisen sidonnan oikeaan reunaan tasattuna, olipa toiminto komento, moottorin toiminto (`look`) tai `open VALIKKO`, joten tavallinen telakoitu valikko toimii klikattavana näppäinohjeena. Telakoitu valikko on tyypillisesti verbivalikko, mutta myös listavalikko kelpaa, esimerkiksi reppu, jonka riviä klikkaamalla valitaan verbin kohde (moottoridokumentti, luku [7.1](../moottori/07-esitys.md#71-asettelu)).
 - **Paneelin parametrit.** Kun alueeseen piirretään parametrillinen paneeli (luku [11.5](#115-paneelit)), argumentit annetaan alueen nimen perään RogueScriptin muodossa (`- s STATS(player)`). Argumentit ovat kyselylausekkeita, jotka moottori laskee jokaisessa välikehyksessä.
+
+**Kokoehto.** Peli voi antaa eri asettelun leveälle ja kapealle ikkunalle sekä vaaka- ja pystyasennolle, esimerkiksi puhelimelle:
+
+```
+game SEIKKAILU
+- layout WIDE
+- layout PHONE_TALL when portrait and width < 60
+- layout PHONE_WIDE when landscape and height < 24
+- layout NARROW when width < 80
+```
+
+- **Järjestys.** Ehdolliset rivit kokeillaan kirjoitusjärjestyksessä, ja ensimmäinen, jonka ehto pätee, valitaan. Ehdoton rivi on oletus, joka valitaan, kun mikään ehto ei päde, ja sen paikalla listassa ei ole väliä. Kun `layout`-rivejä on useampi, täsmälleen yhdellä ei saa olla ehtoa. Ehdottoman rivin puuttuminen ja kaksi ehdotonta riviä ovat latausvirheitä.
+- **Ehto** on yksi tai useampi osa, jotka yhdistetään sanalla `and`: `width VERTAILU N` ja `height VERTAILU N` vertaavat ikkunan kokoa soluina (`<`, `<=`, `>`, `>=`), ja `portrait` tai `landscape` katsoo ikkunan suunnan. Muu sana on latausvirhe. Ehto ei ole RogueScriptiä, eikä se näe pelin tilaa, joten sama ikkuna antaa aina saman asettelun.
+- **Suunta.** `portrait` tarkoittaa, että ikkuna on pikseleinä korkeampi kuin leveä, ja `landscape` muuta, myös neliötä. Pikselikoko tulee alustalta: selain ja graafinen ikkuna tietävät sen, ja pääte kertoo sen, jos osaa. Muuten moottori olettaa solun kaksi kertaa niin korkeaksi kuin leveäksi, jolloin 80×24-pääte on vaaka-asennossa ja 40×40-pääte pystyasennossa.
+- **Vaihto.** Kun ikkunan koko tai suunta muuttuu, esimerkiksi puhelin käännetään, moottori valitsee asettelun uudelleen. Alueiden esitystila säilyy alueen nimen mukaan: samanniminen loki jatkaa samasta vierityksestä, välilehtialue samasta välilehdestä ja telakoitu valikko samasta fokuksesta, ja fokus poistuu, jos valikkoa ei uudessa asettelussa ole. Vaihto on esitystä eikä vie pelin aikaa.
+- **Pienin koko.** Ehto ei katso asettelun vähimmäiskokoa. Jos valittu asettelu ei mahdu ikkunaan, moottori leikkaa raitoja kuten yhdellä asettelulla (moottoridokumentti, luku [7.1](../moottori/07-esitys.md#71-asettelu)), joten kirjoittaja valitsee rajat niin, että kukin asettelu mahtuu ehtonsa ikkunoihin.
+- **Sama peli kaikilla ikkunoilla.** `view_width()` ja `view_height()` luetaan aina oletusasettelusta, ei valitusta, joten logiikka kulkee samoin asettelusta riippumatta (luku [4](../moottori/04-satunnaisuus-ja-toistettavuus.md)).
+- **Pelaajan valinta.** Kentät luetaan datasta, joten pelaaja voi `overrides/`-tiedostossa poistaa ehdot ja pitää yhden asettelun (luku [3.2](03-tiedostot-ja-include.md#32-pelaajan-oma-data)).
+
+**Välilehdet.** Legendin rivi `- t tabs NIMI NIMI …` tekee alueesta välilehtialueen. Kapeassa ikkunassa sivupalkin sisällöt mahtuvat näin yhteen alueeseen:
+
+```
+layout PHONE_TALL
+
+m
+h
+t
+
+legend:
+- m map
+- h hover size.height 1
+- t tabs PAD KEYS PACK(player) SIDE size.height 14
+```
+
+- **Sisällöt.** Jokainen nimi on paneeli argumentteineen (`PACK(player)`), valikko, joka telakoidaan välilehdelle, tai loki. Moottorin lähteet `map`, `hover` ja `sentence` eivät kelpaa välilehdiksi, koska niitä on asettelussa yksi.
+- **Välilehtirivi.** Alueen ylin rivi näyttää välilehtien otsikot tekstiavaimista `<NIMI>.TAB` (`PAD.TAB Liiku`) vierekkäin, ja valitun välilehden sisältö piirretään sen alle. Valittu otsikko näkyy käänteisin värein, ja osoittimen alla oleva otsikko on alleviivattu. Mahtumattomat otsikot katkaistaan tasan, ja jokaisesta näkyy ainakin ensimmäinen merkki.
+- **Valinta.** Alussa valittuna on ensimmäinen välilehti. `click` otsikkoon valitsee välilehden, ja moottorin toiminto `tab NIMI` valitsee välilehden, jonka sisältö on NIMI. `tab.next` ja `tab.prev` kiertävät välilehtiä; asettelussa, jossa välilehtialueita on useampi, ne kiertävät sitä, jonka välilehteä viimeksi vaihdettiin, ja alussa ensimmäistä (luku [11.3](#113-näppäimet-hiiri-ja-gamepad)). Valinta on esitystä, ei pelin tilaa, eikä se tallennu.
+- **Mitat.** Välilehtialueen vähimmäiskoko on sen suurimman sisällön koko ja välilehtirivi. Sisältö piirretään välilehtirivin alle kuten omaan alueeseensa, ja `panels`-rivi nimetään sisällön nimellä (luku [9.3](09-ulkoasu.md#93-paneelit-lokit-ja-esitys)).
+- **Laskenta.** Moottori laskee vain valitun välilehden `value`-kentät ja listavalikon rivit (moottoridokumentti, luku [7.7](../moottori/07-esitys.md#77-paneelit)).
 
 **Kameran seuranta.** Legendin `map`-rivi voi saada seurantatavan: `- m map follow center` (oletus) tai `- m map follow margin 4`. Kamera seuraa oletuksena pelaajaa, moninpelissä kartta-alueen kartan jäsenten rajaavaa suorakulmiota, ja logiikka vaihtaa kohteen funktiolla `follow` (moottoridokumentti, luku [7.1](../moottori/07-esitys.md#71-asettelu)).
 
@@ -176,7 +215,7 @@ keys SCENE
 ```
 
 - **Otsikko:** `keys KONTEKSTI [modal | passthrough] [keyboard N]` ja `pad KONTEKSTI [deadzone P%]`.
-- **Rivi** on `- TOIMINTO näppäimet...`. Iso nimi on komento (`MOVE.NORTH`, `QUAFF`) ja pieni nimi moottorin toiminto (`save`, `quit`, `pass`, `help`, `confirm`, `back`, `close`, `resume`, `skip`, `restart`, `rewind`, `repeat`, `look`, `cursor`, `follow`, `verbs`, `focus`, `travel_to`, `join`, `leave_seat`). `focus` saa alueen valikon nimen: `- focus VERBS v`. Kirjainkoko erottaa ne, joten samannimistä toimintoa ja komentoa ei voi syntyä.
+- **Rivi** on `- TOIMINTO näppäimet...`. Iso nimi on komento (`MOVE.NORTH`, `QUAFF`) ja pieni nimi moottorin toiminto (`save`, `quit`, `pass`, `help`, `confirm`, `back`, `close`, `resume`, `skip`, `restart`, `rewind`, `repeat`, `look`, `cursor`, `follow`, `verbs`, `focus`, `travel_to`, `join`, `leave_seat`, `read`, `tab`, `tab.next`, `tab.prev`, `page.up`, `page.down`, `first`, `last`). `focus` saa alueen valikon nimen: `- focus VERBS v`, `read` lokin nimen: `- read LOG o` ja `tab` välilehden sisällön nimen: `- tab PACK i`. Kirjainkoko erottaa ne, joten samannimistä toimintoa ja komentoa ei voi syntyä.
 - **Kohtauksen toiminnot** `skip`, `restart` ja `rewind` toimivat kontekstissa `SCENE` (RogueScript, luku [9.8](../roguescript/09-kohtaukset-ja-aikajanat.md#98-luonnos-ohitus-ja-alusta-aloitus)).
 - **Vaihtoehdot** erotetaan välilyönnillä. Muuntonäppäimet ovat `ctrl`, `shift` ja `alt`, ja ne yhdistetään `+`-merkillä. Merkit `+` ja `-` kirjoitetaan `plus` ja `minus`. Erikoisnäppäimet ovat muun muassa `tab`, `enter`, `space`, `esc`, `backspace`, nuolet `up` `down` `left` `right` ja numeronäppäimistön `num0`…`num9`; `shift+tab` on tab vaihtonapilla. Vaihdetut merkit kirjoitetaan sellaisenaan (`?`, `#`).
 - **Numeronäppäimistö päätteessä.** Pääte ei erota numeronäppäimistöä tavallisista numeroista, joten päätteessä `numN` on sama näppäin kuin `N`: `num8`-sidonta laukeaa myös tavallisesta `8`-näppäimestä. Alusta, joka erottaa ne, käyttää niitä erikseen. Saman kontekstin `num8` ja `8` eri toiminnoille on päätteessä ristiriita, ja lataus varoittaa siitä, koska muualla sidonta on kelvollinen.
@@ -184,7 +223,7 @@ keys SCENE
 - **Gamepadin painikkeet** ovat paikkapohjaisia: `south`, `east`, `west`, `north`, `lb`, `rb`, `lt`, `rt`, `start`, `select`, `lstick`, `rstick` ja `dpad.up` jne. Tatit ovat suuntina (`lstick.up`).
 - **Ristiriita** samassa kontekstissa on virhe. Eri konteksteissa sama näppäin saa olla, mutta jos `ALWAYS`-kontekstin näppäin on sidottu myös muualla, lataus varoittaa.
 - **Kontekstit pinoutuvat** ajon aikana. Oletus on `modal`, jolloin vain päällimmäinen konteksti saa syötteet. `passthrough` päästää läpi syötteet, joita konteksti ei sido. `pad`-osio seuraa vastaavan `keys`-osion asetusta.
-- **Moottorin kontekstit** ovat `MENU`, `DIALOGUE`, `SCENE`, `AIM`, `DIRECTION`, `LOOK`, `JOIN` ja `ALWAYS`. Pelin peruskonteksti nimetään `game`-lohkon kentällä `keys` (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)), ja se on pinon pohjalla myös pelin alkuvalikossa. Moottorin konteksteilla on oletussidonnat: valikossa ja dialogissa `cursor.north` `up k`, `cursor.south` `down j`, `confirm` `enter space` ja `back` `esc backspace`; kohtauksessa `confirm` `enter space`, `skip` `tab`, `restart` `r` ja `rewind` `backspace`; kohdistuksessa ja katselussa (`AIM`, `LOOK`) `cursor.*` nuolet, `hjklyubn` ja numeronäppäimistö, `next` `tab`, `prev` `shift+tab`, `confirm` `enter space` ja `back` `esc`. Peliohjaimella `dpad` liikuttaa kohdistinta, `south` vahvistaa ja `east` palaa. Pelin peruskontekstissa `travel_to` on oletuksena `click` ja `verbs` `rclick`. Valikoissa hiiri toimii ilman sidontoja: osoitin korostaa rivin, `click` valitsee, rulla vierittää ja `click` valikon ulkopuolella on `back`. Modaalinen paneeli käyttää kontekstin `MENU` sidontoja (luku [11.5](#115-paneelit)). Pelin oma rivi samalle toiminnolle samassa kontekstissa korvaa oletuksen (moottoridokumentti, luvut [8](../moottori/08-syote.md) ja [8.1](../moottori/08-syote.md#81-hiiri)).
+- **Moottorin kontekstit** ovat `MENU`, `DIALOGUE`, `SCENE`, `AIM`, `DIRECTION`, `LOOK`, `JOIN` ja `ALWAYS`. Pelin peruskonteksti nimetään `game`-lohkon kentällä `keys` (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)), ja se on pinon pohjalla myös pelin alkuvalikossa. Moottorin konteksteilla on oletussidonnat: valikossa ja dialogissa `cursor.north` `up k`, `cursor.south` `down j`, `confirm` `enter space`, `back` `esc backspace`, `page.up` `pageup`, `page.down` `pagedown`, `first` `home` ja `last` `end`; kohtauksessa `confirm` `enter space`, `skip` `tab`, `restart` `r` ja `rewind` `backspace`; kohdistuksessa ja katselussa (`AIM`, `LOOK`) `cursor.*` nuolet, `hjklyubn` ja numeronäppäimistö, `next` `tab`, `prev` `shift+tab`, `confirm` `enter space` ja `back` `esc`. Peliohjaimella `dpad` liikuttaa kohdistinta, `south` vahvistaa ja `east` palaa. Pelin peruskontekstissa `travel_to` on oletuksena `click` ja `verbs` `rclick`. Valikoissa hiiri toimii ilman sidontoja: osoitin korostaa rivin, `click` valitsee, rulla vierittää ja `click` valikon ulkopuolella on `back`. Modaalinen paneeli käyttää kontekstin `MENU` sidontoja (luku [11.5](#115-paneelit)). Pelin oma rivi samalle toiminnolle samassa kontekstissa korvaa oletuksen (moottoridokumentti, luvut [8](../moottori/08-syote.md) ja [8.1](../moottori/08-syote.md#81-hiiri)).
 - **Pelaajan sidonnat** kirjoitetaan `overrides/keys.rlml`-tiedostoon, ja ne paikkaavat pelin sidonnat riveittäin (luvut [3.2](03-tiedostot-ja-include.md#32-pelaajan-oma-data) ja [4.8](04-nimiavaruudet.md#48-lohkojen-yhdistäminen-patch-new-ja-drop)). Kirjasto tai modi lisää sidontoja samoin `patch keys`-lohkolla.
 - `ALWAYS` on konteksti, jota moottori kuuntelee kaikkien muiden kontekstien päällä ja myös silloin, kun peli etenee ilman pelaajan vuoroa. Siihen sidotaan taukovalikko, jotta pelistä pääsee aina pois. Sama sidonta sulkee avoimen valikon; `open NIMI stack` -sidonta avaa sen sijaan aina uuden kerroksen. Lataus varoittaa, jos `ALWAYS`-kontekstin näppäin on sidottu myös muualla (moottoridokumentti, luku [8](../moottori/08-syote.md)).
 - `pass` ajaa seuraavan kierroksen heti, kun pelaajalla ei ole vuoroa (luku [3.2](03-tiedostot-ja-include.md#32-pelaajan-oma-data)).
@@ -241,13 +280,14 @@ log LOG history 200 merge
 - **Monta osiota:** `messages`-osiot yhdistyvät riveittäin (luku [4.8](04-nimiavaruudet.md#48-lohkojen-yhdistäminen-patch-new-ja-drop)).
 - **Lokiin kirjoittaminen.** RogueScriptin `log` käyttää vain tässä ilmoitettuja viestejä. Modaalinen `say` ei vaadi ilmoitusta, mutta lataus tarkistaa sen paikkamerkit kutsun argumentteja vasten (RogueScript, luku [9.6](../roguescript/09-kohtaukset-ja-aikajanat.md#96-say-ja-log)).
 - **Valinta.** `log`- ja `logs`-rivi on ryhmä tai yksittäinen avain, ja se valitsee viestit, joiden avain on rivin nimi tai alkaa sillä. Viesti voi näkyä useassa lokissa. Värin ratkaisee tarkin osuma: avainrivi voittaa ryhmärivin ja pidempi ryhmä lyhyemmän. Viesti, jota yksikään `log`-lohko ei valitse, näkyy kaikissa lokeissa. Lataus tarkistaa, että rivin nimi on jonkin viestiavaimen alku. Moottorin ryhmä `SPEECH` sisältää `say`-repliikit.
-- `log` sitoo asettelun alueen (`LOG`) ja valitsee näytettävät viestit: `log ALUE [history N] [merge] [more]`. `history` on muistissa pidettävien viestien määrä, ja `merge` yhdistää peräkkäiset samat viestit.
+- `log` sitoo asettelun alueen (`LOG`) ja valitsee näytettävät viestit: `log ALUE [history N | history all] [merge] [more]`. `history` on muistissa pidettävien viestien määrä, ja `history all` pitää kaikki pelikerran viestit. `merge` yhdistää peräkkäiset samat viestit.
+- **Lokin lukeminen: `read`.** Moottorin toiminto `read LOKI` (`- read LOG o`, valikon kohdassa `- READ_LOG read LOG`) avaa lokin luettavaksi koko ikkunan kokoisena: viestit rivittyvät ikkunan leveyteen, ja näkymä alkaa uusimmasta. Pelaaja selaa taaksepäin aina `history`-määrän alkuun asti, `history all` -lokissa pelin ensimmäiseen viestiin. Ylimmällä rivillä on teksti `<LOKI>.TITLE` ja alimmalla `<LOKI>.READ`, jos ne on kirjoitettu (`LOG.READ ↑↓ selaa  esc sulje`). Värit ja `fade` ovat samat kuin lokin alueessa, ja `fade` lasketaan näkymän riveistä. Näkymä käyttää kontekstia `MENU`: `cursor.north` ja `cursor.south` vierittävät rivin, `page.up` ja `page.down` näkymän korkeuden, `first` ja `last` siirtävät alkuun ja loppuun, rulla ja pystysuora pyyhkäisy vierittävät, ja `back` tai `confirm` sulkee näkymän. Pelin aika pysähtyy lukemisen ajaksi kuten valikossa (moottoridokumentti, luku [7.4](../moottori/07-esitys.md#74-loki-ja-dialogit)).
 - **Pitkä viesti.** Viesti rivittyy alueen leveyteen sanojen välistä. Jos lokilla ei ole `more`-sanaa ja rivitetty viesti ei mahdu alueeseen, sen viimeinen näkyvä rivi katkaistaan merkillä `…` kuten paneelin kentässä (luku [11.5](#115-paneelit)). Yhden rivin lokissa pitkä viesti näkyy siis yhtenä katkaistuna rivinä.
 - **Sivutus `more`.** Kun syötteen odotukseen mennessä on tullut enemmän uusia viestejä kuin alueeseen mahtuu, moottori näyttää ne alueen kokoisina erinä ja kirjoittaa erän loppuun tekstin `<LOKI>.MORE` (esimerkiksi `LOG.MORE --Lisää--`). Mikä tahansa näppäin näyttää seuraavan erän, ja `back` ohittaa loput. Yhden rivin viestirivi ei siis kadota viestejä (moottoridokumentti, luku [7.4](../moottori/07-esitys.md#74-loki-ja-dialogit)).
 
 ## 11.5 Paneelit
 
-Paneeli on ASCII-piirros, jonka legendi sijoittaa kentät: tekstit, arvot ja parametrit. Paneeli piirretään asettelun alueeseen tai avataan modaalisena koko näytön päälle.
+Paneeli on ASCII-piirros, jonka legendi sijoittaa kentät: tekstit, arvot, parametrit ja napit. Paneeli piirretään asettelun alueeseen tai avataan modaalisena koko näytön päälle.
 
 ```
 panel STATS(who: entity)
@@ -272,6 +312,7 @@ legend:
   - `text AVAIN` näyttää tekstiavaimen valitulla kielellä, joten piirrokseen ei kirjoiteta käännettäviä sanoja. Avaimen paikkamerkit annetaan kuten listavalikon `row`-rivillä.
   - `value LAUSEKE` näyttää kyselylausekkeen arvon. Nimiarvo näkyy tekstinä (luku [10](10-tekstit.md)). Lista tai kokoelma näkyy monirivisessä kentässä jäsen riviä kohden ja yksirivisessä pilkuin eroteltuna, joten esimerkiksi näkyvien asioiden selite on yksi kenttä.
   - `param NIMI` näyttää otsikon parametrin arvon sellaisenaan. Se on lyhyt muoto lausekkeelle `value NIMI`, ja lataus tarkistaa, että nimi on otsikon parametri.
+  - `button TOIMINTO text AVAIN` on nappi: kenttä näyttää avaimen tekstin, ja `click` kenttään tekee toiminnon kuten telakoidun valikon kohta. Iso nimi on komento, pieni nimi moottorin toiminto argumentteineen (`look`, `read LOG`, `tab PACK`) ja `open VALIKKO` avaa valikon. Parametrillinen komento kysyy parametrinsa kuten näppäimellä. Osoittimen alla nappi korostuu, ja nappi on himmeä, kun sen toimintoa ei voi käyttää, esimerkiksi kun pelaajalla ei ole vuoroa. Painettuna pidetty nappi toistaa toimintonsa kuten pidetty näppäin, joten kosketusnäytön suuntanapit kävelevät. Tekstin paikkamerkki `{^TOIMINTO}` näyttää toiminnon näppäimen (luku [10](10-tekstit.md)).
 - **Tasaus.** Kentän perään kirjoitetaan `left` (oletus), `right` tai `center`. Mahtumaton teksti katkaistaan merkillä `…`.
 - **Parametrit.** Otsikko voi saada parametreja RogueScriptin muodossa kuten listavalikko (`panel GRAVE(who: text, cause: name, gold: number)`). Asettelussa parametrit annetaan alueen legendissä (luku [11.1](#111-asettelu)), ja modaalisena paneeli avataan logiikasta tai valikosta muodolla `open PANEELI(…)`.
 - **Modaalinen paneeli.** `open PANEELI(…)` näyttää paneelin keskellä näyttöä piirroksen kokoisena, kunnes pelaaja painaa `confirm` tai `back`. Paneeli käyttää kontekstin `MENU` sidontoja, joten ohjeen kehote voi näyttää näppäimen paikkamerkillä `{^confirm}` (luku [10](10-tekstit.md)). Sopii hautakiveen, voittoruutuun, pistelistaan ja ohjeruutuun.
