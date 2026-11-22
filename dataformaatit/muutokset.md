@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 22.11.2026 (kosketus):** lokialueen määre `read` avaa lukunäkymän napautuksesta, paneelialueen `center` keskittää paneelin (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)), ja `hold`-paneeli peittää kartan viereisen kaistan eikä karttaa (luku [11.5](11-kayttoliittyman-data.md#115-paneelit)).
+
 **Muutokset 22.11.2026 (napit):** napin ja välilehden otsikon ulkoasu `panels`-rivillä `button`, otsikot tasaleveinä nappeina ja sisällön keskitys välilehtialueessa (luvut [9.3](09-ulkoasu.md#93-paneelit-lokit-ja-esitys) ja [11.1](11-kayttoliittyman-data.md#111-asettelu)). Napin toiminto `hold PANEELI` näyttää paneelin pidon ajan (luku [11.5](11-kayttoliittyman-data.md#115-paneelit)).
 
 **Muutokset 22.11.2026 (asettelu ikkunan mukaan):** `game`-lohkon `layout`-kenttiä voi olla useita, ja `when`-ehto valitsee asettelun ikkunan koon (`width < N`, `height < N`) ja suunnan (`portrait`, `landscape`) mukaan; ehdoton rivi on oletus, ja `view_width()` luetaan siitä (luvut [3.3](03-tiedostot-ja-include.md#33-aloitus) ja [11.1](11-kayttoliittyman-data.md#111-asettelu)). Uudet: välilehtialue `- t tabs NIMI …` ja toiminnot `tab`, `tab.next` ja `tab.prev` (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)), paneelin nappi `button TOIMINTO text AVAIN` (luku [11.5](11-kayttoliittyman-data.md#115-paneelit)), lokin lukunäkymä `read LOKI`, `history all` sekä toiminnot `page.up`, `page.down`, `first` ja `last` (luvut [11.3](11-kayttoliittyman-data.md#113-näppäimet-hiiri-ja-gamepad) ja [11.4](11-kayttoliittyman-data.md#114-viestit-ja-loki)).

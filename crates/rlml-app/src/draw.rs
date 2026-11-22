@@ -36,6 +36,10 @@ pub struct Area {
     pub cursor: Vec<String>,
     /// A `tabs` area's contents as written (`PACK(player)`, D 11.1).
     pub tabs: Vec<String>,
+    /// `read`: a click on the log opens it to be read (D 11.4).
+    pub read: bool,
+    /// `center`: the panel is centred in a larger area (D 11.1).
+    pub center: bool,
 }
 
 /// The size a tab's content needs: a panel's drawing, a menu's rows (as
@@ -122,6 +126,8 @@ pub struct View {
     pub enabled: bool,
     /// The last frame's buttons: their cells and actions.
     pub buttons: Vec<(Rect, crate::menu::ItemAction)>,
+    /// The last frame's `read` log areas: their cells and logs.
+    pub read_rects: Vec<(Rect, String)>,
     /// Colors as 24 bits, else the nearest of the 256-color palette; the
     /// front end sets it (`rgb`).
     pub truecolor: bool,
@@ -193,7 +199,8 @@ fn areas(rows: &[RawItem]) -> (Vec<Area>, Dims) {
         let source = words.first().copied().unwrap_or("").to_string();
         let menu = (source == "menu").then(|| words.get(1).map(|w| w.to_string())).flatten();
         let tabs = if source == "tabs" { words.iter().skip(1).take_while(|w| !w.starts_with("size")).map(|w| w.to_string()).collect() } else { vec![] };
-        out.push(Area { ch, source, follow, menu, cursor, tabs });
+        let (read, center) = (words.contains(&"read"), words.contains(&"center"));
+        out.push(Area { ch, source, follow, menu, cursor, tabs, read, center });
     }
     (out, dims)
 }
@@ -340,6 +347,7 @@ impl View {
         self.tab_rects.clear();
         self.tab_areas.clear();
         self.buttons.clear();
+        self.read_rects.clear();
         let block = layout_block(world, width, height, self.portrait);
         let (areas, solved) = match &block {
             Some(b) => {
@@ -377,7 +385,7 @@ impl View {
             None => {
                 let mut rects = BTreeMap::new();
                 rects.insert('m', Rect::new(0, 0, width, height));
-                (vec![Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None, cursor: vec![], tabs: vec![] }], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 })
+                (vec![Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None, cursor: vec![], tabs: vec![], read: false, center: false }], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 })
             }
         };
         if solved.too_small {
@@ -433,7 +441,17 @@ impl View {
                     }
                 }
                 "tabs" => self.draw_tabs(&mut frame, world, lang, &area.tabs, inner),
-                _ => self.draw_content(&mut frame, world, lang, &area.source, inner),
+                _ => {
+                    // `center`: a smaller panel in the middle of its area
+                    let at = match content_size(world, &area.source) {
+                        Some((w, h)) if area.center => Rect::new(inner.x + inner.w.saturating_sub(w) / 2, inner.y + inner.h.saturating_sub(h) / 2, w.min(inner.w), h.min(inner.h)),
+                        _ => inner,
+                    };
+                    if area.read {
+                        self.read_rects.push((inner, name.clone()));
+                    }
+                    self.draw_content(&mut frame, world, lang, &area.source, at)
+                }
             }
             // written text resets its cells' style: the area's colors go
             // under it again, and the content's own colors win

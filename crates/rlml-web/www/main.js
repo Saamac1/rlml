@@ -16,9 +16,9 @@ const statsBox = document.getElementById('stats');
 const canvas = document.getElementById('screen');
 const ctx = canvas.getContext('2d', { alpha: false });
 
-// a phone's narrow screen takes a smaller font, so its layout gets
-// columns enough
-const FONT_PX = Math.min(window.innerWidth, window.innerHeight) < 520 ? 14 : 16;
+// a phone takes a larger font, so the map and the log read well on its
+// small screen
+const FONT_PX = Math.min(window.innerWidth, window.innerHeight) < 520 ? 18 : 16;
 const LINE = 1.2;
 const FAMILY = 'Menlo, Monaco, "SF Mono", "DejaVu Sans Mono", Consolas, "Liberation Mono", monospace';
 // cells.rs: the flags over the character's 21 bits

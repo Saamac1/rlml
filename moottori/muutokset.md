@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 22.11.2026 (kosketus):** `read`- ja `center`-määreet ja `hold`-paneelin paikka kartan vieressä (luku [7.7](07-esitys.md#77-paneelit)).
+
 **Muutokset 22.11.2026 (napit):** napit ja välilehtien otsikot `button`-ulkoasulla, keskitetty välilehtialue (luku [7.1](07-esitys.md#71-asettelu)) ja pidon ajan näkyvä paneeli `hold` (luku [7.7](07-esitys.md#77-paneelit)).
 
 **Muutokset 22.11.2026 (asettelu ikkunan mukaan):** moottori valitsee asettelun `when`-ehdon mukaan ja valitsee uudelleen, kun ikkunan koko tai suunta muuttuu; päätteessä suunta lasketaan solun suhteella 1:2 (luku [7.1](07-esitys.md#71-asettelu)). Välilehdet (luku [7.1](07-esitys.md#71-asettelu)), paneelin napit (luku [7.7](07-esitys.md#77-paneelit)), lokin lukunäkymä (luku [7.4](07-esitys.md#74-loki-ja-dialogit)), uudet toiminnot (luku [8](08-syote.md)) ja kosketusnäytön napautus ja pyyhkäisy (luku [8.1](08-syote.md#81-hiiri)).

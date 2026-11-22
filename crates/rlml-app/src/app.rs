@@ -459,11 +459,26 @@ impl<'m> App<'m> {
         if let Some(name) = self.overlay.clone()
             && let Some(pb) = crate::panel::block(&self.r.w, &name)
         {
+            // over the window's largest band beside the map, so the map
+            // stays in sight, or over the whole window (M 7.7)
             let whole = termplate_core::layout::Rect::new(0, 0, w, h);
-            f.fill(whole, ' ', termplate_core::frame::Role::Normal);
+            let over = match self.view.map_rect {
+                Some(m) => {
+                    let (right, below) = ((m.x + m.w).min(w), (m.y + m.h).min(h));
+                    let bands = [
+                        termplate_core::layout::Rect::new(0, below, w, h - below),
+                        termplate_core::layout::Rect::new(0, 0, w, m.y),
+                        termplate_core::layout::Rect::new(right, 0, w - right, h),
+                        termplate_core::layout::Rect::new(0, 0, m.x, h),
+                    ];
+                    bands.into_iter().filter(|b| b.w > 0 && b.h > 0).max_by_key(|b| b.w * b.h).unwrap_or(whole)
+                }
+                None => whole,
+            };
+            f.fill(over, ' ', termplate_core::frame::Role::Normal);
             let mut ui = crate::panel::PanelUi { truecolor: self.view.truecolor, enabled: true, ..Default::default() };
             let lang = self.lang.clone();
-            self.r.w.holding_view(|world| crate::panel::draw(&mut f, world, &lang, pb, &name, whole, &mut ui));
+            self.r.w.holding_view(|world| crate::panel::draw(&mut f, world, &lang, pb, &name, over, &mut ui));
         }
         if let Some(note) = &self.note
             && h > 0
@@ -1712,6 +1727,11 @@ impl<'m> App<'m> {
         if click && let Some((key, i, _)) = self.view.tab_rects.iter().find(|(_, _, r)| r.contains(x, y)).cloned() {
             self.view.tabs.insert(key.clone(), i);
             self.view.last_tabs = Some(key);
+            return Ok(());
+        }
+        // a click on a `read` log opens it to be read (D 11.4)
+        if click && let Some((_, log)) = self.view.read_rects.iter().find(|(r, _)| r.contains(x, y)).cloned() {
+            self.read_log(&log);
             return Ok(());
         }
         // a panel's button does its action, and held it repeats (M 7.7)

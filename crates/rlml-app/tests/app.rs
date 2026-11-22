@@ -1200,9 +1200,33 @@ fn a_held_button_shows_its_panel_until_let_go() {
     assert_eq!(frame.row(26).chars().next(), Some('╭'), "{:#?}", frame.rows());
     let (r, _) = app.view.buttons[0].clone();
     app.mouse_press(click(), r.x + 1, r.y, ms(10)).unwrap();
-    assert_eq!(app.draw().row(0).trim_end(), "HELP.TEXT", "the panel over the whole window");
+    let f = app.draw();
+    let map = app.view.map_rect.unwrap();
+    // over the band under the map, which stays in sight
+    let at = f.rows().iter().position(|r| r.trim_end() == "HELP.TEXT").expect("the panel shows");
+    assert_eq!(at, map.y + map.h, "{:#?}", f.rows());
     app.mouse_release();
-    assert_ne!(app.draw().row(0).trim_end(), "HELP.TEXT", "let go, it closes at once");
+    assert!(!app.draw().rows().iter().any(|r| r.trim_end() == "HELP.TEXT"), "let go, it closes at once");
+}
+
+#[test]
+fn a_tap_on_a_read_log_opens_it_and_center_centres_a_panel() {
+    let f = mini_with(|g| {
+        *g = g.replace("- keys GAME\n", "- keys GAME\n- layout MAIN\n- layout PHONE when portrait\n");
+        g.push_str(
+            "\nlayout PHONE\n\n```\nm\nl\np\n```\n\nlegend:\n- m map\n- l LOG size.height 3 read\n- p PAD size.height 6 center\n\n\
+             panel PAD\n\n```\nhhhh\n```\n\nlegend:\n- h button MOVE.NORTH text PAD.H\n",
+        );
+    });
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (20, 30)).unwrap();
+    let frame = app.draw();
+    // the 4×1 pad in the middle of its 20×6 area at rows 24..30
+    let (r, _) = app.view.buttons[0].clone();
+    assert_eq!((r.x, r.y, r.w), (8, 26, 4), "{:#?}", frame.rows());
+    // a click on the log opens the reading view
+    app.mouse_press(click(), 3, 22, ms(10)).unwrap();
+    assert!(app.reading.is_some());
 }
 
 #[test]
