@@ -30,6 +30,8 @@ enum Show {
 pub struct PanelUi {
     /// Colors as for `draw::rgb`.
     pub truecolor: bool,
+    /// The buttons' look: the `panels` row `button` (D 9.3).
+    pub button: (termplate_core::style::Border, termplate_core::style::Style),
     pub pointer: Option<(usize, usize)>,
     pub enabled: bool,
     pub buttons: Vec<(Rect, crate::menu::ItemAction)>,
@@ -181,6 +183,16 @@ pub fn draw(frame: &mut Frame, w: &mut World, lang: &str, b: &RawBlock, call: &s
             continue;
         }
         let width = rect.w.min(r.w - rect.x);
+        if let Show::Button(action, _) = &f.show {
+            let cells = Rect::new(r.x + rect.x, r.y + rect.y, width, rect.h.min(r.h - rect.y));
+            let label: String = texts.iter().flat_map(|t| t.iter().map(|c| c.0)).collect();
+            let pointed = ui.pointer.is_some_and(|(x, y)| cells.contains(x, y));
+            draw_button(frame, cells, &label, ui.button, false, pointed, !ui.enabled);
+            if let Some(a) = action {
+                ui.buttons.push((cells, a.clone()));
+            }
+            continue;
+        }
         // a multi-line field wraps each member, and a member that fits
         // keeps its glyphs' looks; a one-line field shows the members side
         // by side
@@ -198,18 +210,38 @@ pub fn draw(frame: &mut Frame, w: &mut World, lang: &str, b: &RawBlock, call: &s
                 }
             }
         }
-        // a button looks like a key cap: reverse video, underlined under
-        // the pointer and dim when its action cannot be used (M 7.7)
-        if let Show::Button(action, _) = &f.show {
-            let cells = Rect::new(r.x + rect.x, r.y + rect.y, width, rect.h.min(r.h - rect.y));
-            let mut style = termplate_core::style::Style::default();
+    }
+}
+
+/// A button (M 7.7), also a tab's title: the `panels` row `button`'s
+/// border and colors, its label centred both ways; without the row a key
+/// cap in reverse video. `on` fills it with the border's color (a chosen
+/// tab), `pointed` makes it bold and `dim` dims it.
+pub fn draw_button(frame: &mut Frame, cells: Rect, label: &str, look: (termplate_core::style::Border, termplate_core::style::Style), on: bool, pointed: bool, dim: bool) {
+    use termplate_core::style::{Border, Style};
+    let (border, mut style) = look;
+    let outlined = border != Border::None && cells.w >= 3 && cells.h >= 3;
+    if style == Style::default() {
+        style.attrs.reverse = true;
+    }
+    if on {
+        // the chosen one in the border's color
+        style = Style { fg: style.bg, bg: style.fg, attrs: Style::default().attrs };
+        if style.fg.is_none() && style.bg.is_none() {
             style.attrs.reverse = true;
-            style.attrs.underline = ui.pointer.is_some_and(|(x, y)| cells.contains(x, y));
-            style.attrs.dim = !ui.enabled;
-            crate::draw::paint(frame, cells, style);
-            if let Some(a) = action {
-                ui.buttons.push((cells, a.clone()));
-            }
         }
     }
+    style.attrs.bold = pointed;
+    style.attrs.dim = dim;
+    frame.fill(cells, ' ', Role::Normal);
+    let inner = if outlined {
+        frame.border(cells, border, Role::Normal);
+        Rect::new(cells.x + 1, cells.y + 1, cells.w - 2, cells.h - 2)
+    } else {
+        cells
+    };
+    let text = termplate_core::frame::take_width(label, inner.w);
+    let pad = inner.w.saturating_sub(termplate_core::frame::str_width(text)) / 2;
+    frame.text(inner.x + pad, inner.y + inner.h.saturating_sub(1) / 2, inner.w - pad, text, Role::Normal);
+    crate::draw::paint(frame, cells, style);
 }

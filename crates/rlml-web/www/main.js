@@ -45,12 +45,21 @@ function measure() {
   cellW = Math.ceil(ctx.measureText('M').width);
   cellH = Math.ceil(fontPx * LINE);
 }
+// the page's own room: the body, which a host may pad (safe areas)
+function room() {
+  const b = document.body;
+  return [b.clientWidth || window.innerWidth, b.clientHeight || window.innerHeight];
+}
 function grid() {
-  return [Math.max(20, Math.floor((window.innerWidth * dpr) / cellW)), Math.max(10, Math.floor((window.innerHeight * dpr) / cellH))];
+  const [w, h] = room();
+  return [Math.max(20, Math.floor((w * dpr) / cellW)), Math.max(10, Math.floor((h * dpr) / cellH))];
 }
 measure();
 let [cols, rows] = grid();
-const pixels = () => ({ pw: Math.round(window.innerWidth * dpr), ph: Math.round(window.innerHeight * dpr) });
+const pixels = () => {
+  const [w, h] = room();
+  return { pw: Math.round(w * dpr), ph: Math.round(h * dpr) };
+};
 let lastPixels = pixels();
 
 function size(w, h) {
@@ -249,7 +258,10 @@ new ResizeObserver(() => {
   // a new cell size draws every cell again, as a new size does; the
   // pixels tell portrait from landscape (D 11.1)
   send({ t: 'resize', cols, rows, ...pixels() });
-}).observe(document.documentElement);
+}).observe(document.body);
+// a long press shows no menu and selects nothing (M 8.1)
+addEventListener('contextmenu', (e) => e.preventDefault());
+addEventListener('selectstart', (e) => e.preventDefault());
 
 // pads: gilrs reads the Gamepad API once a frame; the browser shows a
 // pad only after one of its buttons is pressed on the page

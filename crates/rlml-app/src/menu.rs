@@ -36,6 +36,9 @@ pub enum ItemAction {
     Read(String),
     /// `tab NAME`: the tab whose content is NAME (D 11.1).
     Tab(String),
+    /// `hold PANEL`: a button shows the panel over the window while it
+    /// is held (D 11.5).
+    Hold(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -90,6 +93,10 @@ pub(crate) fn action(m: &Model, ns: Option<&str>, key: &str, rest: &RawItem) -> 
         let target = rest.word(1)?;
         let menu = m.resolve(ns, target.split('(').next().unwrap_or(target)).ok()?.full.clone();
         return Some(ItemAction::Open { menu, stack: rest.word(2) == Some("stack") });
+    }
+    if w == "hold" {
+        let panel = rest.word(1)?;
+        return Some(ItemAction::Hold(m.resolve(ns, panel).map_or(panel.to_string(), |d| d.full.clone())));
     }
     if w == "tab" {
         let tab = rest.word(1)?;

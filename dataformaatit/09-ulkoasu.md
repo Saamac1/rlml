@@ -79,6 +79,7 @@ tiles.glyphs spritesheet "tiles16.png" 16x16
 
 - `panels` antaa asettelun alueille (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)) reunat ja värit.
 - `logs` värittää viestit ryhmän tai avaimen mukaan (luku [11.4](11-kayttoliittyman-data.md#114-viestit-ja-loki)).
+- **Napit.** `panels`-rivi `button` antaa paneelien nappien ja välilehtien otsikoiden reunan ja värit (`- button border rounded fg YELLOW bg BLACK`): reunan väri on `fg`, ja valittu välilehti täytetään sillä (luku [11.5](11-kayttoliittyman-data.md#115-paneelit)).
 - **Lokin häivytys.** Lokialueen `panels`-rivin `fade P%` (`- LOG fade 60%`) himmentää näkyvät viestit uusimmasta vanhimpaan: uusin näkyy omassa värissään, ja vanhin näkyvä on P % matkasta kohti alueen `bg`-väriä tai mustaa. Väliviestit himmenevät tasaisesti, ja monirivinen viesti on kaikilta riveiltään samassa sävyssä. Viesti ilman omaa väriä piirretään himmeänä, kun sen osuus on vähintään puolet.
 - **Valikot ja dialogit:** valikon ulkoasu haetaan kontekstin nimellä (`MENU`, `DIALOGUE`). Dialogi-ikkunan ulkoasu sekä valikon ja dialogin himmennettyjen kohtien väri (`disabled when`, luku [11.2](11-kayttoliittyman-data.md#112-valikot)) ovat tyylitiedoston asioita.
 - `presentation`-osion `frame` on animaation välikehyksen kesto. Välikehys on mikroaskel, jossa näkyvä tila muuttui (moottoridokumentti, luku [7.2](../moottori/07-esitys.md#72-kartan-piirtäminen)). Arvo `0` näyttää vain tilan seuraavalla syötteen odotuksella.

@@ -1105,19 +1105,31 @@ fn mini_phone() -> MemFiles {
     })
 }
 
+/// The middle cell of the button whose action is `command`.
+fn button_of(app: &App, command: &str) -> (usize, usize) {
+    let (r, _) = app.view.buttons.iter().find(|(_, a)| matches!(a, rlml_app::menu::ItemAction::Command(c) if c.ends_with(command))).expect(command);
+    (r.x + r.w / 2, r.y + r.h / 2)
+}
+
+/// The middle cell of tab `i`'s title.
+fn tab_title(app: &App, i: usize) -> (usize, usize) {
+    let (_, _, r) = app.view.tab_rects.iter().find(|(_, n, _)| *n == i).unwrap();
+    (r.x + r.w / 2, r.y)
+}
+
 #[test]
 fn the_window_chooses_the_layout() {
     let m = model(&mini_phone());
     let mut app = App::new(&m, 7, (40, 12)).unwrap();
     // 40×12 cells is landscape at 1:2 cells: the default, with its log rows
-    assert!(app.view.tab_rects.is_empty());
     app.draw();
     assert!(app.view.tab_rects.is_empty(), "MAIN has no tabs");
-    // 30×30 is portrait and narrow: the tabs at the bottom, the pad first
+    // 30×30 is portrait and narrow: the tabs at the bottom, evenly wide, the
+    // pad first and centred across
     app.resize(30, 30);
     let f = app.draw();
-    assert_eq!(f.row(25).trim_end(), " PAD  LOG", "{:#?}", f.rows());
-    assert_eq!(f.row(26).trim_end(), " PAD.N");
+    assert_eq!(f.row(25).trim_end(), "      PAD            LOG", "{:#?}", f.rows());
+    assert_eq!(f.row(26).trim(), "PAD.N");
     // the same cells at a wide window's pixels are landscape again
     app.pixels = Some((900, 600));
     app.draw();
@@ -1131,12 +1143,14 @@ fn a_button_acts_and_held_it_repeats() {
     app.draw();
     let (x, y) = player_at(&app);
     // the north button walks a step
-    app.mouse_press(click(), 2, 26, ms(10)).unwrap();
+    let (bx, by) = button_of(&app, "MOVE.NORTH");
+    app.mouse_press(click(), bx, by, ms(10)).unwrap();
     assert_eq!(player_at(&app), (x, y - 1));
     // held, the south button repeats after its delay until it is let go
     app.releases = true;
     app.draw();
-    app.mouse_press(click(), 2, 27, ms(100)).unwrap();
+    let (bx, by) = button_of(&app, "MOVE.SOUTH");
+    app.mouse_press(click(), bx, by, ms(100)).unwrap();
     assert_eq!(player_at(&app), (x, y));
     app.tick(ms(300)).unwrap();
     assert_eq!(player_at(&app), (x, y), "not before the delay");
@@ -1156,13 +1170,39 @@ fn tabs_change_by_click_and_by_action() {
     app.r.w.log.push(rlml_core::rt::world::LogEntry { key: "STD.MESSAGE.COMBAT.N1".into(), args: vec![] });
     app.draw();
     // a click on the LOG title shows the log under the tab row
-    app.mouse_press(click(), 7, 25, ms(10)).unwrap();
+    let (tx, ty) = tab_title(&app, 1);
+    app.mouse_press(click(), tx, ty, ms(10)).unwrap();
     assert_eq!(app.draw().row(26).trim_end(), "STD.MESSAGE.COMBAT.N1");
     // tab.next goes round to the pad, and a button's `tab LOG` comes back
     press(&mut app, "t");
-    assert_eq!(app.draw().row(26).trim_end(), " PAD.N");
-    app.mouse_press(click(), 2, 28, ms(20)).unwrap();
+    assert_eq!(app.draw().row(26).trim(), "PAD.N");
+    let (r, _) = app.view.buttons.iter().find(|(_, a)| matches!(a, rlml_app::menu::ItemAction::Tab(_))).cloned().unwrap();
+    app.mouse_press(click(), r.x, r.y, ms(20)).unwrap();
     assert_eq!(app.draw().row(26).trim_end(), "STD.MESSAGE.COMBAT.N1");
+}
+
+#[test]
+fn a_held_button_shows_its_panel_until_let_go() {
+    let f = mini_with(|g| {
+        *g = g.replace("- keys GAME\n", "- keys GAME\n- layout MAIN\n- layout PHONE when portrait\n");
+        g.push_str(
+            "\nlayout PHONE\n\n```\nm\nt\n```\n\nlegend:\n- m map\n- t tabs PAD size.height 4\n\n\
+             panel PAD\n\n```\nhhhhh\n```\n\nlegend:\n- h button hold HELP text PAD.H\n\n\
+             panel HELP\n\n```\nxxxxxxxxxx\n```\n\nlegend:\n- x text HELP.TEXT\n\n\
+             panels\n- button border rounded fg ffff00 bg 000000\n",
+        );
+    });
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (20, 30)).unwrap();
+    app.releases = true;
+    let frame = app.draw();
+    // with the button style the tab row is three rows of buttons
+    assert_eq!(frame.row(26).chars().next(), Some('╭'), "{:#?}", frame.rows());
+    let (r, _) = app.view.buttons[0].clone();
+    app.mouse_press(click(), r.x + 1, r.y, ms(10)).unwrap();
+    assert_eq!(app.draw().row(0).trim_end(), "HELP.TEXT", "the panel over the whole window");
+    app.mouse_release();
+    assert_ne!(app.draw().row(0).trim_end(), "HELP.TEXT", "let go, it closes at once");
 }
 
 #[test]

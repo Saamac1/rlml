@@ -170,6 +170,8 @@ pub struct App<'m> {
     pub releases: bool,
     /// The held button's action and when it repeats next.
     held: Option<(ItemAction, Duration)>,
+    /// The panel a held `hold PANEL` button shows over the window.
+    pub overlay: Option<String>,
     /// `settings - targeting cursor|list|auto` (D 3.2), `cursor` by default.
     targeting: String,
 }
@@ -305,6 +307,7 @@ impl<'m> App<'m> {
             pixels: None,
             releases: false,
             held: None,
+            overlay: None,
             targeting: setting("targeting").unwrap_or_else(|| "cursor".into()),
         };
         match app.title() {
@@ -453,6 +456,15 @@ impl<'m> App<'m> {
         if self.coin.is_some() && self.menus.position(COIN_MENU).is_none() {
             self.coin = None;
         }
+        if let Some(name) = self.overlay.clone()
+            && let Some(pb) = crate::panel::block(&self.r.w, &name)
+        {
+            let whole = termplate_core::layout::Rect::new(0, 0, w, h);
+            f.fill(whole, ' ', termplate_core::frame::Role::Normal);
+            let mut ui = crate::panel::PanelUi { truecolor: self.view.truecolor, enabled: true, ..Default::default() };
+            let lang = self.lang.clone();
+            self.r.w.holding_view(|world| crate::panel::draw(&mut f, world, &lang, pb, &name, whole, &mut ui));
+        }
         if let Some(note) = &self.note
             && h > 0
         {
@@ -495,6 +507,8 @@ impl<'m> App<'m> {
     /// docked menu's row does.
     fn button_action(&mut self, action: ItemAction, now: Duration) -> RtResult<()> {
         match action {
+            // without releases from the front end a second click closes it
+            ItemAction::Hold(p) => self.overlay = if !self.releases && self.overlay.as_ref() == Some(&p) { None } else { Some(p) },
             ItemAction::Tab(t) => self.select_tab(&t),
             ItemAction::Read(l) => self.read_log(&l),
             ItemAction::Open { menu, stack } => {
@@ -516,6 +530,7 @@ impl<'m> App<'m> {
     /// The front end's mouse button went up: a held button stops (M 7.7).
     pub fn mouse_release(&mut self) {
         self.held = None;
+        self.overlay = None;
     }
 
     /// `read LOG`: the log opens at its newest (M 7.4).
@@ -622,6 +637,10 @@ impl<'m> App<'m> {
     /// only; other presses are dropped.
     fn press(&mut self, device: Device, press: Press, now: Duration) -> RtResult<()> {
         let always = self.input.keys.is_always(device, &press);
+        // a key closes a held panel (D 11.5)
+        if self.overlay.take().is_some() {
+            return Ok(());
+        }
         // the reading view takes its keys by `MENU`'s bindings, which win
         // over `ALWAYS`'s, so `esc` closes it rather than pausing (M 7.4)
         if self.reading.is_some() {
@@ -838,6 +857,10 @@ impl<'m> App<'m> {
             ItemAction::Tab(t) => {
                 self.menus.clear();
                 self.select_tab(&t);
+            }
+            ItemAction::Hold(p) => {
+                self.menus.clear();
+                self.overlay = Some(p);
             }
             // a command from a menu is the player's command with its cost;
             // the menus close for it
@@ -1459,6 +1482,10 @@ impl<'m> App<'m> {
                 self.select_tab(&t);
                 return Ok(());
             }
+            ItemAction::Hold(p) => {
+                self.overlay = Some(p);
+                return Ok(());
+            }
         };
         self.verb_hint = None;
         if !self.r.w.verb_open(&command, &[]) {
@@ -1548,6 +1575,7 @@ impl<'m> App<'m> {
                             ItemAction::Open { menu, stack } => Action::Open { menu: menu.clone(), stack: *stack },
                             ItemAction::Read(l) => Action::Read(l.clone()),
                             ItemAction::Tab(t) => Action::Tab(t.clone()),
+                            ItemAction::Hold(p) => Action::Engine(format!("hold {p}")),
                         };
                         let key = self.input.keys.shortcut_for(&contexts, device, &action).unwrap_or_default();
                         crate::draw::DockRow { label: self.r.w.text(&self.lang, &format!("{}.{}", d.full, it.key), &[]), key, enabled: turn.is_some() }
@@ -1640,6 +1668,11 @@ impl<'m> App<'m> {
         self.pointer = Some((x, y));
         self.last_key = now;
         self.clock = now;
+        // a held panel shows until the button goes up, or the next click
+        if self.overlay.is_some() && !self.releases {
+            self.overlay = None;
+            return Ok(());
+        }
         // in the reading view the wheel scrolls and a click closes (M 7.4)
         if self.reading.is_some() {
             use termplate_core::keys::Mouse;
@@ -1683,7 +1716,7 @@ impl<'m> App<'m> {
         }
         // a panel's button does its action, and held it repeats (M 7.7)
         if click && let Some((_, action)) = self.view.buttons.iter().find(|(r, _)| r.contains(x, y)).cloned() {
-            if self.releases {
+            if self.releases && !matches!(action, ItemAction::Hold(_)) {
                 self.held = Some((action.clone(), now + HOLD_DELAY));
             }
             return self.button_action(action, now);

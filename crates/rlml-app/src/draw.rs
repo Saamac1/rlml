@@ -38,6 +38,23 @@ pub struct Area {
     pub tabs: Vec<String>,
 }
 
+/// The size a tab's content needs: a panel's drawing, a menu's rows (as
+/// wide as nothing asks); a log takes what it gets (`None`).
+fn content_size(world: &World, tab: &str) -> Option<(usize, usize)> {
+    let name = tab.split('(').next().unwrap_or("");
+    let d = world.m.resolve(None, name).ok()?;
+    match d.kind {
+        Kind::Panel => crate::panel::block(world, &d.full).map(crate::panel::size),
+        Kind::Menu => d.block().map(|b| (0, b.items.len())),
+        _ => None,
+    }
+}
+
+/// The tab row's height: three rows for buttons with a border, else one.
+fn tab_row_height(world: &World, tc: bool) -> usize {
+    if panel_style(world, "button", tc).0 != Border::None { 3 } else { 1 }
+}
+
 /// A tabs area's key: its contents as written, so the same tabs keep
 /// their choice in another layout (D 11.1).
 pub fn tabs_key(tabs: &[String]) -> String {
@@ -341,11 +358,10 @@ impl View {
                                 let edge = if panel_style(world, name, self.truecolor).0 != Border::None { 2 } else { 0 };
                                 content.insert(a.ch, AreaSize { min_width: pw + edge, min_height: ph + edge });
                             }
-                            // a tabs area holds its largest panel and the tab row
+                            // a tabs area holds its largest content and the tab row
                             if !a.tabs.is_empty() {
-                                let sizes = a.tabs.iter().filter_map(|t| crate::panel::block(world, t.split('(').next().unwrap_or(""))).map(crate::panel::size);
-                                let (pw, ph) = sizes.fold((0, 0), |(w, h), (pw, ph)| (w.max(pw), h.max(ph)));
-                                content.insert(a.ch, AreaSize { min_width: pw, min_height: ph + 1 });
+                                let (pw, ph) = a.tabs.iter().filter_map(|t| content_size(world, t)).fold((0, 0), |(w, h), (pw, ph)| (w.max(pw), h.max(ph)));
+                                content.insert(a.ch, AreaSize { min_width: pw, min_height: ph + tab_row_height(world, self.truecolor) });
                             }
                         }
                         let solved = grid.solve(&content, width, height);
@@ -441,7 +457,7 @@ impl View {
             }
             Some((name, Kind::Panel)) => {
                 let Some(pb) = crate::panel::block(world, &name) else { return };
-                let mut ui = crate::panel::PanelUi { truecolor: tc, pointer: self.pointer, enabled: self.enabled, buttons: vec![] };
+                let mut ui = crate::panel::PanelUi { truecolor: tc, button: panel_style(world, "button", tc), pointer: self.pointer, enabled: self.enabled, buttons: vec![] };
                 world.holding_view(|w| crate::panel::draw(frame, w, lang, pb, source, r, &mut ui));
                 self.buttons.extend(ui.buttons);
             }
@@ -449,46 +465,54 @@ impl View {
         }
     }
 
-    /// A tabs area (D 11.1, M 7.1): the titles `<NAME>.TAB` on its top
-    /// row, the chosen one in reverse video and the pointed one
-    /// underlined, and the chosen content under them.
+    /// A tabs area (D 11.1, M 7.1): the titles `<NAME>.TAB` on top, as
+    /// buttons of the `panels` row `button` (three rows high with its
+    /// border, evenly wide) or on one row, the chosen one filled and the
+    /// pointed one bold; the chosen content under them. The titles and the
+    /// content are centred in the area when it is larger.
     fn draw_tabs(&mut self, frame: &mut Frame, world: &mut World, lang: &str, tabs: &[String], r: Rect) {
         if tabs.is_empty() || r.h == 0 || r.w == 0 {
             return;
         }
         let key = tabs_key(tabs);
         let chosen = self.tabs.get(&key).copied().unwrap_or(0).min(tabs.len() - 1);
-        self.tab_areas.push((key.clone(), tabs.iter().map(|t| world.m.resolve(None, t.split('(').next().unwrap_or("")).map_or(t.clone(), |d| d.full.clone())).collect()));
-        let titles: Vec<String> = tabs
+        let fulls: Vec<String> = tabs.iter().map(|t| world.m.resolve(None, t.split('(').next().unwrap_or("")).map_or(t.clone(), |d| d.full.clone())).collect();
+        self.tab_areas.push((key.clone(), fulls.clone()));
+        let titles: Vec<String> = fulls
             .iter()
-            .map(|t| {
-                let name = t.split('(').next().unwrap_or("");
-                let full = world.m.resolve(None, name).map_or(name.to_string(), |d| d.full.clone());
+            .map(|full| {
                 let k = format!("{full}.TAB");
-                if world.m.has_text(lang, &k) { world.text(lang, &k, &[]) } else { name.to_string() }
+                if world.m.has_text(lang, &k) { world.text(lang, &k, &[]) } else { full.rsplit('.').next().unwrap_or(full).to_string() }
             })
             .collect();
-        // titles at their own width with a space each side, or cut evenly
-        let natural: usize = titles.iter().map(|t| termplate_core::frame::str_width(t) + 2).sum();
+        let look = panel_style(world, "button", self.truecolor);
+        let row_h = tab_row_height(world, self.truecolor).min(r.h);
+        // the block of titles and content, centred down the area when every
+        // content has a size of its own
+        let heights: Option<Vec<usize>> = tabs.iter().map(|t| content_size(world, t).map(|s| s.1)).collect();
+        let top = match heights {
+            Some(hs) => r.y + r.h.saturating_sub(row_h + hs.into_iter().max().unwrap_or(0)) / 2,
+            None => r.y,
+        };
         let even = (r.w / tabs.len()).max(1);
-        let mut x = r.x;
         for (i, t) in titles.iter().enumerate() {
-            let w = if natural <= r.w { termplate_core::frame::str_width(t) + 2 } else if i + 1 == tabs.len() { r.x + r.w - x } else { even };
-            let w = w.min(r.x + r.w - x);
-            if w == 0 {
+            let x = r.x + i * even;
+            let w = if i + 1 == tabs.len() { r.x + r.w - x } else { even };
+            if x >= r.x + r.w {
                 break;
             }
-            let cells = Rect::new(x, r.y, w, 1);
-            let label = if natural <= r.w { format!(" {t} ") } else { termplate_core::frame::take_width(t, w).to_string() };
-            frame.text(x, r.y, w, &label, Role::Normal);
-            let mut style = Style::default();
-            style.attrs.reverse = i == chosen;
-            style.attrs.underline = self.pointer.is_some_and(|(px, py)| cells.contains(px, py));
-            paint(frame, cells, style);
+            let cells = Rect::new(x, top, w, row_h);
+            let pointed = self.pointer.is_some_and(|(px, py)| cells.contains(px, py));
+            crate::panel::draw_button(frame, cells, t, look, i == chosen, pointed, false);
             self.tab_rects.push((key.clone(), i, cells));
-            x += w;
         }
-        let content = Rect::new(r.x, r.y + 1, r.w, r.h - 1);
+        let y = top + row_h;
+        let content = Rect::new(r.x, y, r.w, (r.y + r.h).saturating_sub(y));
+        // a narrower panel is centred across
+        let content = match content_size(world, &tabs[chosen]) {
+            Some((w, _)) if w > 0 && w < content.w => Rect::new(content.x + (content.w - w) / 2, content.y, w, content.h),
+            _ => content,
+        };
         self.draw_content(frame, world, lang, &tabs[chosen], content);
     }
 

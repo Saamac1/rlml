@@ -17,7 +17,7 @@ use crate::token::Token;
 pub const ENGINE_ACTIONS: &[&str] = &[
     "save", "quit", "pass", "repeat", "help", "confirm", "back", "close", "resume", "skip", "restart", "rewind", "new_game", "load_game",
     "exit", "next", "prev", "toggle", "travel_to", "look", "cursor", "follow", "verbs", "focus", "join", "leave_seat", "read", "tab", "tab.next",
-    "tab.prev", "page.up", "page.down", "first", "last",
+    "tab.prev", "page.up", "page.down", "first", "last", "hold",
 ];
 
 /// Engine events (M 9.1, M 9.6).
@@ -1026,6 +1026,12 @@ impl Checker<'_> {
             // `read LOG`: a log to read back (D 11.4)
             let target = row.word(1).ok_or("`read` needs a log")?;
             self.m.resolve_kind(ns, target, &[Kind::Log])?;
+            return Ok(2);
+        }
+        if w == "hold" {
+            // `hold PANEL`: shown while the button is held (D 11.5)
+            let target = row.word(1).ok_or("`hold` needs a panel")?;
+            self.m.resolve_kind(ns, target, &[Kind::Panel])?;
             return Ok(2);
         }
         if w == "tab" {
