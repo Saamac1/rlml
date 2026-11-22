@@ -997,3 +997,59 @@ fn a_batch_of_events_cuts_pointer_moves_to_their_last_cell() {
     assert!(app.quit);
     assert_eq!(app.draw().width, 60);
 }
+
+#[test]
+fn the_fog_dims_remembered_cells_out_of_view() {
+    // a remembered floor cell out of view, drawn without and with the veil
+    let looks = |layers: &str| {
+        let layers = layers.to_string();
+        let f = mini_with(move |g| g.push_str(&layers));
+        let m = model(&f);
+        let mut app = App::new(&m, 7, (40, 12)).unwrap();
+        let map = app.r.w.s.active_map().unwrap();
+        let view = app.r.w.player_view(map);
+        let m_ = &app.r.w.s.maps[map];
+        let cell = (0..m_.height).flat_map(|y| (0..m_.width).map(move |x| (x, y))).find(|&(x, y)| !view.contains(&(x, y)) && m_.tile(0, x, y).is_some_and(|t| t.ends_with("FLOOR"))).unwrap();
+        app.r.w.s.maps[map].remembered.push(cell);
+        let seen = *view.iter().find(|&&(x, y)| app.r.w.s.maps[map].tile(0, x, y).is_some_and(|t| t.ends_with("FLOOR")) && app.r.w.s.entities_at(rlml_core::rt::value::Pos { map, x, y }).is_empty()).unwrap();
+        let cells = app.r.w.render_cells(map);
+        (cells[cell.1 as usize][cell.0 as usize], cells[seen.1 as usize][seen.0 as usize])
+    };
+    let (plain, seen) = looks("\nlayers\n- GROUND map remember\n- THINGS entities\n- FOG fog\n");
+    let (veiled, seen_veiled) = looks("\nlayers\n- GROUND map remember\n- THINGS entities\n- FOG fog alpha 50%\n");
+    assert_eq!(plain.fg, Some([0x4a, 0x4a, 0x5a]), "the floor's own color without alpha");
+    assert_eq!(veiled.fg, Some([0x25, 0x25, 0x2d]), "half way to black");
+    assert_eq!(seen, seen_veiled, "what is in view is not dimmed");
+    let (toward, _) = looks("\nlayers\n- GROUND map remember\n- THINGS entities\n- FOG fog alpha 100% color 102030\n");
+    assert_eq!((toward.fg, toward.bg), (Some([0x10, 0x20, 0x30]), Some([0x10, 0x20, 0x30])));
+}
+
+#[test]
+fn a_log_fades_from_the_newest_message() {
+    let f = mini_with(|g| g.push_str("\npanels\n- LOG fade 60%\n\nlogs\n- STD.MESSAGE fg ffffff\n"));
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    app.view.truecolor = true;
+    for _ in 0..3 {
+        app.r.w.log.push(rlml_core::rt::world::LogEntry { key: "STD.MESSAGE.COMBAT.MISS".into(), args: vec![] });
+    }
+    let frame = app.draw();
+    let fg = |y: usize| frame.get(0, y).and_then(|c| c.style).and_then(|s| s.fg);
+    // the log is the last 3 rows: oldest, middle, newest
+    assert_eq!(fg(9), Some(termplate_core::style::Color::Rgb(0x66, 0x66, 0x66)), "the oldest shown at 60%");
+    assert_eq!(fg(10), Some(termplate_core::style::Color::Rgb(0xb3, 0xb3, 0xb3)), "the middle at 30%");
+    assert_eq!(fg(11), Some(termplate_core::style::Color::Rgb(0xff, 0xff, 0xff)), "the newest as it is");
+}
+
+#[test]
+fn a_docked_menu_shows_the_keys_of_engine_actions_and_menus() {
+    let f = mini_with(|g| {
+        *g = g.replace("- keys GAME\n", "- keys GAME\n- layout WITH_KEYS\n");
+        g.push_str("\nlayout WITH_KEYS\n\n```\nmk\nll\n```\n\nlegend:\n- m map\n- k menu KEYS size.width 14\n- l LOG size.height 3\n\nmenu KEYS\n- WAIT\n- LOOK look\n- PAUSE open PAUSE\n\nkeys GAME\n- look e\n");
+    });
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    app.draw();
+    let keys: Vec<String> = app.view.docked.values().next().unwrap().rows.iter().map(|r| r.key.clone()).collect();
+    assert_eq!(keys, ["s", "e", "esc"]);
+}

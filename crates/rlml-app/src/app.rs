@@ -1334,10 +1334,12 @@ impl<'m> App<'m> {
                     .items
                     .iter()
                     .map(|it| {
-                        let key = match &it.action {
-                            ItemAction::Command(c) => self.input.keys.shortcut(&contexts, device, c).unwrap_or_default(),
-                            _ => String::new(),
+                        let action = match &it.action {
+                            ItemAction::Command(c) => Action::Command(c.clone()),
+                            ItemAction::Engine(a) => Action::Engine(a.clone()),
+                            ItemAction::Open { menu, stack } => Action::Open { menu: menu.clone(), stack: *stack },
                         };
+                        let key = self.input.keys.shortcut_for(&contexts, device, &action).unwrap_or_default();
                         crate::draw::DockRow { label: self.r.w.text(&self.lang, &format!("{}.{}", d.full, it.key), &[]), key, enabled: turn.is_some() }
                     })
                     .collect();

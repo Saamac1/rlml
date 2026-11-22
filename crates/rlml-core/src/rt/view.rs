@@ -25,6 +25,20 @@ struct Layer {
     source: String,
     filter: Option<crate::rs::ast::Expr>,
     remember: bool,
+    /// The `fog` layer's `alpha P%` over the remembered cells, toward
+    /// its `color` (black without one, D 9.5).
+    veil: Option<(f32, Rgb)>,
+}
+
+/// A color `share` of the way toward `to`.
+pub fn blend(c: Rgb, to: Rgb, share: f32) -> Rgb {
+    let s = share.clamp(0.0, 1.0);
+    [0, 1, 2].map(|i| (c[i] as f32 + (to[i] as f32 - c[i] as f32) * s).round() as u8)
+}
+
+/// `60%` as 0.6.
+pub fn percent(word: &str) -> Option<f32> {
+    word.strip_suffix('%')?.parse::<f32>().ok().filter(|p| (0.0..=100.0).contains(p)).map(|p| p / 100.0)
 }
 
 impl World<'_> {
@@ -35,16 +49,18 @@ impl World<'_> {
             let words: Vec<&str> = item.tokens.iter().map(|t| t.text.as_str()).collect();
             let remember = words.contains(&"remember");
             let filter = words.iter().position(|w| *w == "where").and_then(|i| {
-                let end = words.iter().position(|w| *w == "remember" || *w == "smooth").filter(|e| *e > i).unwrap_or(words.len());
+                let end = words.iter().position(|w| ["remember", "smooth", "alpha", "color"].contains(w)).filter(|e| *e > i).unwrap_or(words.len());
                 crate::rs::parse::parse_expr(item.span(i + 1, end)).ok()
             });
-            out.push(Layer { source, filter, remember });
+            let after = |k: &str| words.iter().position(|w| *w == k).and_then(|i| words.get(i + 1).copied());
+            let veil = (source == "fog").then(|| after("alpha").and_then(percent)).flatten().map(|a| (a, after("color").and_then(|c| self.color(c, item.namespace.as_deref())).unwrap_or([0, 0, 0])));
+            out.push(Layer { source, filter, remember, veil });
         }
         if out.is_empty() {
             out = vec![
-                Layer { source: "map".into(), filter: None, remember: true },
-                Layer { source: "entities".into(), filter: None, remember: false },
-                Layer { source: "fog".into(), filter: None, remember: false },
+                Layer { source: "map".into(), filter: None, remember: true, veil: None },
+                Layer { source: "entities".into(), filter: None, remember: false, veil: None },
+                Layer { source: "fog".into(), filter: None, remember: false, veil: None },
             ];
         }
         out
@@ -197,8 +213,22 @@ impl World<'_> {
                 "fog" => {
                     for y in 0..h {
                         for x in 0..w {
-                            if !view.contains(&(x, y)) && !(drawn[y as usize][x as usize] && remembered.contains(&(x, y))) {
-                                grid[y as usize][x as usize] = blank;
+                            if view.contains(&(x, y)) {
+                                continue;
+                            }
+                            let cell = &mut grid[y as usize][x as usize];
+                            if !(drawn[y as usize][x as usize] && remembered.contains(&(x, y))) {
+                                *cell = blank;
+                            } else if let Some((alpha, to)) = layer.veil {
+                                // a remembered cell out of view shows dimmed
+                                cell.fg = cell.fg.map(|c| blend(c, to, alpha));
+                                // a cell without a background keeps the
+                                // window's own under a black veil
+                                cell.bg = match cell.bg {
+                                    Some(b) => Some(blend(b, to, alpha)),
+                                    None if to != [0, 0, 0] => Some(blend([0, 0, 0], to, alpha)),
+                                    None => None,
+                                };
                             }
                         }
                     }

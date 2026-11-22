@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 22.11.2026 (himmennykset ja näppäinohje):** `fog`-kerroksen `alpha P%` ja `color VÄRI` himmentävät muistetut ruudut näkökentän ulkopuolella (luku [9.5](09-ulkoasu.md#95-konsolin-kerrokset)). Lokialueen `panels`-rivin `fade P%` himmentää vanhemmat viestit, ja uusin on kirkkain (luku [9.3](09-ulkoasu.md#93-paneelit-lokit-ja-esitys)). Telakoidun valikon rivi näyttää minkä tahansa toiminnon sidonnan, joten valikko toimii klikattavana näppäinohjeena (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)).
+
 **Muutokset 20.11.2026 (moottorin valikon tekstit):** moottorin valikon kohtien tekstiavaimet `ENGINE.NEW_GAME` ja `ENGINE.EXIT` (luku [10](10-tekstit.md)).
 
 **Muutokset 20.11.2026 (klikkaus kohteeseen):** `game`-lohkon kenttä `walk_avoid KYSELY` pitää klikkausmatkan reitin pois ruuduista, esimerkiksi uloskäynneiltä (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)). Kartta-alueen `cursor TYYLI` on `underline`, `reverse`, `bold` tai `bg VÄRI`, ja se merkitsee myös hiiren osoittimen ruudun (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)). Moottorin käytös on moottoridokumentin luvussa [8.1](../moottori/08-syote.md#81-hiiri).

@@ -175,8 +175,27 @@ fn panel_style(w: &World, name: &str, tc: bool) -> (Border, Style) {
     (border, style)
 }
 
+/// A log area's `fade P%` and the color it fades toward: the area's
+/// `bg`, else black (D 9.3).
+fn panel_fade(w: &World, name: &str) -> Option<(f32, Rgb)> {
+    let mut fade = None;
+    let mut bg = None;
+    for (_, item) in w.m.section_rows("panels") {
+        let (_, row) = item.marker();
+        let ns = row.namespace.as_deref();
+        if names::qualify(ns, row.key()) != name && row.key() != name {
+            continue;
+        }
+        let words: Vec<&str> = row.tokens.iter().map(|t| t.text.as_str()).collect();
+        let after = |k: &str| words.iter().position(|x| *x == k).and_then(|i| words.get(i + 1).copied());
+        fade = after("fade").and_then(rlml_core::rt::view::percent).or(fade);
+        bg = after("bg").and_then(|c| w.color(c, ns)).or(bg);
+    }
+    fade.map(|f| (f, bg.unwrap_or([0, 0, 0])))
+}
+
 /// A message key's color by the most specific `logs` row (D 11.4).
-fn log_color(w: &World, key: &str, tc: bool) -> Option<Color> {
+fn log_color(w: &World, key: &str) -> Option<Rgb> {
     let mut best: Option<(usize, Rgb)> = None;
     for (_, item) in w.m.section_rows("logs") {
         let (_, row) = item.marker();
@@ -193,7 +212,7 @@ fn log_color(w: &World, key: &str, tc: bool) -> Option<Color> {
             best = Some((row.key().len(), c));
         }
     }
-    best.map(|(_, c)| rgb(c, tc))
+    best.map(|(_, c)| c)
 }
 
 /// Paints a rectangle's cells with a style.
@@ -456,20 +475,37 @@ pub fn docked_at(view: &View, x: usize, y: usize) -> Option<(String, usize)> {
 fn draw_log(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, tc: bool) {
     let history = world.m.defs.get(name).and_then(|d| d.block()).and_then(|b| b.arg_after("history")).and_then(|n| n.parse::<usize>().ok()).unwrap_or(usize::MAX);
     let selects = log_rows(world, name);
-    let mut lines: Vec<(String, Option<Color>)> = Vec::new();
+    // each line with its color and its message's place in the log
+    let mut lines: Vec<(String, Option<Rgb>, usize)> = Vec::new();
     let entries: Vec<_> = world.log.iter().filter(|l| selects.is_empty() || selects.iter().any(|s| l.key == *s || l.key.starts_with(&format!("{s}.")))).collect();
-    for l in entries.iter().rev().take(history).rev() {
+    let from = entries.len().saturating_sub(history);
+    for (n, l) in entries.iter().enumerate().skip(from) {
         let text = world.text(lang, &l.key, &l.args);
-        let color = log_color(world, &l.key, tc);
+        let color = log_color(world, &l.key);
         for part in wrap(&text, r.w.max(1)) {
-            lines.push((part, color));
+            lines.push((part, color, n));
         }
     }
-    let shown = lines.len().saturating_sub(r.h);
-    for (i, (line, color)) in lines[shown..].iter().enumerate() {
+    let shown = &lines[lines.len().saturating_sub(r.h)..];
+    // `fade`: the newest message is the brightest, the oldest shown the
+    // dimmest (D 9.3)
+    let fade = panel_fade(world, name);
+    let (oldest, newest) = (shown.first().map_or(0, |l| l.2), shown.last().map_or(0, |l| l.2));
+    for (i, (line, color, n)) in shown.iter().enumerate() {
         frame.text(r.x, r.y + i, r.w, line, Role::Normal);
-        if let Some(c) = color {
-            paint(frame, Rect::new(r.x, r.y + i, r.w, 1), Style { fg: Some(*c), ..Style::default() });
+        let share = match fade {
+            Some((f, _)) if newest > oldest => f * (newest - n) as f32 / (newest - oldest) as f32,
+            _ => 0.0,
+        };
+        let mut style = Style::default();
+        match (color, fade) {
+            (Some(c), Some((_, to))) => style.fg = Some(rgb(rlml_core::rt::view::blend(*c, to, share), tc)),
+            (Some(c), None) => style.fg = Some(rgb(*c, tc)),
+            // without a color of its own, an old line is drawn dim
+            (None, _) => style.attrs.dim = share >= 0.5,
+        }
+        if style != Style::default() {
+            paint(frame, Rect::new(r.x, r.y + i, r.w, 1), style);
         }
     }
 }

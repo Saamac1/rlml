@@ -330,8 +330,16 @@ impl Keys {
     /// context stack, as written in a `keys` or `pad` row (M 7.3: a verb's
     /// shortcut). `None` when it is not bound.
     pub fn shortcut(&self, stack: &[String], device: Device, command: &str) -> Option<String> {
-        let want = Action::Command(command.to_string());
-        for name in stack.iter().rev() {
+        self.shortcut_for(stack, device, &Action::Command(command.to_string()))
+    }
+
+    /// The first key or button for any action: a docked menu's row shows
+    /// it for a command, an engine action (`look`) or `open MENU` alike.
+    pub fn shortcut_for(&self, stack: &[String], device: Device, want: &Action) -> Option<String> {
+        let want = want.clone();
+        // `ALWAYS` is heard above every stack
+        let always = ["ALWAYS".to_string()];
+        for name in always.iter().chain(stack.iter().rev()) {
             let Some(c) = self.contexts.get(name) else { continue };
             let found = match device {
                 Device::Keyboard(p) => c.parts.get(&p).unwrap_or(&c.rows).iter().find(|(_, a)| *a == want).map(|(b, _)| b.name()),

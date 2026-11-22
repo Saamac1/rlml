@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 22.11.2026 (himmennykset ja näppäinohje):** moottori himmentää muistetut ruudut näkökentän ulkopuolella `fog`-kerroksen `alpha`-arvon mukaan (luku [7.2](07-esitys.md#72-kartan-piirtäminen)) ja lokin vanhemmat viestit `fade`-arvon mukaan ([D 9.3](../dataformaatit/09-ulkoasu.md#93-paneelit-lokit-ja-esitys)). Telakoidun valikon rivi näyttää myös moottorin toiminnon ja `open`-kohdan sidonnan, `ALWAYS`-konteksti mukaan lukien (luku [8.1](08-syote.md#81-hiiri)).
+
 **Muutokset 20.11.2026 (moottorin valikon tekstit):** moottorin valikko `ENGINE` hakee kohtiensa tekstit avaimista `ENGINE.NEW_GAME` ja `ENGINE.EXIT`, jotka peli kääntää (luku [8](08-syote.md)). Tämä sulkee avoimen kysymyksen (luku [11](11-avoimet-kysymykset.md)).
 
 **Muutokset 20.11.2026 (klikkaus kohteeseen):** klikkausmatka entiteettiin, joka estää liikkeen, päättyy sen viereen ja askeleeseen sitä kohti, joten klikkaus kävelee päin ja käyttää kohdetta. Matka ei astu reitin varrella olevaan estävään entiteettiin, ja `walk_avoid` pitää reitin pois pelin välttämistä ruuduista. Osoittimen ruutu merkitään kartalle kursorin tyylillä (luku [8.1](08-syote.md#81-hiiri)). Tarkistus kattaa kentän `walk_avoid` (luku [2.5](02-lataus.md#25-tarkistukset)).
