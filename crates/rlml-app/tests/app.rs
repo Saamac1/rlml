@@ -1264,22 +1264,17 @@ fn a_modal_panel_scrolls_when_it_does_not_fit_and_buttons_hide_and_press() {
     app.mouse_press(click(), r.x, r.y, ms(10)).unwrap();
     assert!(app.reading.as_ref().is_some_and(|r| r.panel), "open LIST opens the panel");
     app.mouse_release();
-    // 15 rows fit in 30: centred down
+    // over the band under the map, which stays in sight: 3 rows of 15, so
+    // it scrolls, down to its last row only
     let f = app.draw();
-    let first = f.rows().iter().position(|r| r.trim() == "1").unwrap();
-    assert_eq!(first, (30 - 15) / 2);
-    app.mouse_press(click(), 1, 1, ms(20)).unwrap();
-    assert!(app.reading.is_none(), "a tap closes it");
-    // in a window of 8 rows it scrolls, down to its last row only
-    app.resize(20, 8);
-    app.pixels = Some((200, 800));
-    app.draw();
-    let (r, _) = app.view.buttons[0].clone();
-    app.mouse_press(click(), r.x, r.y, ms(30)).unwrap();
-    app.mouse_release();
-    assert_eq!(app.draw().row(0).trim(), "1");
+    let map = app.view.map_rect.unwrap();
+    let band = map.y + map.h;
+    assert_eq!(f.row(band).trim(), "1", "{:#?}", f.rows());
+    assert!(f.rows()[..band].iter().any(|r| r.contains('@')), "the map shows");
     app.mouse_press(Binding::mouse(termplate_core::keys::Mouse::WheelDown), 1, 1, ms(40)).unwrap();
-    assert_eq!(app.draw().row(0).trim(), "4", "the wheel scrolls three rows");
+    assert_eq!(app.draw().row(band).trim(), "4", "the wheel scrolls three rows");
     press(&mut app, "end");
-    assert_eq!(app.draw().row(7).trim(), "15", "the last row at the bottom");
+    assert_eq!(app.draw().row(29).trim(), "15", "the last row at the bottom");
+    app.mouse_press(click(), 1, 1, ms(50)).unwrap();
+    assert!(app.reading.is_none(), "a tap closes it");
 }

@@ -448,7 +448,7 @@ impl<'m> App<'m> {
         self.view.portrait = self.portrait();
         self.view.pointer = self.pointer;
         self.view.enabled = self.players_turn() && !self.menus.is_open();
-        if self.reading.is_some() {
+        if self.reading.as_ref().is_some_and(|r| !r.panel) {
             return self.draw_reading(w, h);
         }
         let mut f = if self.playing { self.view.draw(&mut self.r.w, &self.lang, w, h) } else { Frame::new(w, h) };
@@ -462,26 +462,32 @@ impl<'m> App<'m> {
         if let Some(name) = self.overlay.clone()
             && let Some(pb) = crate::panel::block(&self.r.w, &name)
         {
-            // over the window's largest band beside the map, so the map
-            // stays in sight, or over the whole window (M 7.7)
-            let whole = termplate_core::layout::Rect::new(0, 0, w, h);
-            let over = match self.view.map_rect {
-                Some(m) => {
-                    let (right, below) = ((m.x + m.w).min(w), (m.y + m.h).min(h));
-                    let bands = [
-                        termplate_core::layout::Rect::new(0, below, w, h - below),
-                        termplate_core::layout::Rect::new(0, 0, w, m.y),
-                        termplate_core::layout::Rect::new(right, 0, w - right, h),
-                        termplate_core::layout::Rect::new(0, 0, m.x, h),
-                    ];
-                    bands.into_iter().filter(|b| b.w > 0 && b.h > 0).max_by_key(|b| b.w * b.h).unwrap_or(whole)
-                }
-                None => whole,
-            };
+            // over the window's largest band beside the map (M 7.7)
+            let over = self.beside_map(w, h);
             f.fill(over, ' ', termplate_core::frame::Role::Normal);
             let mut ui = crate::panel::PanelUi { truecolor: self.view.truecolor, enabled: true, ..Default::default() };
             let lang = self.lang.clone();
             self.r.w.holding_view(|world| crate::panel::draw(&mut f, world, &lang, pb, &name, over, &mut ui));
+        }
+        // a modal panel over the band beside the map, scrolled as the
+        // reading view (D 11.5)
+        if let Some(r) = self.reading.clone().filter(|r| r.panel) {
+            let band = self.beside_map(w, h);
+            f.fill(band, ' ', termplate_core::frame::Role::Normal);
+            let line = |key: String| self.m.has_text(&self.lang, &key).then(|| self.r.w.text(&self.lang, &key, &[]));
+            let (title, hint) = (line(format!("{}.TITLE", r.log)), line(format!("{}.READ", r.log)));
+            let (top, bottom) = (title.is_some() as usize, hint.is_some() as usize);
+            if let Some(t) = &title {
+                f.text(band.x, band.y, band.w, t, termplate_core::frame::Role::Title);
+            }
+            if let Some(t) = &hint
+                && band.h > 0
+            {
+                f.text(band.x, band.y + band.h - 1, band.w, t, termplate_core::frame::Role::Dim);
+            }
+            let rect = termplate_core::layout::Rect::new(band.x, band.y + top, band.w, band.h.saturating_sub(top + bottom));
+            let back = self.draw_modal_panel(&mut f, &r.log, rect, r.back);
+            self.reading = Some(Reading { back, page: rect.h, ..r });
         }
         if let Some(note) = &self.note
             && h > 0
@@ -600,14 +606,21 @@ impl<'m> App<'m> {
             f.text(0, h - 1, w, t, termplate_core::frame::Role::Dim);
         }
         let rect = termplate_core::layout::Rect::new(0, top, w, h.saturating_sub(top + bottom));
-        if r.panel {
-            let back = self.draw_modal_panel(&mut f, &r.log, rect, r.back);
-            self.reading = Some(Reading { back, page: rect.h, ..r });
-            return f;
-        }
         let (_, back) = crate::draw::draw_log_back(&mut f, &self.r.w, &self.lang, &r.log, rect, self.view.truecolor, r.back);
         self.reading = Some(Reading { back, page: rect.h, ..r });
         f
+    }
+
+    /// The window's largest band outside the map area (below, above, right
+    /// or left of it), so the map stays in sight; the whole window without
+    /// a map area (D 11.5, M 7.7).
+    fn beside_map(&self, w: usize, h: usize) -> termplate_core::layout::Rect {
+        use termplate_core::layout::Rect;
+        let whole = Rect::new(0, 0, w, h);
+        let Some(m) = self.view.map_rect else { return whole };
+        let (right, below) = ((m.x + m.w).min(w), (m.y + m.h).min(h));
+        let bands = [Rect::new(0, below, w, h - below), Rect::new(0, 0, w, m.y), Rect::new(right, 0, w - right, h), Rect::new(0, 0, m.x, h)];
+        bands.into_iter().filter(|b| b.w > 0 && b.h > 0).max_by_key(|b| b.w * b.h).unwrap_or(whole)
     }
 
     /// A modal panel in `r` (D 11.5): drawn whole off the screen, centred
@@ -624,8 +637,8 @@ impl<'m> App<'m> {
         let used = (0..ph).rev().find(|&y| off.row(y).trim() != "").map_or(0, |y| y + 1);
         let (from, at) = if used <= r.h { (0, r.y + (r.h - used) / 2) } else { (back.min(used - r.h), r.y) };
         for y in 0..used.min(r.h) {
-            for x in 0..r.w.min(f.width) {
-                f.cells[(at + y) * f.width + x] = off.cells[(from + y) * off.width + x];
+            for x in 0..r.w.min(f.width.saturating_sub(r.x)) {
+                f.cells[(at + y) * f.width + r.x + x] = off.cells[(from + y) * off.width + x];
             }
         }
         from
