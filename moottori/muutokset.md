@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 22.11.2026 (vieritysnapit):** lukunäkymän ja modaalisen paneelin vieritysnapit (luku [7.4](07-esitys.md#74-loki-ja-dialogit)).
+
 **Muutokset 22.11.2026 (napit, osa 2):** piilotettavat ja painettuna näkyvät napit sekä vieritettävä modaalinen paneeli (luku [7.7](07-esitys.md#77-paneelit)).
 
 **Muutokset 22.11.2026 (kosketus):** `read`- ja `center`-määreet ja `hold`-paneelin paikka kartan vieressä (luku [7.7](07-esitys.md#77-paneelit)).

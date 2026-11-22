@@ -54,6 +54,12 @@ fn content_size(world: &World, tab: &str) -> Option<(usize, usize)> {
     }
 }
 
+/// The buttons' look and the pressed one's: the `panels` rows `button`
+/// and `button.pressed` (D 9.3).
+pub fn button_look(world: &World, tc: bool) -> ((Border, Style), Style) {
+    (panel_style(world, "button", tc), panel_style(world, "button.pressed", tc).1)
+}
+
 /// The tab row's height: three rows for buttons with a border, else one.
 fn tab_row_height(world: &World, tc: bool) -> usize {
     if panel_style(world, "button", tc).0 != Border::None { 3 } else { 1 }

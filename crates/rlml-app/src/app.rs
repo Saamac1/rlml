@@ -211,6 +211,9 @@ pub struct Reading {
     /// A modal panel (`open PANEL`, D 11.5) read the same way: `back` is
     /// then the rows scrolled down from its top.
     pub panel: bool,
+    /// The scroll buttons drawn last, up and down, where something is
+    /// hidden that way (M 7.4).
+    pub arrows: (Option<termplate_core::layout::Rect>, Option<termplate_core::layout::Rect>),
 }
 
 /// The verb coin's name as a menu layer.
@@ -486,8 +489,9 @@ impl<'m> App<'m> {
                 f.text(band.x, band.y + band.h - 1, band.w, t, termplate_core::frame::Role::Dim);
             }
             let rect = termplate_core::layout::Rect::new(band.x, band.y + top, band.w, band.h.saturating_sub(top + bottom));
-            let back = self.draw_modal_panel(&mut f, &r.log, rect, r.back);
-            self.reading = Some(Reading { back, page: rect.h, ..r });
+            let (back, used) = self.draw_modal_panel(&mut f, &r.log, rect, r.back);
+            let arrows = self.draw_arrows(&mut f, rect, back > 0, back + rect.h < used);
+            self.reading = Some(Reading { back, page: rect.h, arrows, ..r });
         }
         if let Some(note) = &self.note
             && h > 0
@@ -561,7 +565,7 @@ impl<'m> App<'m> {
 
     /// `read LOG`: the log opens at its newest (M 7.4).
     fn read_log(&mut self, log: &str) {
-        self.reading = Some(Reading { log: log.to_string(), back: 0, page: 1, panel: false });
+        self.reading = Some(Reading { log: log.to_string(), back: 0, page: 1, panel: false, arrows: (None, None) });
     }
 
     /// A `MENU` action in the reading view.
@@ -606,9 +610,34 @@ impl<'m> App<'m> {
             f.text(0, h - 1, w, t, termplate_core::frame::Role::Dim);
         }
         let rect = termplate_core::layout::Rect::new(0, top, w, h.saturating_sub(top + bottom));
-        let (_, back) = crate::draw::draw_log_back(&mut f, &self.r.w, &self.lang, &r.log, rect, self.view.truecolor, r.back);
-        self.reading = Some(Reading { back, page: rect.h, ..r });
+        let (lines, back) = crate::draw::draw_log_back(&mut f, &self.r.w, &self.lang, &r.log, rect, self.view.truecolor, r.back);
+        let arrows = self.draw_arrows(&mut f, rect, lines > back + rect.h, back > 0);
+        self.reading = Some(Reading { back, page: rect.h, arrows, ..r });
         f
+    }
+
+    /// The scroll buttons at the right of `r` (M 7.4): `↑` at the top when
+    /// something is hidden above, `↓` at the bottom when below; three rows
+    /// high where there is room.
+    fn draw_arrows(&mut self, f: &mut Frame, r: termplate_core::layout::Rect, above: bool, below: bool) -> (Option<termplate_core::layout::Rect>, Option<termplate_core::layout::Rect>) {
+        use termplate_core::layout::Rect;
+        let (look, pressed) = crate::draw::button_look(&self.r.w, self.view.truecolor);
+        let (bw, bh) = (5.min(r.w), if r.h >= 7 { 3 } else { 1 });
+        if bw == 0 || r.h < 2 * bh {
+            return (None, None);
+        }
+        let x = r.x + r.w - bw;
+        let mut out = (None, None);
+        for (show, y, label, slot) in [(above, r.y, "↑", 0), (below, r.y + r.h - bh, "↓", 1)] {
+            if !show {
+                continue;
+            }
+            let cells = Rect::new(x, y, bw, bh);
+            let look = if self.view.pressed == Some(cells) { (look.0, look.1.over(pressed)) } else { look };
+            crate::panel::draw_button(f, cells, label, look, false, false, false);
+            if slot == 0 { out.0 = Some(cells) } else { out.1 = Some(cells) }
+        }
+        out
     }
 
     /// The window's largest band outside the map area (below, above, right
@@ -625,9 +654,10 @@ impl<'m> App<'m> {
 
     /// A modal panel in `r` (D 11.5): drawn whole off the screen, centred
     /// across, centred down when it fits, else scrolled `back` rows from
-    /// its top, cut to its last written row. Gives the `back` drawn.
-    fn draw_modal_panel(&mut self, f: &mut Frame, name: &str, r: termplate_core::layout::Rect, back: usize) -> usize {
-        let Some(pb) = crate::panel::block(&self.r.w, name) else { return 0 };
+    /// its top, cut to its last written row. Gives the `back` drawn and
+    /// the rows the panel uses.
+    fn draw_modal_panel(&mut self, f: &mut Frame, name: &str, r: termplate_core::layout::Rect, back: usize) -> (usize, usize) {
+        let Some(pb) = crate::panel::block(&self.r.w, name) else { return (0, 0) };
         let (pw, ph) = crate::panel::size(pb);
         let mut off = Frame::new(r.w, ph);
         let whole = termplate_core::layout::Rect::new(r.w.saturating_sub(pw) / 2, 0, pw.min(r.w), ph);
@@ -641,7 +671,7 @@ impl<'m> App<'m> {
                 f.cells[(at + y) * f.width + r.x + x] = off.cells[(from + y) * off.width + x];
             }
         }
-        from
+        (from, used)
     }
 
     pub fn resize(&mut self, w: usize, h: usize) {
@@ -806,7 +836,7 @@ impl<'m> App<'m> {
     fn open(&mut self, menu: &str, stack: bool) {
         // a panel opens modal, scrolled like the reading view (D 11.5)
         if self.m.kind(menu) == Some(rlml_core::model::Kind::Panel) {
-            self.reading = Some(Reading { log: menu.to_string(), back: 0, page: 1, panel: true });
+            self.reading = Some(Reading { log: menu.to_string(), back: 0, page: 1, panel: true, arrows: (None, None) });
             return;
         }
         if !self.menus.open(&mut self.r.w, menu, stack) {
@@ -1745,7 +1775,24 @@ impl<'m> App<'m> {
             match b {
                 Binding::Mouse(Mouse::WheelUp, _) => self.scroll_reading(3),
                 Binding::Mouse(Mouse::WheelDown, _) => self.scroll_reading(-3),
-                Binding::Mouse(Mouse::Click | Mouse::RightClick, _) => self.reading = None,
+                Binding::Mouse(Mouse::Click, _) => {
+                    // the scroll buttons scroll half a view, elsewhere a
+                    // click closes (M 7.4)
+                    let (up, down) = self.reading.as_ref().map_or((None, None), |r| r.arrows);
+                    let half = self.reading.as_ref().map_or(1, |r| (r.page / 2).max(1)) as isize;
+                    match (up.filter(|r| r.contains(x, y)), down.filter(|r| r.contains(x, y))) {
+                        (Some(r), _) => {
+                            self.scroll_reading(half);
+                            self.view.pressed = self.releases.then_some(r);
+                        }
+                        (_, Some(r)) => {
+                            self.scroll_reading(-half);
+                            self.view.pressed = self.releases.then_some(r);
+                        }
+                        _ => self.reading = None,
+                    }
+                }
+                Binding::Mouse(Mouse::RightClick, _) => self.reading = None,
                 _ => {}
             }
             return Ok(());

@@ -1072,6 +1072,14 @@ fn the_log_is_read_back_to_its_start() {
     press(&mut app, "o");
     assert!(app.reading.is_some());
     assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N29", "the newest at the bottom");
+    // older messages are hidden above: the up button, and none down
+    let (up, down) = app.reading.as_ref().unwrap().arrows;
+    assert!(down.is_none());
+    let up = up.expect("older above");
+    app.mouse_press(click(), up.x, up.y, ms(15)).unwrap();
+    assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N23", "half a view up");
+    assert!(app.reading.as_ref().unwrap().arrows.1.is_some(), "newer below now");
+    press(&mut app, "end");
     assert_eq!(row(&mut app, 0), "STD.MESSAGE.COMBAT.N18", "the whole window is the log");
     press(&mut app, "k");
     assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N28");
@@ -1271,10 +1279,20 @@ fn a_modal_panel_scrolls_when_it_does_not_fit_and_buttons_hide_and_press() {
     let band = map.y + map.h;
     assert_eq!(f.row(band).trim(), "1", "{:#?}", f.rows());
     assert!(f.rows()[..band].iter().any(|r| r.contains('@')), "the map shows");
+    // at its top only the down button: a tap on it scrolls, then up shows
+    let (up, down) = app.reading.as_ref().unwrap().arrows;
+    assert!(up.is_none());
+    let down = down.expect("more below");
+    assert!(f.row(down.y).trim_end().ends_with('↓'));
+    app.mouse_press(click(), down.x, down.y, ms(35)).unwrap();
+    assert!(app.reading.is_some(), "the button scrolls and does not close");
+    assert_eq!(app.draw().row(band).trim_start().chars().next(), Some('2'));
+    assert!(app.reading.as_ref().unwrap().arrows.0.is_some(), "now something above");
+    press(&mut app, "home");
     app.mouse_press(Binding::mouse(termplate_core::keys::Mouse::WheelDown), 1, 1, ms(40)).unwrap();
-    assert_eq!(app.draw().row(band).trim(), "4", "the wheel scrolls three rows");
+    assert!(app.draw().row(band).trim_start().starts_with("4 "), "the wheel scrolls three rows");
     press(&mut app, "end");
-    assert_eq!(app.draw().row(29).trim(), "15", "the last row at the bottom");
+    assert_eq!(app.draw().row(29).split_whitespace().next(), Some("15"), "the last row at the bottom");
     app.mouse_press(click(), 1, 1, ms(50)).unwrap();
     assert!(app.reading.is_none(), "a tap closes it");
 }
