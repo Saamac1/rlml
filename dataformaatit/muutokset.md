@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 22.11.2026 (napit, osa 2):** napin `hide when EHTO`, painetun napin värit `button.pressed` ja modaalisen paneelin vieritys (luvut [9.3](09-ulkoasu.md#93-paneelit-lokit-ja-esitys) ja [11.5](11-kayttoliittyman-data.md#115-paneelit)).
+
 **Muutokset 22.11.2026 (kosketus):** lokialueen määre `read` avaa lukunäkymän napautuksesta, paneelialueen `center` keskittää paneelin (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)), ja `hold`-paneeli peittää kartan viereisen kaistan eikä karttaa (luku [11.5](11-kayttoliittyman-data.md#115-paneelit)).
 
 **Muutokset 22.11.2026 (napit):** napin ja välilehden otsikon ulkoasu `panels`-rivillä `button`, otsikot tasaleveinä nappeina ja sisällön keskitys välilehtialueessa (luvut [9.3](09-ulkoasu.md#93-paneelit-lokit-ja-esitys) ja [11.1](11-kayttoliittyman-data.md#111-asettelu)). Napin toiminto `hold PANEELI` näyttää paneelin pidon ajan (luku [11.5](11-kayttoliittyman-data.md#115-paneelit)).

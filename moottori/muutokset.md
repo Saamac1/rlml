@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 22.11.2026 (napit, osa 2):** piilotettavat ja painettuna näkyvät napit sekä vieritettävä modaalinen paneeli (luku [7.7](07-esitys.md#77-paneelit)).
+
 **Muutokset 22.11.2026 (kosketus):** `read`- ja `center`-määreet ja `hold`-paneelin paikka kartan vieressä (luku [7.7](07-esitys.md#77-paneelit)).
 
 **Muutokset 22.11.2026 (napit):** napit ja välilehtien otsikot `button`-ulkoasulla, keskitetty välilehtialue (luku [7.1](07-esitys.md#71-asettelu)) ja pidon ajan näkyvä paneeli `hold` (luku [7.7](07-esitys.md#77-paneelit)).

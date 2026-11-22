@@ -1237,3 +1237,49 @@ fn layout_rows_need_one_default() {
     assert!(errors.iter().any(|e| e.contains("exactly one has no `when`, here 2")), "{errors:?}");
     assert!(errors.iter().any(|e| e.contains("`<>` is no comparison")), "{errors:?}");
 }
+
+#[test]
+fn a_modal_panel_scrolls_when_it_does_not_fit_and_buttons_hide_and_press() {
+    let rows: String = (0..20).map(|_| "LLLLLLLLLL\n").collect();
+    let f = mini_with(move |g| {
+        *g = g.replace("- keys GAME\n", "- keys GAME\n- layout MAIN\n- layout PHONE when portrait\n");
+        g.push_str(&format!(
+            "\nlayout PHONE\n\n```\nm\np\n```\n\nlegend:\n- m map\n- p PAD size.height 3\n\n\
+             panel PAD\n\n```\nhhhh oooo\n```\n\nlegend:\n- h button open LIST text PAD.H\n- o button MOVE.NORTH text PAD.O hide when player.at.x == 2\n\n\
+             panel LIST\n\n```\n{rows}```\n\nlegend:\n- L value [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]\n\n\
+             panels\n- button fg 000000 bg ffff00\n- button.pressed bg ffffff\n"
+        ));
+    });
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (20, 30)).unwrap();
+    app.view.truecolor = true;
+    app.releases = true;
+    app.draw();
+    // the player stands at x 2: the second button is hidden
+    assert_eq!(app.view.buttons.len(), 1);
+    // held down, a button is white, and yellow again when let go
+    let (r, _) = app.view.buttons[0].clone();
+    let bg = |app: &mut App| app.draw().get(r.x, r.y).and_then(|c| c.style).and_then(|s| s.bg);
+    assert_eq!(bg(&mut app), Some(termplate_core::style::Color::Rgb(0xff, 0xff, 0x00)));
+    app.mouse_press(click(), r.x, r.y, ms(10)).unwrap();
+    assert!(app.reading.as_ref().is_some_and(|r| r.panel), "open LIST opens the panel");
+    app.mouse_release();
+    // 15 rows fit in 30: centred down
+    let f = app.draw();
+    let first = f.rows().iter().position(|r| r.trim() == "1").unwrap();
+    assert_eq!(first, (30 - 15) / 2);
+    app.mouse_press(click(), 1, 1, ms(20)).unwrap();
+    assert!(app.reading.is_none(), "a tap closes it");
+    // in a window of 8 rows it scrolls, down to its last row only
+    app.resize(20, 8);
+    app.pixels = Some((200, 800));
+    app.draw();
+    let (r, _) = app.view.buttons[0].clone();
+    app.mouse_press(click(), r.x, r.y, ms(30)).unwrap();
+    app.mouse_release();
+    assert_eq!(app.draw().row(0).trim(), "1");
+    app.mouse_press(Binding::mouse(termplate_core::keys::Mouse::WheelDown), 1, 1, ms(40)).unwrap();
+    assert_eq!(app.draw().row(0).trim(), "4", "the wheel scrolls three rows");
+    press(&mut app, "end");
+    assert_eq!(app.draw().row(7).trim(), "15", "the last row at the bottom");
+}

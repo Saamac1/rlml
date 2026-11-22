@@ -208,6 +208,9 @@ pub struct Reading {
     pub log: String,
     pub back: usize,
     pub page: usize,
+    /// A modal panel (`open PANEL`, D 11.5) read the same way: `back` is
+    /// then the rows scrolled down from its top.
+    pub panel: bool,
 }
 
 /// The verb coin's name as a menu layer.
@@ -526,8 +529,9 @@ impl<'m> App<'m> {
             ItemAction::Hold(p) => self.overlay = if !self.releases && self.overlay.as_ref() == Some(&p) { None } else { Some(p) },
             ItemAction::Tab(t) => self.select_tab(&t),
             ItemAction::Read(l) => self.read_log(&l),
+            // a panel is read at any time, a menu on the turn
             ItemAction::Open { menu, stack } => {
-                if self.players_turn() {
+                if self.players_turn() || self.m.kind(&menu) == Some(rlml_core::model::Kind::Panel) {
                     self.open(&menu, stack);
                 }
             }
@@ -546,11 +550,12 @@ impl<'m> App<'m> {
     pub fn mouse_release(&mut self) {
         self.held = None;
         self.overlay = None;
+        self.view.pressed = None;
     }
 
     /// `read LOG`: the log opens at its newest (M 7.4).
     fn read_log(&mut self, log: &str) {
-        self.reading = Some(Reading { log: log.to_string(), back: 0, page: 1 });
+        self.reading = Some(Reading { log: log.to_string(), back: 0, page: 1, panel: false });
     }
 
     /// A `MENU` action in the reading view.
@@ -568,9 +573,11 @@ impl<'m> App<'m> {
         }
     }
 
-    /// Lines up (positive) or down; the drawing cuts it to the oldest.
+    /// Lines up (positive) or down; the drawing cuts it to the oldest, and
+    /// a panel's to its last row.
     fn scroll_reading(&mut self, by: isize) {
         if let Some(r) = &mut self.reading {
+            let by = if r.panel { by.saturating_neg() } else { by };
             r.back = (r.back as isize).saturating_add(by).max(0) as usize;
         }
     }
@@ -593,9 +600,35 @@ impl<'m> App<'m> {
             f.text(0, h - 1, w, t, termplate_core::frame::Role::Dim);
         }
         let rect = termplate_core::layout::Rect::new(0, top, w, h.saturating_sub(top + bottom));
+        if r.panel {
+            let back = self.draw_modal_panel(&mut f, &r.log, rect, r.back);
+            self.reading = Some(Reading { back, page: rect.h, ..r });
+            return f;
+        }
         let (_, back) = crate::draw::draw_log_back(&mut f, &self.r.w, &self.lang, &r.log, rect, self.view.truecolor, r.back);
         self.reading = Some(Reading { back, page: rect.h, ..r });
         f
+    }
+
+    /// A modal panel in `r` (D 11.5): drawn whole off the screen, centred
+    /// across, centred down when it fits, else scrolled `back` rows from
+    /// its top, cut to its last written row. Gives the `back` drawn.
+    fn draw_modal_panel(&mut self, f: &mut Frame, name: &str, r: termplate_core::layout::Rect, back: usize) -> usize {
+        let Some(pb) = crate::panel::block(&self.r.w, name) else { return 0 };
+        let (pw, ph) = crate::panel::size(pb);
+        let mut off = Frame::new(r.w, ph);
+        let whole = termplate_core::layout::Rect::new(r.w.saturating_sub(pw) / 2, 0, pw.min(r.w), ph);
+        let mut ui = crate::panel::PanelUi { truecolor: self.view.truecolor, enabled: true, ..Default::default() };
+        let lang = self.lang.clone();
+        self.r.w.holding_view(|world| crate::panel::draw(&mut off, world, &lang, pb, name, whole, &mut ui));
+        let used = (0..ph).rev().find(|&y| off.row(y).trim() != "").map_or(0, |y| y + 1);
+        let (from, at) = if used <= r.h { (0, r.y + (r.h - used) / 2) } else { (back.min(used - r.h), r.y) };
+        for y in 0..used.min(r.h) {
+            for x in 0..r.w.min(f.width) {
+                f.cells[(at + y) * f.width + x] = off.cells[(from + y) * off.width + x];
+            }
+        }
+        from
     }
 
     pub fn resize(&mut self, w: usize, h: usize) {
@@ -758,6 +791,11 @@ impl<'m> App<'m> {
     }
 
     fn open(&mut self, menu: &str, stack: bool) {
+        // a panel opens modal, scrolled like the reading view (D 11.5)
+        if self.m.kind(menu) == Some(rlml_core::model::Kind::Panel) {
+            self.reading = Some(Reading { log: menu.to_string(), back: 0, page: 1, panel: true });
+            return;
+        }
         if !self.menus.open(&mut self.r.w, menu, stack) {
             self.note = Some(format!("{menu}: list menus and panels are not supported yet"));
         }
@@ -1735,8 +1773,11 @@ impl<'m> App<'m> {
             return Ok(());
         }
         // a panel's button does its action, and held it repeats (M 7.7)
-        if click && let Some((_, action)) = self.view.buttons.iter().find(|(r, _)| r.contains(x, y)).cloned() {
-            if self.releases && !matches!(action, ItemAction::Hold(_)) {
+        if click && let Some((cells, action)) = self.view.buttons.iter().find(|(r, _)| r.contains(x, y)).cloned() {
+            if self.releases {
+                self.view.pressed = Some(cells);
+            }
+            if self.releases && !matches!(action, ItemAction::Hold(_) | ItemAction::Open { .. }) {
                 self.held = Some((action.clone(), now + HOLD_DELAY));
             }
             return self.button_action(action, now);

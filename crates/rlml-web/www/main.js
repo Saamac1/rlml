@@ -213,9 +213,14 @@ function lift(e) {
   if (!t || t.id !== e.pointerId) return;
   touch = null;
   if (t.timer) {
-    // a tap shorter than the hold: a click now
+    // a tap shorter than the hold: a click now, let go a moment later so
+    // the button shows it was pressed
     clearTimeout(t.timer);
-    if (!t.swiping) pressAt(t.cell, 'click');
+    if (!t.swiping) {
+      pressAt(t.cell, 'click');
+      setTimeout(() => send({ t: 'release' }), 120);
+      return;
+    }
   }
   send({ t: 'release' });
 }

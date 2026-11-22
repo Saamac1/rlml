@@ -126,6 +126,8 @@ pub struct View {
     pub enabled: bool,
     /// The last frame's buttons: their cells and actions.
     pub buttons: Vec<(Rect, crate::menu::ItemAction)>,
+    /// The button held down now, which shows `button.pressed` (D 9.3).
+    pub pressed: Option<Rect>,
     /// The last frame's `read` log areas: their cells and logs.
     pub read_rects: Vec<(Rect, String)>,
     /// Colors as 24 bits, else the nearest of the 256-color palette; the
@@ -475,7 +477,15 @@ impl View {
             }
             Some((name, Kind::Panel)) => {
                 let Some(pb) = crate::panel::block(world, &name) else { return };
-                let mut ui = crate::panel::PanelUi { truecolor: tc, button: panel_style(world, "button", tc), pointer: self.pointer, enabled: self.enabled, buttons: vec![] };
+                let mut ui = crate::panel::PanelUi {
+                    truecolor: tc,
+                    button: panel_style(world, "button", tc),
+                    pressed_look: panel_style(world, "button.pressed", tc).1,
+                    pressed: self.pressed,
+                    pointer: self.pointer,
+                    enabled: self.enabled,
+                    buttons: vec![],
+                };
                 world.holding_view(|w| crate::panel::draw(frame, w, lang, pb, source, r, &mut ui));
                 self.buttons.extend(ui.buttons);
             }
