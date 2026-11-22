@@ -34,6 +34,14 @@ pub struct Area {
     /// The map area's `cursor TYYLI` as written: `underline`, `reverse`,
     /// `bold` or `bg COLOR` (D 11.1).
     pub cursor: Vec<String>,
+    /// A `tabs` area's contents as written (`PACK(player)`, D 11.1).
+    pub tabs: Vec<String>,
+}
+
+/// A tabs area's key: its contents as written, so the same tabs keep
+/// their choice in another layout (D 11.1).
+pub fn tabs_key(tabs: &[String]) -> String {
+    tabs.join(" ")
 }
 
 /// A docked menu's row as the app gives it to draw (M 7.1, M 8.1).
@@ -80,6 +88,23 @@ pub struct View {
     pub docked_rects: BTreeMap<String, Rect>,
     /// The `sentence` area's text (M 8.1); the app sets it.
     pub sentence: Option<String>,
+    /// The window is taller than wide in pixels: the app sets it, and the
+    /// layout is chosen by it and the window's cells (D 11.1).
+    pub portrait: bool,
+    /// The chosen tab of each tabs area by its key (`tabs_key`), and the
+    /// key of the area whose tab changed last (D 11.1).
+    pub tabs: BTreeMap<String, usize>,
+    pub last_tabs: Option<String>,
+    /// Where the last frame drew each tab title: the area's key, the tab
+    /// and its cells; and each tabs area's key with its tabs' names.
+    pub tab_rects: Vec<(String, usize, Rect)>,
+    pub tab_areas: Vec<(String, Vec<String>)>,
+    /// The pointer's cell and whether the turn's seat can act, for the
+    /// buttons; the app sets them (D 11.5).
+    pub pointer: Option<(usize, usize)>,
+    pub enabled: bool,
+    /// The last frame's buttons: their cells and actions.
+    pub buttons: Vec<(Rect, crate::menu::ItemAction)>,
     /// Colors as 24 bits, else the nearest of the 256-color palette; the
     /// front end sets it (`rgb`).
     pub truecolor: bool,
@@ -111,9 +136,10 @@ fn style_of(look: &Look, tc: bool) -> Style {
     Style { fg: look.fg.map(|c| rgb(c, tc)), bg: look.bg.map(|c| rgb(c, tc)), ..Style::default() }
 }
 
-/// The layout in use: `game.layout` or the only one (D 11.1).
-fn layout_block(w: &World) -> Option<rlml_core::syntax::RawBlock> {
-    w.m.layout().cloned()
+/// The layout for the window: the first `layout` row whose `when` holds,
+/// else the default (D 11.1).
+fn layout_block(w: &World, cols: usize, rows: usize, portrait: bool) -> Option<rlml_core::syntax::RawBlock> {
+    w.m.layout_for(cols, rows, portrait).cloned()
 }
 
 /// Areas and their written sizes from the layout's legend.
@@ -149,7 +175,8 @@ fn areas(rows: &[RawItem]) -> (Vec<Area>, Dims) {
         dims.insert(ch, size);
         let source = words.first().copied().unwrap_or("").to_string();
         let menu = (source == "menu").then(|| words.get(1).map(|w| w.to_string())).flatten();
-        out.push(Area { ch, source, follow, menu, cursor });
+        let tabs = if source == "tabs" { words.iter().skip(1).take_while(|w| !w.starts_with("size")).map(|w| w.to_string()).collect() } else { vec![] };
+        out.push(Area { ch, source, follow, menu, cursor, tabs });
     }
     (out, dims)
 }
@@ -216,7 +243,7 @@ fn log_color(w: &World, key: &str) -> Option<Rgb> {
 }
 
 /// Paints a rectangle's cells with a style.
-fn paint(frame: &mut Frame, r: Rect, style: Style) {
+pub(crate) fn paint(frame: &mut Frame, r: Rect, style: Style) {
     if style == Style::default() {
         return;
     }
@@ -290,11 +317,13 @@ impl View {
     /// Draws the game into a frame of the window's size.
     pub fn draw(&mut self, world: &mut World, lang: &str, width: usize, height: usize) -> Frame {
         let mut frame = Frame::new(width, height);
-        let tc = self.truecolor;
         // set again when the map is drawn: a too small window has none
         self.map_rect = None;
         self.docked_rects.clear();
-        let block = layout_block(world);
+        self.tab_rects.clear();
+        self.tab_areas.clear();
+        self.buttons.clear();
+        let block = layout_block(world, width, height, self.portrait);
         let (areas, solved) = match &block {
             Some(b) => {
                 let rows: Vec<RawItem> = b.sub("legend").cloned().collect();
@@ -312,6 +341,12 @@ impl View {
                                 let edge = if panel_style(world, name, self.truecolor).0 != Border::None { 2 } else { 0 };
                                 content.insert(a.ch, AreaSize { min_width: pw + edge, min_height: ph + edge });
                             }
+                            // a tabs area holds its largest panel and the tab row
+                            if !a.tabs.is_empty() {
+                                let sizes = a.tabs.iter().filter_map(|t| crate::panel::block(world, t.split('(').next().unwrap_or(""))).map(crate::panel::size);
+                                let (pw, ph) = sizes.fold((0, 0), |(w, h), (pw, ph)| (w.max(pw), h.max(ph)));
+                                content.insert(a.ch, AreaSize { min_width: pw, min_height: ph + 1 });
+                            }
                         }
                         let solved = grid.solve(&content, width, height);
                         (areas, solved)
@@ -326,7 +361,7 @@ impl View {
             None => {
                 let mut rects = BTreeMap::new();
                 rects.insert('m', Rect::new(0, 0, width, height));
-                (vec![Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None, cursor: vec![] }], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 })
+                (vec![Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None, cursor: vec![], tabs: vec![] }], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 })
             }
         };
         if solved.too_small {
@@ -348,7 +383,7 @@ impl View {
             // and the leash and the screen measure the same cells; the
             // model decides whether its border is drawn
             let rect = if area.source == "map" {
-                let a = world.map_area();
+                let a = block.as_ref().map(|b| world.m.map_area_in(b)).unwrap_or_default();
                 if !a.border {
                     border = Border::None;
                 }
@@ -381,19 +416,80 @@ impl View {
                         draw_docked(&mut frame, d, inner);
                     }
                 }
-                _ => {
-                    if world.m.resolve(None, &name).is_ok_and(|d| d.kind == Kind::Log) {
-                        draw_log(&mut frame, world, lang, &name, inner, tc);
-                    } else if let Some(pb) = crate::panel::block(world, &name) {
-                        world.holding_view(|w| crate::panel::draw(&mut frame, w, lang, pb, &area.source, inner, tc));
-                    }
-                }
+                "tabs" => self.draw_tabs(&mut frame, world, lang, &area.tabs, inner),
+                _ => self.draw_content(&mut frame, world, lang, &area.source, inner),
             }
             // written text resets its cells' style: the area's colors go
             // under it again, and the content's own colors win
             paint(&mut frame, inner, style);
         }
         frame
+    }
+
+    /// An area's log, panel or docked menu, by its source as written.
+    fn draw_content(&mut self, frame: &mut Frame, world: &mut World, lang: &str, source: &str, r: Rect) {
+        let tc = self.truecolor;
+        let written = source.split('(').next().unwrap_or("");
+        let full = world.m.resolve(None, written).map(|d| (d.full.clone(), d.kind)).ok();
+        match full {
+            Some((name, Kind::Log)) => draw_log(frame, world, lang, &name, r, tc),
+            Some((name, Kind::Menu)) => {
+                self.docked_rects.insert(name.clone(), r);
+                if let Some(d) = self.docked.get(&name) {
+                    draw_docked(frame, d, r);
+                }
+            }
+            Some((name, Kind::Panel)) => {
+                let Some(pb) = crate::panel::block(world, &name) else { return };
+                let mut ui = crate::panel::PanelUi { truecolor: tc, pointer: self.pointer, enabled: self.enabled, buttons: vec![] };
+                world.holding_view(|w| crate::panel::draw(frame, w, lang, pb, source, r, &mut ui));
+                self.buttons.extend(ui.buttons);
+            }
+            _ => {}
+        }
+    }
+
+    /// A tabs area (D 11.1, M 7.1): the titles `<NAME>.TAB` on its top
+    /// row, the chosen one in reverse video and the pointed one
+    /// underlined, and the chosen content under them.
+    fn draw_tabs(&mut self, frame: &mut Frame, world: &mut World, lang: &str, tabs: &[String], r: Rect) {
+        if tabs.is_empty() || r.h == 0 || r.w == 0 {
+            return;
+        }
+        let key = tabs_key(tabs);
+        let chosen = self.tabs.get(&key).copied().unwrap_or(0).min(tabs.len() - 1);
+        self.tab_areas.push((key.clone(), tabs.iter().map(|t| world.m.resolve(None, t.split('(').next().unwrap_or("")).map_or(t.clone(), |d| d.full.clone())).collect()));
+        let titles: Vec<String> = tabs
+            .iter()
+            .map(|t| {
+                let name = t.split('(').next().unwrap_or("");
+                let full = world.m.resolve(None, name).map_or(name.to_string(), |d| d.full.clone());
+                let k = format!("{full}.TAB");
+                if world.m.has_text(lang, &k) { world.text(lang, &k, &[]) } else { name.to_string() }
+            })
+            .collect();
+        // titles at their own width with a space each side, or cut evenly
+        let natural: usize = titles.iter().map(|t| termplate_core::frame::str_width(t) + 2).sum();
+        let even = (r.w / tabs.len()).max(1);
+        let mut x = r.x;
+        for (i, t) in titles.iter().enumerate() {
+            let w = if natural <= r.w { termplate_core::frame::str_width(t) + 2 } else if i + 1 == tabs.len() { r.x + r.w - x } else { even };
+            let w = w.min(r.x + r.w - x);
+            if w == 0 {
+                break;
+            }
+            let cells = Rect::new(x, r.y, w, 1);
+            let label = if natural <= r.w { format!(" {t} ") } else { termplate_core::frame::take_width(t, w).to_string() };
+            frame.text(x, r.y, w, &label, Role::Normal);
+            let mut style = Style::default();
+            style.attrs.reverse = i == chosen;
+            style.attrs.underline = self.pointer.is_some_and(|(px, py)| cells.contains(px, py));
+            paint(frame, cells, style);
+            self.tab_rects.push((key.clone(), i, cells));
+            x += w;
+        }
+        let content = Rect::new(r.x, r.y + 1, r.w, r.h - 1);
+        self.draw_content(frame, world, lang, &tabs[chosen], content);
     }
 
     fn draw_map(&mut self, frame: &mut Frame, world: &mut World, r: Rect, follow: Follow, cursor: &[String]) {

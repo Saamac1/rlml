@@ -496,7 +496,6 @@ impl Checker<'_> {
         }
         let refs: &[(&str, &[Kind])] = &[
             ("title", &[Kind::Menu]),
-            ("layout", &[Kind::Layout]),
             ("naming", &[Kind::Query]),
             ("walk", &[Kind::Command]),
             ("walk_stop", &[Kind::Query]),
@@ -528,6 +527,32 @@ impl Checker<'_> {
                 Some(n) => self.r.push(item.err(format!("`keys`: no key context `{n}`"))),
                 None => self.r.push(item.err("`keys` takes one context NAME")),
             }
+        }
+        // `layout` rows, each with an optional `when` (D 11.1)
+        let layout_rows: Vec<&RawItem> = g.items.iter().filter(|i| i.key() == "layout").collect();
+        let mut plain = 0;
+        for item in &layout_rows {
+            match item.word(1) {
+                Some(n) => {
+                    if let Err(e) = self.m.resolve_kind(ns, n, &[Kind::Layout]) {
+                        self.r.push(item.err(format!("`layout`: {e}")));
+                    }
+                }
+                None => self.r.push(item.err("`layout` takes a layout's NAME")),
+            }
+            match item.tokens.iter().position(|t| t.is("when")) {
+                Some(at) => {
+                    let words: Vec<&str> = item.tokens[at + 1..].iter().map(|t| t.text.as_str()).collect();
+                    if let Err(e) = crate::model::layout_cond(&words) {
+                        self.r.push(item.err(format!("`layout ... when`: {e} (D 11.1)")));
+                    }
+                }
+                None if item.tokens.len() > 2 => self.r.push(item.err("`layout NAME` takes nothing more than `when CONDITION` (D 11.1)")),
+                None => plain += 1,
+            }
+        }
+        if layout_rows.len() > 1 && plain != 1 {
+            self.r.push(g.err(format!("of several `layout` rows exactly one has no `when`, here {plain} (D 11.1)")));
         }
         if !fields.contains_key("layout") {
             let layouts: Vec<&str> = defs_of(self.m, Kind::Layout).map(|d| d.full.as_str()).collect();
@@ -807,7 +832,18 @@ impl Checker<'_> {
                     self.r.push(item.err(format!("a layout has one `{name}` area (D 11.1)")));
                 }
                 sources.push(name.to_string());
-                if name == "menu" {
+                if name == "tabs" {
+                    // a tabs area: panels, docked menus and logs (D 11.1)
+                    if rest.tokens.len() < 2 {
+                        self.r.push(item.err(format!("area `{c}`: `tabs` needs one or more panels, menus or logs")));
+                    }
+                    for t in rest.tokens.iter().skip(1).map(|t| t.text.as_str()).take_while(|w| !w.starts_with("size")) {
+                        let tab = t.split('(').next().unwrap_or(t);
+                        if let Err(e) = self.m.resolve_kind(item.namespace.as_deref(), tab, &[Kind::Panel, Kind::Menu, Kind::Log]) {
+                            self.r.push(item.err(format!("area `{c}`: {e}")));
+                        }
+                    }
+                } else if name == "menu" {
                     // a docked menu (D 11.1)
                     match rest.word(1) {
                         Some(menu) => {

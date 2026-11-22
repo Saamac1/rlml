@@ -16,7 +16,9 @@ const statsBox = document.getElementById('stats');
 const canvas = document.getElementById('screen');
 const ctx = canvas.getContext('2d', { alpha: false });
 
-const FONT_PX = 16;
+// a phone's narrow screen takes a smaller font, so its layout gets
+// columns enough
+const FONT_PX = Math.min(window.innerWidth, window.innerHeight) < 520 ? 14 : 16;
 const LINE = 1.2;
 const FAMILY = 'Menlo, Monaco, "SF Mono", "DejaVu Sans Mono", Consolas, "Liberation Mono", monospace';
 // cells.rs: the flags over the character's 21 bits
@@ -48,6 +50,8 @@ function grid() {
 }
 measure();
 let [cols, rows] = grid();
+const pixels = () => ({ pw: Math.round(window.innerWidth * dpr), ph: Math.round(window.innerHeight * dpr) });
+let lastPixels = pixels();
 
 function size(w, h) {
   canvas.width = w * cellW;
@@ -118,7 +122,7 @@ addEventListener('keydown', (e) => {
   send({ t: 'key', name });
 });
 
-// the mouse: a pixel's cell on the canvas, or none outside it
+// the mouse and touch: a pixel's cell on the canvas, or none outside it
 function cellAt(e) {
   const r = canvas.getBoundingClientRect();
   if (r.width === 0 || r.height === 0) return null;
@@ -132,21 +136,83 @@ function cellAt(e) {
 // the pointer's moves go only when its cell changes; the worker keeps the
 // last of those that came before a frame
 let pointed = null;
-addEventListener('mousemove', (e) => {
-  const c = cellAt(e);
+function moveTo(c) {
   if (!c || (pointed && pointed[0] === c[0] && pointed[1] === c[1])) return;
   pointed = c;
   send({ t: 'move', x: c[0], y: c[1] });
+}
+function pressAt(c, name) {
+  moveTo(c);
+  send({ t: 'press', name, x: c[0], y: c[1] });
+}
+
+// a finger: a tap is a click, held still it presses (a held button
+// repeats), and a vertical swipe scrolls as the wheel does (M 8.1)
+const HOLD_MS = 150;
+let touch = null;
+
+canvas.addEventListener('pointerdown', (e) => {
+  const c = cellAt(e);
+  if (!c) return;
+  e.preventDefault();
+  canvas.setPointerCapture?.(e.pointerId);
+  if (e.pointerType === 'mouse') {
+    const name = mouse_binding(e.button, e.ctrlKey, e.altKey, e.shiftKey);
+    if (name !== undefined) pressAt(c, name);
+    return;
+  }
+  const t = { id: e.pointerId, cell: c, y: e.clientY, pressed: false, swiping: false, timer: 0 };
+  t.timer = setTimeout(() => {
+    t.timer = 0;
+    if (!t.swiping) {
+      t.pressed = true;
+      pressAt(t.cell, 'click');
+    }
+  }, HOLD_MS);
+  touch = t;
 });
 
-canvas.addEventListener('mousedown', (e) => {
-  const c = cellAt(e);
-  const name = mouse_binding(e.button, e.ctrlKey, e.altKey, e.shiftKey);
-  if (!c || name === undefined) return;
-  // no text selection, no middle-button scrolling
-  e.preventDefault();
-  send({ t: 'press', name, x: c[0], y: c[1] });
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'mouse') {
+    moveTo(cellAt(e));
+    return;
+  }
+  const t = touch;
+  if (!t || t.id !== e.pointerId || t.pressed) return;
+  const step = cellH / dpr;
+  const dy = e.clientY - t.y;
+  if (!t.swiping && Math.abs(dy) < step * 0.6) return;
+  t.swiping = true;
+  if (t.timer) {
+    clearTimeout(t.timer);
+    t.timer = 0;
+  }
+  // the finger down shows what is above: the wheel up
+  const steps = Math.trunc(dy / step);
+  if (steps === 0) return;
+  t.y += steps * step;
+  const name = wheel_binding(steps > 0, false, false, false);
+  for (let i = 0; i < Math.min(Math.abs(steps), 5); i++) send({ t: 'press', name, x: t.cell[0], y: t.cell[1] });
 });
+
+function lift(e) {
+  if (e.pointerType === 'mouse') {
+    send({ t: 'release' });
+    return;
+  }
+  const t = touch;
+  if (!t || t.id !== e.pointerId) return;
+  touch = null;
+  if (t.timer) {
+    // a tap shorter than the hold: a click now
+    clearTimeout(t.timer);
+    if (!t.swiping) pressAt(t.cell, 'click');
+  }
+  send({ t: 'release' });
+}
+canvas.addEventListener('pointerup', lift);
+canvas.addEventListener('pointercancel', lift);
+addEventListener('mousemove', (e) => moveTo(cellAt(e)));
 // the right button is the game's
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -174,11 +240,15 @@ new ResizeObserver(() => {
   const remeasured = ratio !== dpr;
   if (remeasured) measure();
   const [c, r] = grid();
-  if (c === cols && r === rows && !remeasured) return;
+  const p = pixels();
+  const turned = (p.ph > p.pw) !== (lastPixels.ph > lastPixels.pw);
+  lastPixels = p;
+  if (c === cols && r === rows && !remeasured && !turned) return;
   cols = c;
   rows = r;
-  // a new cell size draws every cell again, as a new size does
-  send({ t: 'resize', cols, rows });
+  // a new cell size draws every cell again, as a new size does; the
+  // pixels tell portrait from landscape (D 11.1)
+  send({ t: 'resize', cols, rows, ...pixels() });
 }).observe(document.documentElement);
 
 // pads: gilrs reads the Gamepad API once a frame; the browser shows a
@@ -226,7 +296,7 @@ async function start() {
         break;
     }
   };
-  worker.postMessage({ t: 'load', bundle, seed, cols, rows });
+  worker.postMessage({ t: 'load', bundle, seed, cols, rows, ...pixels() });
 }
 
 start().catch((e) => show(String(e && e.message ? e.message : e), true));

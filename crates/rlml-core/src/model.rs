@@ -138,6 +138,67 @@ pub struct Model {
     tile_rows: OnceLock<BTreeMap<String, Vec<Vec<String>>>>,
 }
 
+/// One part of a `layout` row's `when` (D 11.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutCond {
+    /// `width < N` and the like: the axis (true for width), the
+    /// comparison and N.
+    Size { width: bool, op: CmpOp, n: usize },
+    Portrait,
+    Landscape,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CmpOp {
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+impl LayoutCond {
+    pub fn holds(&self, cols: usize, rows: usize, portrait: bool) -> bool {
+        match *self {
+            LayoutCond::Portrait => portrait,
+            LayoutCond::Landscape => !portrait,
+            LayoutCond::Size { width, op, n } => {
+                let v = if width { cols } else { rows };
+                match op {
+                    CmpOp::Lt => v < n,
+                    CmpOp::Le => v <= n,
+                    CmpOp::Gt => v > n,
+                    CmpOp::Ge => v >= n,
+                }
+            }
+        }
+    }
+}
+
+/// A `when` condition's words: parts joined by `and` (D 11.1).
+pub fn layout_cond(words: &[&str]) -> Result<Vec<LayoutCond>, String> {
+    let mut out = Vec::new();
+    for part in words.split(|w| *w == "and") {
+        out.push(match part {
+            ["portrait"] => LayoutCond::Portrait,
+            ["landscape"] => LayoutCond::Landscape,
+            [axis @ ("width" | "height"), op, n] => {
+                let op = match *op {
+                    "<" => CmpOp::Lt,
+                    "<=" => CmpOp::Le,
+                    ">" => CmpOp::Gt,
+                    ">=" => CmpOp::Ge,
+                    other => return Err(format!("`{other}` is no comparison (`<`, `<=`, `>`, `>=`)")),
+                };
+                let n = n.parse().map_err(|_| format!("`{n}` is no number of cells"))?;
+                LayoutCond::Size { width: *axis == "width", op, n }
+            }
+            [] => return Err("an empty part of `when`".into()),
+            other => return Err(format!("`{}` is not `width`/`height` COMPARISON N, `portrait` or `landscape`", other.join(" "))),
+        });
+    }
+    Ok(out)
+}
+
 /// Text keys by language: the file and row of each key's text.
 type TextIndex = BTreeMap<String, BTreeMap<String, (usize, usize)>>;
 
@@ -193,14 +254,50 @@ impl Model {
     }
 
     /// The layout in use: `game.layout` or the only one (D 11.1).
+    /// The default layout: the `layout` row without a `when`, or the only
+    /// layout (D 11.1). `view_width()` reads it, whatever the window.
     pub fn layout(&self) -> Option<&RawBlock> {
-        let game = self.named_game();
-        let named = game.and_then(|g| g.items.iter().find(|i| i.key() == "layout")).and_then(|i| i.word(1).map(String::from));
-        let def = match named {
-            Some(n) => self.resolve_kind(game.and_then(|g| g.namespace.as_deref()), &n, &[Kind::Layout]).ok(),
-            None => self.defs.values().find(|d| d.kind == Kind::Layout),
-        };
-        def.and_then(|d| d.block())
+        self.layout_full(None).and_then(|n| self.defs.get(&n)).and_then(|d| d.block())
+    }
+
+    /// The layout for a window of `cols`×`rows` cells, `portrait` when it
+    /// is taller than wide in pixels: the first `layout` row whose `when`
+    /// holds, else the default (D 11.1).
+    pub fn layout_for(&self, cols: usize, rows: usize, portrait: bool) -> Option<&RawBlock> {
+        self.layout_full(Some((cols, rows, portrait))).and_then(|n| self.defs.get(&n)).and_then(|d| d.block())
+    }
+
+    /// The `game` block's `layout` rows: each layout's full name and its
+    /// condition, `None` without `when`; a row that does not read is left
+    /// out (the check reports it).
+    pub fn layout_rows(&self) -> Vec<(String, Option<Vec<LayoutCond>>)> {
+        let Some(g) = self.named_game() else { return vec![] };
+        let ns = g.namespace.as_deref();
+        g.items
+            .iter()
+            .filter(|i| i.key() == "layout")
+            .filter_map(|i| {
+                let full = self.resolve_kind(ns, i.word(1)?, &[Kind::Layout]).ok()?.full.clone();
+                let cond = match i.tokens.iter().position(|t| t.is("when")) {
+                    Some(at) => Some(layout_cond(&i.tokens[at + 1..].iter().map(|t| t.text.as_str()).collect::<Vec<_>>()).ok()?),
+                    None => None,
+                };
+                Some((full, cond))
+            })
+            .collect()
+    }
+
+    fn layout_full(&self, window: Option<(usize, usize, bool)>) -> Option<String> {
+        let rows = self.layout_rows();
+        if rows.is_empty() {
+            return self.defs.values().find(|d| d.kind == Kind::Layout).map(|d| d.full.clone());
+        }
+        if let Some((c, r, p)) = window
+            && let Some((full, _)) = rows.iter().find(|(_, cond)| cond.as_ref().is_some_and(|cs| cs.iter().all(|x| x.holds(c, r, p))))
+        {
+            return Some(full.clone());
+        }
+        rows.iter().find(|(_, cond)| cond.is_none()).or(rows.first()).map(|(f, _)| f.clone())
     }
 
     /// The border style `panels` rows give area `name` (D 9.3): the last
@@ -225,7 +322,15 @@ impl Model {
     /// written size per axis and whether its border is drawn. The rule for
     /// the border lives here only; the terminal and the core both read it.
     pub fn map_area(&self) -> MapArea {
-        let Some(b) = self.layout() else { return MapArea::default() };
+        match self.layout() {
+            Some(b) => self.map_area_in(b),
+            None => MapArea::default(),
+        }
+    }
+
+    /// A layout's map area as its legend writes it: the default layout's
+    /// is `view_width()`'s, the chosen one's is drawn (D 11.1).
+    pub fn map_area_in(&self, b: &RawBlock) -> MapArea {
         let cells = |s: Option<&str>| s.and_then(|s| s.parse::<i32>().ok()).filter(|&n| n > 0);
         let styled = self.panel_border("map").is_some_and(|b| b != "none");
         for item in b.sub("legend") {

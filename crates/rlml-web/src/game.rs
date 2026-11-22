@@ -42,8 +42,11 @@ impl Game {
     /// starts in the same window.
     pub fn restart(&mut self) -> RtResult<()> {
         let size = self.app.size;
+        let (pixels, releases) = (self.app.pixels, self.app.releases);
         let shown = self.shown.take();
         *self = Game::new(self.m, self.seed, size)?;
+        self.app.pixels = pixels;
+        self.app.releases = releases;
         self.shown = shown;
         Ok(())
     }

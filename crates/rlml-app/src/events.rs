@@ -19,6 +19,8 @@ pub enum Event {
     Key(Binding),
     /// A mouse button or wheel at a cell.
     Press { binding: Binding, x: usize, y: usize },
+    /// The mouse button went up: a held panel button stops (M 7.7).
+    Release,
     /// The pointer moved to a cell.
     Move { x: usize, y: usize },
     /// The window's new size in cells.
@@ -56,6 +58,7 @@ impl Feed {
             match ev {
                 Event::Key(b) => app.key(b, now)?,
                 Event::Press { binding, x, y } => app.mouse_press(binding, x, y, now)?,
+                Event::Release => app.mouse_release(),
                 Event::Move { .. } => {}
                 Event::Resize(w, h) => {
                     app.resize(w, h);

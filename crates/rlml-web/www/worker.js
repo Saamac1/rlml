@@ -115,7 +115,8 @@ onmessage = async (e) => {
     try {
       await init();
       game = new WebGame(JSON.parse(m.bundle), m.seed, m.cols, m.rows);
-      if (size) game.resize(size.cols, size.rows);
+      const s = size || m;
+      game.resize(s.cols, s.rows, s.pw, s.ph);
     } catch (err) {
       postMessage({ t: 'error', text: `Pelin lataus ei onnistunut:\n\n${err && err.message ? err.message : err}` });
       return;
@@ -129,7 +130,8 @@ onmessage = async (e) => {
       case 'key': game.key(m.name); break;
       case 'press': game.press(m.name, m.x, m.y); break;
       case 'move': game.pointer(m.x, m.y); break;
-      case 'resize': game.resize(m.cols, m.rows); break;
+      case 'resize': game.resize(m.cols, m.rows, m.pw, m.ph); break;
+      case 'release': game.release(); break;
       case 'pad': for (const words of m.events) game.pad(words); break;
       default: return;
     }

@@ -112,7 +112,10 @@ impl WebGame {
         // the app borrows the model, and a wasm-bindgen class carries no
         // borrow: the model lives as long as the page
         let m = Box::leak(Box::new(m));
-        Ok(WebGame { g: Game::new(m, seed as u64, (cols, rows)).map_err(err)? })
+        let mut g = Game::new(m, seed as u64, (cols, rows)).map_err(err)?;
+        // the page tells when a button goes up, so held buttons repeat
+        g.app.releases = true;
+        Ok(WebGame { g })
     }
 
     /// A key by its binding name, for the next step.
@@ -134,9 +137,16 @@ impl WebGame {
         self.g.push(Event::Move { x, y });
     }
 
-    /// The window's new size in cells; the next frame is whole.
-    pub fn resize(&mut self, cols: usize, rows: usize) {
+    /// The window's new size in cells and in pixels, which tell portrait
+    /// from landscape (D 11.1); the next frame is whole.
+    pub fn resize(&mut self, cols: usize, rows: usize, px_width: usize, px_height: usize) {
+        self.g.app.pixels = Some((px_width, px_height));
         self.g.push(Event::Resize(cols, rows));
+    }
+
+    /// The mouse button or the finger went up.
+    pub fn release(&mut self) {
+        self.g.push(Event::Release);
     }
 
     /// A pad's raw event as `Pads::poll` gives it.

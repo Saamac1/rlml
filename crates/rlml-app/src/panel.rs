@@ -19,6 +19,20 @@ enum Show {
     Text(String),
     Value(Result<Expr, String>),
     Param(String),
+    /// `button ACTION text KEY`: the key's text; a click does the action.
+    Button(Option<crate::menu::ItemAction>, String),
+}
+
+/// What a panel's buttons need from the app and give back (D 11.5): the
+/// pointer's cell, whether the turn's seat can act, and each drawn
+/// button's cells and action, for the mouse.
+#[derive(Debug, Clone, Default)]
+pub struct PanelUi {
+    /// Colors as for `draw::rgb`.
+    pub truecolor: bool,
+    pub pointer: Option<(usize, usize)>,
+    pub enabled: bool,
+    pub buttons: Vec<(Rect, crate::menu::ItemAction)>,
 }
 
 struct Field {
@@ -44,7 +58,7 @@ pub fn size(b: &RawBlock) -> (usize, usize) {
     (b.drawing.iter().map(|l| l.chars().count()).max().unwrap_or(0), b.drawing.len())
 }
 
-fn fields(b: &RawBlock) -> Vec<Field> {
+fn fields(m: &rlml_core::model::Model, b: &RawBlock) -> Vec<Field> {
     let mut out = Vec::new();
     for item in b.sub("legend") {
         let Ok((ch, rest)) = glyph_char(item) else { continue };
@@ -59,6 +73,11 @@ fn fields(b: &RawBlock) -> Vec<Field> {
             Some(&"text") => Show::Text(words.get(1).unwrap_or(&"").to_string()),
             Some(&"param") => Show::Param(words.get(1).unwrap_or(&"").to_string()),
             Some(&"value") if end > 1 => Show::Value(rlml_core::rs::parse::parse_expr(rest.span(1, end)).map_err(|d| d.message)),
+            Some(&"button") => {
+                let Some(t) = words.iter().position(|w| *w == "text") else { continue };
+                let action = rlml_core::syntax::RawItem::new(&item.file, item.line, item.namespace.clone(), rest.span(1, t)).ok().and_then(|a| crate::menu::action(m, b.namespace.as_deref(), "", &a));
+                Show::Button(action, words.get(t + 1).unwrap_or(&"").to_string())
+            }
             _ => continue,
         };
         out.push(Field { ch, show, align });
@@ -116,9 +135,10 @@ fn fitted(line: &[Cell], width: usize, align: Align) -> Vec<Cell> {
 }
 
 /// Draws panel `b` into `r`; `call` is the area's source as written, with
-/// its arguments (`STATS(player)`); `truecolor` as for `draw::rgb`.
-pub fn draw(frame: &mut Frame, w: &mut World, lang: &str, b: &RawBlock, call: &str, r: Rect, truecolor: bool) {
-    let fields = fields(b);
+/// its arguments (`STATS(player)`).
+pub fn draw(frame: &mut Frame, w: &mut World, lang: &str, b: &RawBlock, call: &str, r: Rect, ui: &mut PanelUi) {
+    let truecolor = ui.truecolor;
+    let fields = fields(w.m, b);
     let names: Vec<String> = fields.iter().map(|f| f.ch.to_string()).collect();
     let refs: Vec<&str> = names.iter().map(String::as_str).collect();
     let detected = match termplate_core::panel::detect(&b.drawing, &refs) {
@@ -148,7 +168,7 @@ pub fn draw(frame: &mut Frame, w: &mut World, lang: &str, b: &RawBlock, call: &s
     for pos in &detected.fields {
         let Some(f) = fields.iter().find(|f| f.ch.to_string() == pos.name) else { continue };
         let texts = match &f.show {
-            Show::Text(key) => vec![styled(w, lang, key, &[])],
+            Show::Text(key) | Show::Button(_, key) => vec![styled(w, lang, key, &[])],
             Show::Param(name) => env.locals.get(name).map(|v| shown(w, lang, v)).unwrap_or_default(),
             Show::Value(Err(e)) => vec![plain(e)],
             Show::Value(Ok(e)) => match w.eval(e, &mut env.clone()) {
@@ -176,6 +196,19 @@ pub fn draw(frame: &mut Frame, w: &mut World, lang: &str, b: &RawBlock, call: &s
                     Some(look) => crate::draw::put_look(frame, sx, sy, &Look { ch, ..look }, truecolor),
                     None => frame.put(sx, sy, ch, Role::Normal),
                 }
+            }
+        }
+        // a button looks like a key cap: reverse video, underlined under
+        // the pointer and dim when its action cannot be used (M 7.7)
+        if let Show::Button(action, _) = &f.show {
+            let cells = Rect::new(r.x + rect.x, r.y + rect.y, width, rect.h.min(r.h - rect.y));
+            let mut style = termplate_core::style::Style::default();
+            style.attrs.reverse = true;
+            style.attrs.underline = ui.pointer.is_some_and(|(x, y)| cells.contains(x, y));
+            style.attrs.dim = !ui.enabled;
+            crate::draw::paint(frame, cells, style);
+            if let Some(a) = action {
+                ui.buttons.push((cells, a.clone()));
             }
         }
     }

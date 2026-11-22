@@ -1092,3 +1092,84 @@ fn the_log_is_read_back_to_its_start() {
     press(&mut app, "esc");
     assert!(app.reading.is_none());
 }
+
+/// The minigame with a narrow portrait layout: the map over a tabs area
+/// with a pad panel and the log.
+fn mini_phone() -> MemFiles {
+    mini_with(|g| {
+        *g = g.replace("- keys GAME\n", "- keys GAME\n- layout MAIN\n- layout PHONE when portrait and width < 50\n");
+        g.push_str(
+            "\nlayout PHONE\n\n```\nm\nt\n```\n\nlegend:\n- m map\n- t tabs PAD LOG size.height 5\n\n\
+             panel PAD\n\n```\n nnnnn\n sssss\n ddddd\n```\n\nlegend:\n- n button MOVE.NORTH text PAD.N\n- s button MOVE.SOUTH text PAD.S\n- d button tab LOG text PAD.L\n\nkeys GAME\n- tab.next t\n",
+        );
+    })
+}
+
+#[test]
+fn the_window_chooses_the_layout() {
+    let m = model(&mini_phone());
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    // 40×12 cells is landscape at 1:2 cells: the default, with its log rows
+    assert!(app.view.tab_rects.is_empty());
+    app.draw();
+    assert!(app.view.tab_rects.is_empty(), "MAIN has no tabs");
+    // 30×30 is portrait and narrow: the tabs at the bottom, the pad first
+    app.resize(30, 30);
+    let f = app.draw();
+    assert_eq!(f.row(25).trim_end(), " PAD  LOG", "{:#?}", f.rows());
+    assert_eq!(f.row(26).trim_end(), " PAD.N");
+    // the same cells at a wide window's pixels are landscape again
+    app.pixels = Some((900, 600));
+    app.draw();
+    assert!(app.view.tab_rects.is_empty());
+}
+
+#[test]
+fn a_button_acts_and_held_it_repeats() {
+    let m = model(&mini_phone());
+    let mut app = App::new(&m, 7, (30, 30)).unwrap();
+    app.draw();
+    let (x, y) = player_at(&app);
+    // the north button walks a step
+    app.mouse_press(click(), 2, 26, ms(10)).unwrap();
+    assert_eq!(player_at(&app), (x, y - 1));
+    // held, the south button repeats after its delay until it is let go
+    app.releases = true;
+    app.draw();
+    app.mouse_press(click(), 2, 27, ms(100)).unwrap();
+    assert_eq!(player_at(&app), (x, y));
+    app.tick(ms(300)).unwrap();
+    assert_eq!(player_at(&app), (x, y), "not before the delay");
+    app.tick(ms(460)).unwrap();
+    assert_eq!(player_at(&app), (x, y + 1));
+    app.tick(ms(610)).unwrap();
+    assert_eq!(player_at(&app), (x, y + 2));
+    app.mouse_release();
+    app.tick(ms(2000)).unwrap();
+    assert_eq!(player_at(&app), (x, y + 2), "let go, it stops");
+}
+
+#[test]
+fn tabs_change_by_click_and_by_action() {
+    let m = model(&mini_phone());
+    let mut app = App::new(&m, 7, (30, 30)).unwrap();
+    app.r.w.log.push(rlml_core::rt::world::LogEntry { key: "STD.MESSAGE.COMBAT.N1".into(), args: vec![] });
+    app.draw();
+    // a click on the LOG title shows the log under the tab row
+    app.mouse_press(click(), 7, 25, ms(10)).unwrap();
+    assert_eq!(app.draw().row(26).trim_end(), "STD.MESSAGE.COMBAT.N1");
+    // tab.next goes round to the pad, and a button's `tab LOG` comes back
+    press(&mut app, "t");
+    assert_eq!(app.draw().row(26).trim_end(), " PAD.N");
+    app.mouse_press(click(), 2, 28, ms(20)).unwrap();
+    assert_eq!(app.draw().row(26).trim_end(), "STD.MESSAGE.COMBAT.N1");
+}
+
+#[test]
+fn layout_rows_need_one_default() {
+    let f = mini_with(|g| *g = g.replace("- keys GAME\n", "- keys GAME\n- layout MAIN\n- layout MAIN\n- layout MAIN when height <> 3\n"));
+    let (_, r) = rlml_core::check_game(&f, "game.rlml");
+    let errors: Vec<String> = r.errors().map(|d| d.to_string()).collect();
+    assert!(errors.iter().any(|e| e.contains("exactly one has no `when`, here 2")), "{errors:?}");
+    assert!(errors.iter().any(|e| e.contains("`<>` is no comparison")), "{errors:?}");
+}

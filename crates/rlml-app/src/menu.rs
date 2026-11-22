@@ -34,6 +34,8 @@ pub enum ItemAction {
     Open { menu: String, stack: bool },
     /// `read LOG` (D 11.4).
     Read(String),
+    /// `tab NAME`: the tab whose content is NAME (D 11.1).
+    Tab(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,8 +74,9 @@ fn condition(row: &RawItem, word: &str) -> Option<Expr> {
     rlml_core::rs::parse::parse_expr(row.span(start, end)).ok()
 }
 
-/// The action written after an item's key, or its default (D 11.2).
-fn action(m: &Model, ns: Option<&str>, key: &str, rest: &RawItem) -> Option<ItemAction> {
+/// The action written after an item's key, or its default (D 11.2); a
+/// panel's `button` reads its action the same way (D 11.5).
+pub(crate) fn action(m: &Model, ns: Option<&str>, key: &str, rest: &RawItem) -> Option<ItemAction> {
     let ns = rest.namespace.as_deref().or(ns);
     let written = !rest.tokens.is_empty() && !["hide", "disabled"].contains(&rest.key());
     if !written {
@@ -87,6 +90,10 @@ fn action(m: &Model, ns: Option<&str>, key: &str, rest: &RawItem) -> Option<Item
         let target = rest.word(1)?;
         let menu = m.resolve(ns, target.split('(').next().unwrap_or(target)).ok()?.full.clone();
         return Some(ItemAction::Open { menu, stack: rest.word(2) == Some("stack") });
+    }
+    if w == "tab" {
+        let tab = rest.word(1)?;
+        return Some(ItemAction::Tab(m.resolve(ns, tab.split('(').next().unwrap_or(tab)).map_or(tab.to_string(), |d| d.full.clone())));
     }
     if w == "read" {
         let log = rest.word(1)?;

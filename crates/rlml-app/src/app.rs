@@ -50,19 +50,36 @@ pub struct Idle {
 /// leaving.
 pub const ENGINE_MENU: &str = "ENGINE";
 
-/// The menus docked in the layout: its `- v menu NAME` rows (D 11.1).
+/// The menus docked in any layout: `- v menu NAME` rows and menus on
+/// tabs (D 11.1), each once.
 fn docked_menus(m: &Model) -> Vec<Menu> {
-    let Some(layout) = m.layout() else { return vec![] };
-    layout
-        .sub("legend")
-        .filter_map(|item| {
+    let mut out: Vec<Menu> = Vec::new();
+    for def in m.defs.values().filter(|d| d.kind == rlml_core::model::Kind::Layout) {
+        let Some(layout) = def.block() else { continue };
+        for item in layout.sub("legend") {
             let words: Vec<&str> = item.tokens.iter().map(|t| t.text.as_str()).collect();
-            let i = words.iter().position(|w| *w == "menu")?;
-            let full = m.resolve(item.namespace.as_deref(), words.get(i + 1)?).ok()?.full.clone();
-            Menu::read(m, &full)
-        })
-        .collect()
+            let names: Vec<&str> = match words.iter().position(|w| *w == "menu" || *w == "tabs") {
+                Some(i) if words[i] == "menu" => words.get(i + 1).copied().into_iter().collect(),
+                Some(i) => words[i + 1..].iter().copied().take_while(|w| !w.starts_with("size")).collect(),
+                None => vec![],
+            };
+            for n in names {
+                let Ok(d) = m.resolve_kind(item.namespace.as_deref(), n, &[rlml_core::model::Kind::Menu]) else { continue };
+                if !out.iter().any(|x| x.full == d.full)
+                    && let Some(menu) = Menu::read(m, &d.full)
+                {
+                    out.push(menu);
+                }
+            }
+        }
+    }
+    out
 }
+
+/// How long a held button waits before it repeats, and then between its
+/// repeats (M 7.7).
+const HOLD_DELAY: Duration = Duration::from_millis(350);
+const HOLD_REPEAT: Duration = Duration::from_millis(140);
 
 fn engine_menu() -> Menu {
     let item = |key: &str, action: &str| Item { key: key.into(), action: ItemAction::Engine(action.into()), hide: None, disabled: None, label: None };
@@ -145,6 +162,14 @@ pub struct App<'m> {
     pub asking: Option<Asking>,
     /// The log being read (`read LOG`, M 7.4): presentation, not state.
     pub reading: Option<Reading>,
+    /// The window's size in pixels when the front end knows it; without
+    /// it a cell counts as twice as high as wide (D 11.1).
+    pub pixels: Option<(usize, usize)>,
+    /// The front end tells when a mouse button is let go
+    /// (`mouse_release`), so a held button repeats (M 7.7).
+    pub releases: bool,
+    /// The held button's action and when it repeats next.
+    held: Option<(ItemAction, Duration)>,
     /// `settings - targeting cursor|list|auto` (D 3.2), `cursor` by default.
     targeting: String,
 }
@@ -277,6 +302,9 @@ impl<'m> App<'m> {
             menu_drawn: Default::default(),
             asking: None,
             reading: None,
+            pixels: None,
+            releases: false,
+            held: None,
             targeting: setting("targeting").unwrap_or_else(|| "cursor".into()),
         };
         match app.title() {
@@ -411,6 +439,9 @@ impl<'m> App<'m> {
         self.view.docked = self.docked_view();
         self.view.sentence = self.sentence();
         let (w, h) = self.size;
+        self.view.portrait = self.portrait();
+        self.view.pointer = self.pointer;
+        self.view.enabled = self.players_turn() && !self.menus.is_open();
         if self.reading.is_some() {
             return self.draw_reading(w, h);
         }
@@ -428,6 +459,63 @@ impl<'m> App<'m> {
             f.text(0, h - 1, w, note, termplate_core::frame::Role::Normal);
         }
         f
+    }
+
+    /// Portrait: the window is taller than wide in pixels, a cell counted
+    /// as 1:2 without the pixels (D 11.1).
+    fn portrait(&self) -> bool {
+        match self.pixels {
+            Some((pw, ph)) => ph > pw,
+            None => 2 * self.size.1 > self.size.0,
+        }
+    }
+
+    /// `tab NAME`: the tabs area holding NAME shows it (D 11.1).
+    fn select_tab(&mut self, name: &str) {
+        let found = self.view.tab_areas.iter().find_map(|(key, names)| names.iter().position(|n| n == name).map(|i| (key.clone(), i)));
+        if let Some((key, i)) = found {
+            self.view.tabs.insert(key.clone(), i);
+            self.view.last_tabs = Some(key);
+        }
+    }
+
+    /// `tab.next` and `tab.prev`: the area whose tab changed last, else
+    /// the first (D 11.1).
+    fn step_tab(&mut self, by: isize) {
+        let area = self.view.tab_areas.iter().find(|(k, _)| Some(k) == self.view.last_tabs.as_ref()).or(self.view.tab_areas.first()).cloned();
+        if let Some((key, names)) = area {
+            let n = names.len() as isize;
+            let now = self.view.tabs.get(&key).copied().unwrap_or(0) as isize;
+            self.view.tabs.insert(key.clone(), (now + by).rem_euclid(n.max(1)) as usize);
+            self.view.last_tabs = Some(key);
+        }
+    }
+
+    /// A panel's button (M 7.7): its action on the player's turn, as a
+    /// docked menu's row does.
+    fn button_action(&mut self, action: ItemAction, now: Duration) -> RtResult<()> {
+        match action {
+            ItemAction::Tab(t) => self.select_tab(&t),
+            ItemAction::Read(l) => self.read_log(&l),
+            ItemAction::Open { menu, stack } => {
+                if self.players_turn() {
+                    self.open(&menu, stack);
+                }
+            }
+            ItemAction::Engine(a) => self.engine(&a, now)?,
+            ItemAction::Command(c) => {
+                if self.players_turn() {
+                    self.verb_hint = None;
+                    self.command(CommandValue { name: c, args: vec![] })?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The front end's mouse button went up: a held button stops (M 7.7).
+    pub fn mouse_release(&mut self) {
+        self.held = None;
     }
 
     /// `read LOG`: the log opens at its newest (M 7.4).
@@ -620,6 +708,7 @@ impl<'m> App<'m> {
             }
             Effect::Toggle(p) => self.note = Some(format!("panel {p}: panels are not supported yet")),
             Effect::Read(log) => self.read_log(&log),
+            Effect::Tab(t) => self.select_tab(&t),
             Effect::Focus(menu) => {
                 if self.players_turn()
                     && let Some(n) = self.r.awaiting()
@@ -709,6 +798,8 @@ impl<'m> App<'m> {
                 }
             }
             "travel_to" | "follow" | "look" | "verbs" => {}
+            "tab.next" => self.step_tab(1),
+            "tab.prev" => self.step_tab(-1),
             "quit" if self.playing => self.quit_game(),
             "quit" | "exit" => self.quit = true,
             other => self.note = Some(format!("`{other}` is not supported yet")),
@@ -743,6 +834,10 @@ impl<'m> App<'m> {
             ItemAction::Read(log) => {
                 self.menus.clear();
                 self.read_log(&log);
+            }
+            ItemAction::Tab(t) => {
+                self.menus.clear();
+                self.select_tab(&t);
             }
             // a command from a menu is the player's command with its cost;
             // the menus close for it
@@ -965,6 +1060,16 @@ impl<'m> App<'m> {
     /// The clock at `now`: rounds without the player's turn and `idle`.
     pub fn tick(&mut self, now: Duration) -> RtResult<()> {
         self.clock = now;
+        // a held button repeats at the keys' pace (M 7.7)
+        if let Some((action, next)) = self.held.clone()
+            && now >= next
+        {
+            self.held = Some((action.clone(), now + HOLD_REPEAT));
+            self.last_key = now;
+            if !self.menus.is_open() && self.reading.is_none() {
+                self.button_action(action, now)?;
+            }
+        }
         // the game's time stops while a menu is open or the log is read
         // (M 7.4, M 8)
         if !self.playing || self.menus.is_open() || self.reading.is_some() {
@@ -1017,6 +1122,9 @@ impl<'m> App<'m> {
 
     /// The time until the next tick matters: the round's pace or `idle`.
     pub fn wait(&self) -> Duration {
+        if let Some((_, next)) = &self.held {
+            return next.saturating_sub(self.clock).clamp(Duration::from_millis(10), HOLD_REPEAT);
+        }
         if !self.playing || self.menus.is_open() || self.reading.is_some() {
             return Duration::from_millis(500);
         }
@@ -1347,6 +1455,10 @@ impl<'m> App<'m> {
                 self.read_log(&log);
                 return Ok(());
             }
+            ItemAction::Tab(t) => {
+                self.select_tab(&t);
+                return Ok(());
+            }
         };
         self.verb_hint = None;
         if !self.r.w.verb_open(&command, &[]) {
@@ -1435,6 +1547,7 @@ impl<'m> App<'m> {
                             ItemAction::Engine(a) => Action::Engine(a.clone()),
                             ItemAction::Open { menu, stack } => Action::Open { menu: menu.clone(), stack: *stack },
                             ItemAction::Read(l) => Action::Read(l.clone()),
+                            ItemAction::Tab(t) => Action::Tab(t.clone()),
                         };
                         let key = self.input.keys.shortcut_for(&contexts, device, &action).unwrap_or_default();
                         crate::draw::DockRow { label: self.r.w.text(&self.lang, &format!("{}.{}", d.full, it.key), &[]), key, enabled: turn.is_some() }
@@ -1561,6 +1674,20 @@ impl<'m> App<'m> {
             }
             return Ok(());
         }
+        // a tab title chooses its tab, at any time (D 11.1)
+        let click = b == Binding::mouse(termplate_core::keys::Mouse::Click);
+        if click && let Some((key, i, _)) = self.view.tab_rects.iter().find(|(_, _, r)| r.contains(x, y)).cloned() {
+            self.view.tabs.insert(key.clone(), i);
+            self.view.last_tabs = Some(key);
+            return Ok(());
+        }
+        // a panel's button does its action, and held it repeats (M 7.7)
+        if click && let Some((_, action)) = self.view.buttons.iter().find(|(r, _)| r.contains(x, y)).cloned() {
+            if self.releases {
+                self.held = Some((action.clone(), now + HOLD_DELAY));
+            }
+            return self.button_action(action, now);
+        }
         if !always && !self.players_turn() {
             return Ok(());
         }
@@ -1603,6 +1730,7 @@ impl<'m> App<'m> {
             }
             Some(Action::Toggle(p)) => self.note = Some(format!("panel {p}: panels are not supported yet")),
             Some(Action::Read(log)) => self.read_log(&log),
+            Some(Action::Tab(t)) => self.select_tab(&t),
             Some(Action::Focus(_)) | None => {}
         }
         Ok(())
