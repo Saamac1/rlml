@@ -143,6 +143,8 @@ pub struct App<'m> {
     menu_drawn: crate::menu::Drawn,
     /// The player's command whose parameters are being asked (M 8).
     pub asking: Option<Asking>,
+    /// The log being read (`read LOG`, M 7.4): presentation, not state.
+    pub reading: Option<Reading>,
     /// `settings - targeting cursor|list|auto` (D 3.2), `cursor` by default.
     targeting: String,
 }
@@ -170,6 +172,15 @@ pub enum AskUi {
     Aim { name: String, pos: rlml_core::rt::value::Pos, range: i64, candidates: Vec<rlml_core::rt::value::Pos> },
     /// A direction, context `DIRECTION`.
     Direction { name: String, pos: bool },
+}
+
+/// A log open to be read back (M 7.4): its name, how many lines up from
+/// the newest it shows, and the height of its last page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reading {
+    pub log: String,
+    pub back: usize,
+    pub page: usize,
 }
 
 /// The verb coin's name as a menu layer.
@@ -265,6 +276,7 @@ impl<'m> App<'m> {
             coin: None,
             menu_drawn: Default::default(),
             asking: None,
+            reading: None,
             targeting: setting("targeting").unwrap_or_else(|| "cursor".into()),
         };
         match app.title() {
@@ -399,6 +411,9 @@ impl<'m> App<'m> {
         self.view.docked = self.docked_view();
         self.view.sentence = self.sentence();
         let (w, h) = self.size;
+        if self.reading.is_some() {
+            return self.draw_reading(w, h);
+        }
         let mut f = if self.playing { self.view.draw(&mut self.r.w, &self.lang, w, h) } else { Frame::new(w, h) };
         self.menu_drawn = match self.menus.layers.last() {
             Some(layer) => menu::draw(&mut f, &self.r.w, &self.lang, layer),
@@ -412,6 +427,56 @@ impl<'m> App<'m> {
         {
             f.text(0, h - 1, w, note, termplate_core::frame::Role::Normal);
         }
+        f
+    }
+
+    /// `read LOG`: the log opens at its newest (M 7.4).
+    fn read_log(&mut self, log: &str) {
+        self.reading = Some(Reading { log: log.to_string(), back: 0, page: 1 });
+    }
+
+    /// A `MENU` action in the reading view.
+    fn reading_action(&mut self, a: &str) {
+        let page = self.reading.as_ref().map_or(1, |r| r.page.max(1)) as isize;
+        match a {
+            "cursor.north" => self.scroll_reading(1),
+            "cursor.south" => self.scroll_reading(-1),
+            "page.up" => self.scroll_reading(page),
+            "page.down" => self.scroll_reading(-page),
+            "first" => self.scroll_reading(isize::MAX / 2),
+            "last" => self.scroll_reading(-(isize::MAX / 2)),
+            "back" | "confirm" | "close" => self.reading = None,
+            _ => {}
+        }
+    }
+
+    /// Lines up (positive) or down; the drawing cuts it to the oldest.
+    fn scroll_reading(&mut self, by: isize) {
+        if let Some(r) = &mut self.reading {
+            r.back = (r.back as isize).saturating_add(by).max(0) as usize;
+        }
+    }
+
+    /// The reading view: `<LOG>.TITLE` at the top and `<LOG>.READ` at the
+    /// bottom when written, the log between (M 7.4).
+    fn draw_reading(&mut self, w: usize, h: usize) -> Frame {
+        let mut f = Frame::new(w, h);
+        let Some(r) = self.reading.clone() else { return f };
+        let line = |key: String| self.m.has_text(&self.lang, &key).then(|| self.r.w.text(&self.lang, &key, &[]));
+        let (title, hint) = (line(format!("{}.TITLE", r.log)), line(format!("{}.READ", r.log)));
+        let top = title.is_some() as usize;
+        let bottom = hint.is_some() as usize;
+        if let Some(t) = &title {
+            f.text(0, 0, w, t, termplate_core::frame::Role::Title);
+        }
+        if let Some(t) = &hint
+            && h > 0
+        {
+            f.text(0, h - 1, w, t, termplate_core::frame::Role::Dim);
+        }
+        let rect = termplate_core::layout::Rect::new(0, top, w, h.saturating_sub(top + bottom));
+        let (_, back) = crate::draw::draw_log_back(&mut f, &self.r.w, &self.lang, &r.log, rect, self.view.truecolor, r.back);
+        self.reading = Some(Reading { back, page: rect.h, ..r });
         f
     }
 
@@ -469,6 +534,18 @@ impl<'m> App<'m> {
     /// only; other presses are dropped.
     fn press(&mut self, device: Device, press: Press, now: Duration) -> RtResult<()> {
         let always = self.input.keys.is_always(device, &press);
+        // the reading view takes its keys by `MENU`'s bindings, which win
+        // over `ALWAYS`'s, so `esc` closes it rather than pausing (M 7.4)
+        if self.reading.is_some() {
+            match self.input.keys.lookup_on(&["MENU".to_string()], device, &press).cloned() {
+                Some(Action::Engine(a)) => {
+                    self.reading_action(&a);
+                    return Ok(());
+                }
+                _ if !always => return Ok(()),
+                _ => self.reading = None,
+            }
+        }
         // a seat's own cursor goes before the turn's routing: it works on
         // other seats' turns too (M 8.2)
         let travelling_seat = self.r.awaiting().filter(|&n| self.players_turn() && self.r.travelling(n) && self.drives(device, n));
@@ -542,6 +619,7 @@ impl<'m> App<'m> {
                 }
             }
             Effect::Toggle(p) => self.note = Some(format!("panel {p}: panels are not supported yet")),
+            Effect::Read(log) => self.read_log(&log),
             Effect::Focus(menu) => {
                 if self.players_turn()
                     && let Some(n) = self.r.awaiting()
@@ -575,6 +653,15 @@ impl<'m> App<'m> {
                     return Ok(());
                 }
                 "confirm" => return self.choose(now),
+                // a menu fits its window, so a page goes to its end
+                "first" | "page.up" => {
+                    layer.move_to_end(false);
+                    return Ok(());
+                }
+                "last" | "page.down" => {
+                    layer.move_to_end(true);
+                    return Ok(());
+                }
                 _ => {}
             }
         }
@@ -653,6 +740,10 @@ impl<'m> App<'m> {
         match item.action {
             ItemAction::Open { menu, stack } => self.open(&menu, stack),
             ItemAction::Engine(a) => self.engine(&a, now)?,
+            ItemAction::Read(log) => {
+                self.menus.clear();
+                self.read_log(&log);
+            }
             // a command from a menu is the player's command with its cost;
             // the menus close for it
             ItemAction::Command(c) => {
@@ -874,8 +965,9 @@ impl<'m> App<'m> {
     /// The clock at `now`: rounds without the player's turn and `idle`.
     pub fn tick(&mut self, now: Duration) -> RtResult<()> {
         self.clock = now;
-        // the game's time stops while a menu is open (M 8)
-        if !self.playing || self.menus.is_open() {
+        // the game's time stops while a menu is open or the log is read
+        // (M 7.4, M 8)
+        if !self.playing || self.menus.is_open() || self.reading.is_some() {
             self.last_round = now;
             self.last_key = now;
             return Ok(());
@@ -925,7 +1017,7 @@ impl<'m> App<'m> {
 
     /// The time until the next tick matters: the round's pace or `idle`.
     pub fn wait(&self) -> Duration {
-        if !self.playing || self.menus.is_open() {
+        if !self.playing || self.menus.is_open() || self.reading.is_some() {
             return Duration::from_millis(500);
         }
         if self.players_turn() && self.r.awaiting().is_some_and(|n| self.r.travelling(n)) {
@@ -1251,6 +1343,10 @@ impl<'m> App<'m> {
                 self.open(&menu, stack);
                 return Ok(());
             }
+            ItemAction::Read(log) => {
+                self.read_log(&log);
+                return Ok(());
+            }
         };
         self.verb_hint = None;
         if !self.r.w.verb_open(&command, &[]) {
@@ -1338,6 +1434,7 @@ impl<'m> App<'m> {
                             ItemAction::Command(c) => Action::Command(c.clone()),
                             ItemAction::Engine(a) => Action::Engine(a.clone()),
                             ItemAction::Open { menu, stack } => Action::Open { menu: menu.clone(), stack: *stack },
+                            ItemAction::Read(l) => Action::Read(l.clone()),
                         };
                         let key = self.input.keys.shortcut_for(&contexts, device, &action).unwrap_or_default();
                         crate::draw::DockRow { label: self.r.w.text(&self.lang, &format!("{}.{}", d.full, it.key), &[]), key, enabled: turn.is_some() }
@@ -1430,6 +1527,17 @@ impl<'m> App<'m> {
         self.pointer = Some((x, y));
         self.last_key = now;
         self.clock = now;
+        // in the reading view the wheel scrolls and a click closes (M 7.4)
+        if self.reading.is_some() {
+            use termplate_core::keys::Mouse;
+            match b {
+                Binding::Mouse(Mouse::WheelUp, _) => self.scroll_reading(3),
+                Binding::Mouse(Mouse::WheelDown, _) => self.scroll_reading(-3),
+                Binding::Mouse(Mouse::Click | Mouse::RightClick, _) => self.reading = None,
+                _ => {}
+            }
+            return Ok(());
+        }
         self.note = None;
         let contexts = self.contexts();
         let press = Press::Key(b.clone());
@@ -1494,6 +1602,7 @@ impl<'m> App<'m> {
                 self.open(&menu, stack)
             }
             Some(Action::Toggle(p)) => self.note = Some(format!("panel {p}: panels are not supported yet")),
+            Some(Action::Read(log)) => self.read_log(&log),
             Some(Action::Focus(_)) | None => {}
         }
         Ok(())

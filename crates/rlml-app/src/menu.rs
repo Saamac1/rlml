@@ -32,6 +32,8 @@ pub enum ItemAction {
     Engine(String),
     /// `open MENU [stack]`.
     Open { menu: String, stack: bool },
+    /// `read LOG` (D 11.4).
+    Read(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -85,6 +87,10 @@ fn action(m: &Model, ns: Option<&str>, key: &str, rest: &RawItem) -> Option<Item
         let target = rest.word(1)?;
         let menu = m.resolve(ns, target.split('(').next().unwrap_or(target)).ok()?.full.clone();
         return Some(ItemAction::Open { menu, stack: rest.word(2) == Some("stack") });
+    }
+    if w == "read" {
+        let log = rest.word(1)?;
+        return Some(ItemAction::Read(m.resolve(ns, log).map_or(log.to_string(), |d| d.full.clone())));
     }
     if names::is_vocabulary(w) {
         return Some(ItemAction::Engine(w.to_string()));
@@ -165,6 +171,14 @@ impl Layer {
     }
 
     /// Moves the cursor to the next enabled row up or down, wrapping.
+    /// The cursor to the first or the last row that can be chosen.
+    pub fn move_to_end(&mut self, last: bool) {
+        let rows: Vec<usize> = (0..self.rows.len()).filter(|&i| self.rows[i].enabled).collect();
+        if let Some(&i) = if last { rows.last() } else { rows.first() } {
+            self.cursor = i;
+        }
+    }
+
     pub fn move_by(&mut self, step: isize) {
         let n = self.rows.len() as isize;
         if n == 0 {

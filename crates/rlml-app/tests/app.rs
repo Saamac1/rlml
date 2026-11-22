@@ -1053,3 +1053,42 @@ fn a_docked_menu_shows_the_keys_of_engine_actions_and_menus() {
     let keys: Vec<String> = app.view.docked.values().next().unwrap().rows.iter().map(|r| r.key.clone()).collect();
     assert_eq!(keys, ["s", "e", "esc"]);
 }
+
+#[test]
+fn the_log_is_read_back_to_its_start() {
+    let f = mini_with(|g| g.push_str("\nkeys GAME\n- read LOG o\n"));
+    let f = {
+        let mut f = f;
+        let ui = f.game.get_mut("ui/main.rlml").unwrap();
+        *ui = ui.replace("log LOG history 50", "log LOG history all");
+        f
+    };
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    for n in 0..30 {
+        app.r.w.log.push(rlml_core::rt::world::LogEntry { key: format!("STD.MESSAGE.COMBAT.N{n:02}"), args: vec![] });
+    }
+    let row = |app: &mut App, y: usize| app.draw().row(y).trim_end().to_string();
+    press(&mut app, "o");
+    assert!(app.reading.is_some());
+    assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N29", "the newest at the bottom");
+    assert_eq!(row(&mut app, 0), "STD.MESSAGE.COMBAT.N18", "the whole window is the log");
+    press(&mut app, "k");
+    assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N28");
+    press(&mut app, "pageup");
+    assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N16", "a page is the view's height");
+    press(&mut app, "home");
+    assert_eq!(row(&mut app, 0), "STD.MESSAGE.COMBAT.N00", "back to the first message");
+    press(&mut app, "k");
+    assert_eq!(row(&mut app, 0), "STD.MESSAGE.COMBAT.N00", "not past it");
+    app.mouse_press(Binding::mouse(termplate_core::keys::Mouse::WheelDown), 5, 5, ms(20)).unwrap();
+    assert_eq!(row(&mut app, 0), "STD.MESSAGE.COMBAT.N03", "the wheel scrolls three lines");
+    press(&mut app, "end");
+    assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N29");
+    // the game's time stops while reading, and esc closes
+    let turn = app.r.w.s.game.turn();
+    app.tick(ms(5000)).unwrap();
+    assert_eq!(app.r.w.s.game.turn(), turn);
+    press(&mut app, "esc");
+    assert!(app.reading.is_none());
+}

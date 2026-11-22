@@ -473,6 +473,13 @@ pub fn docked_at(view: &View, x: usize, y: usize) -> Option<(String, usize)> {
 /// The log's newest messages that fit, wrapped at word gaps, each in its
 /// `logs` color (D 11.4, M 7.4).
 fn draw_log(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, tc: bool) {
+    draw_log_back(frame, world, lang, name, r, tc, 0);
+}
+
+/// The log drawn `back` lines up from its newest, as the reading view
+/// scrolls it (D 11.4, M 7.4); `back` is cut to the oldest line. Gives
+/// the lines it holds and the `back` it drew.
+pub fn draw_log_back(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, tc: bool, back: usize) -> (usize, usize) {
     let history = world.m.defs.get(name).and_then(|d| d.block()).and_then(|b| b.arg_after("history")).and_then(|n| n.parse::<usize>().ok()).unwrap_or(usize::MAX);
     let selects = log_rows(world, name);
     // each line with its color and its message's place in the log
@@ -486,7 +493,9 @@ fn draw_log(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, t
             lines.push((part, color, n));
         }
     }
-    let shown = &lines[lines.len().saturating_sub(r.h)..];
+    let back = back.min(lines.len().saturating_sub(r.h));
+    let end = lines.len() - back;
+    let shown = &lines[end.saturating_sub(r.h)..end];
     // `fade`: the newest message is the brightest, the oldest shown the
     // dimmest (D 9.3)
     let fade = panel_fade(world, name);
@@ -508,6 +517,7 @@ fn draw_log(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, t
             paint(frame, Rect::new(r.x, r.y + i, r.w, 1), style);
         }
     }
+    (lines.len(), back)
 }
 
 /// The message keys or groups a `log` block selects (D 11.4).

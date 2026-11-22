@@ -16,7 +16,8 @@ use crate::token::Token;
 /// Engine actions a key, menu item or `{^…}` may name (M 9.1).
 pub const ENGINE_ACTIONS: &[&str] = &[
     "save", "quit", "pass", "repeat", "help", "confirm", "back", "close", "resume", "skip", "restart", "rewind", "new_game", "load_game",
-    "exit", "next", "prev", "toggle", "travel_to", "look", "cursor", "follow", "verbs", "focus", "join", "leave_seat",
+    "exit", "next", "prev", "toggle", "travel_to", "look", "cursor", "follow", "verbs", "focus", "join", "leave_seat", "read", "tab", "tab.next",
+    "tab.prev", "page.up", "page.down", "first", "last",
 ];
 
 /// Engine events (M 9.1, M 9.6).
@@ -984,6 +985,17 @@ impl Checker<'_> {
             let name = target.split('(').next().unwrap_or(target);
             self.m.resolve_kind(ns, name, &[Kind::Menu, Kind::Panel])?;
             return Ok(if row.word(2) == Some("stack") { 3 } else { 2 });
+        }
+        if w == "read" {
+            // `read LOG`: a log to read back (D 11.4)
+            let target = row.word(1).ok_or("`read` needs a log")?;
+            self.m.resolve_kind(ns, target, &[Kind::Log])?;
+            return Ok(2);
+        }
+        if w == "tab" {
+            // `tab NAME`: the tab whose content is NAME (D 11.1)
+            row.word(1).ok_or("`tab` needs a tab's content")?;
+            return Ok(2);
         }
         if w == "focus" {
             // `focus MENU`: a menu docked in the layout (D 11.3)

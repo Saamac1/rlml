@@ -29,6 +29,8 @@ pub enum Action {
     Toggle(String),
     /// `focus MENU`: the keys go to a docked menu (D 11.3).
     Focus(String),
+    /// `read LOG`: the log opens to be read back (D 11.4).
+    Read(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,7 +131,16 @@ fn defaults() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
         ("confirm", "enter space"),
         ("back", "esc"),
     ];
-    let menu = vec![("cursor.north", "up k"), ("cursor.south", "down j"), ("confirm", "enter space"), ("back", "esc backspace")];
+    let menu = vec![
+        ("cursor.north", "up k"),
+        ("cursor.south", "down j"),
+        ("confirm", "enter space"),
+        ("back", "esc backspace"),
+        ("page.up", "pageup"),
+        ("page.down", "pagedown"),
+        ("first", "home"),
+        ("last", "end"),
+    ];
     vec![
         ("MENU", menu.clone()),
         ("DIALOGUE", menu),
@@ -217,6 +228,7 @@ impl Keys {
                         "open" => (Action::Open { menu: row.word(1).and_then(|w| m.resolve(row.namespace.as_deref(), w).ok()).map(|d| d.full.clone()).unwrap_or_default(), stack: row.word(2) == Some("stack") }, if row.word(2) == Some("stack") { 3 } else { 2 }),
                         "toggle" => (Action::Toggle(row.word(1).unwrap_or("").to_string()), 2),
                         "focus" => (Action::Focus(row.word(1).and_then(|w| m.resolve(row.namespace.as_deref(), w).ok()).map(|d| d.full.clone()).unwrap_or_default()), 2),
+                        "read" => (Action::Read(row.word(1).map(|w| m.resolve(row.namespace.as_deref(), w).map_or(w.to_string(), |d| d.full.clone())).unwrap_or_default()), 2),
                         w if names::is_vocabulary(w) => (Action::Engine(w.to_string()), 1),
                         w => match m.resolve_kind(row.namespace.as_deref(), w, &[Kind::Command]) {
                             Ok(d) => (Action::Command(d.full.clone()), 1),
@@ -369,6 +381,7 @@ pub enum Effect {
     Open { menu: String, stack: bool, always: bool },
     Toggle(String),
     Focus(String),
+    Read(String),
     /// The repeat count is being typed (D 11.3).
     Counting(String),
     /// The press is not bound here.
@@ -447,6 +460,7 @@ impl Input {
             Action::Open { menu, stack } => Effect::Open { menu, stack, always: self.keys.is_always(device, press) },
             Action::Toggle(p) => Effect::Toggle(p),
             Action::Focus(m) => Effect::Focus(m),
+            Action::Read(l) => Effect::Read(l),
         }
     }
 }
