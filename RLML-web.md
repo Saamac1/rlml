@@ -86,7 +86,13 @@ Selain antaa aina `true`.
   `setTimeout(app.wait())`, joka perutaan uuden syötteen tullessa.
   Välikuvat `app.frames` lähetetään `frame_time()`-välein.
 - **Piirto:** canvas, monospace-fontti, solun koko fontin mitoista,
-  `devicePixelRatio` huomioiden. Leveät merkit (`unicode-width` 2) vievät
+  `devicePixelRatio` huomioiden.
+  Fontin koko sovitetaan: sivu mittaa ikkunan solut jokaisella
+  fonttikoolla suosikista (puhelimella 18 px, muuten 16 px, kerrottuna
+  käyttäjän oletusfontin ja 16 px:n suhteella) alas 7 px:iin, ja worker
+  valitsee suurimman, jolla valittu asettelu mahtuu ikkunaan
+  (`WebGame::fits`, `App::fits`). Näin suurennetut fontit tai sivun
+  zoomaus eivät leikkaa asettelua, vaan fontti pienenee. Leveät merkit (`unicode-width` 2) vievät
   kaksi solua kuten terminaalissa.
 - **Näppäimet:** `keydown` → `termplate_core::keys::Binding`. Kuvaa
   `KeyboardEvent.key` samoihin nimiin kuin `termplate-term`in `map_event`

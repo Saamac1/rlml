@@ -144,6 +144,13 @@ impl WebGame {
         self.g.push(Event::Resize(cols, rows));
     }
 
+    /// Whether a window of `cols`×`rows` cells and `px_width`×`px_height`
+    /// pixels holds the layout it would choose; the page shrinks its font
+    /// until it does.
+    pub fn fits(&self, cols: usize, rows: usize, px_width: usize, px_height: usize) -> bool {
+        self.g.app.fits(cols, rows, (px_width, px_height))
+    }
+
     /// The mouse button or the finger went up.
     pub fn release(&mut self) {
         self.g.push(Event::Release);

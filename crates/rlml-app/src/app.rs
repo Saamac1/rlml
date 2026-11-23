@@ -501,6 +501,13 @@ impl<'m> App<'m> {
         f
     }
 
+    /// Whether a window of `cols`×`rows` cells and `pixels` holds the
+    /// layout it would choose: the browser picks its font size by this.
+    pub fn fits(&self, cols: usize, rows: usize, pixels: (usize, usize)) -> bool {
+        let portrait = pixels.1 > pixels.0;
+        self.view.solve(&self.r.w, cols, rows, portrait).is_ok_and(|(_, s)| !s.too_small)
+    }
+
     /// Portrait: the window is taller than wide in pixels, a cell counted
     /// as 1:2 without the pixels (D 11.1).
     fn portrait(&self) -> bool {

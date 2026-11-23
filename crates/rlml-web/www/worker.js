@@ -109,14 +109,22 @@ function show() {
   }
 }
 
+// the first font size, largest first, whose window in cells holds the
+// game's layout, or the smallest; the page measures its cells by it
+function resize(m) {
+  const list = m.fonts && m.fonts.length ? m.fonts : [{ css: 0, cols: m.cols, rows: m.rows }];
+  const f = list.find((f) => game.fits(f.cols, f.rows, m.pw, m.ph)) || list[list.length - 1];
+  if (f.css) postMessage({ t: 'font', css: f.css, cols: f.cols, rows: f.rows });
+  game.resize(f.cols, f.rows, m.pw, m.ph);
+}
+
 onmessage = async (e) => {
   const m = e.data;
   if (m.t === 'load') {
     try {
       await init();
       game = new WebGame(JSON.parse(m.bundle), m.seed, m.cols, m.rows);
-      const s = size || m;
-      game.resize(s.cols, s.rows, s.pw, s.ph);
+      resize(size || m);
     } catch (err) {
       postMessage({ t: 'error', text: `Pelin lataus ei onnistunut:\n\n${err && err.message ? err.message : err}` });
       return;
@@ -130,7 +138,7 @@ onmessage = async (e) => {
       case 'key': game.key(m.name); break;
       case 'press': game.press(m.name, m.x, m.y); break;
       case 'move': game.pointer(m.x, m.y); break;
-      case 'resize': game.resize(m.cols, m.rows, m.pw, m.ph); break;
+      case 'resize': resize(m); break;
       case 'release': game.release(); break;
       case 'pad': for (const words of m.events) game.pad(words); break;
       default: return;

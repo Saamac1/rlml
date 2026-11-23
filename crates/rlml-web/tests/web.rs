@@ -228,3 +228,17 @@ fn clicks_hover_and_a_new_size_in_the_workers_loop() {
     g.step(Duration::from_millis(now + 20)).unwrap();
     assert_eq!(g.draw()[2], 1);
 }
+
+#[test]
+fn fits_tells_whether_the_layout_holds_in_a_window() {
+    // a map of 20x8 cells over a log of 3 rows
+    let mut f = mini();
+    let ui = f.game.get("ui/main.rlml").unwrap().replace("- m map\n", "- m map size 20x8\n");
+    f.game.insert("ui/main.rlml".into(), ui);
+    let m = Box::leak(Box::new(rlml_web::bundle::load(&f, "game.rlml").unwrap()));
+    let g = Game::new(m, 7, (40, 12)).unwrap();
+    assert!(g.app.fits(20, 11, (400, 300)));
+    assert!(g.app.fits(80, 30, (800, 600)));
+    assert!(!g.app.fits(19, 11, (400, 300)), "the map is narrower than written");
+    assert!(!g.app.fits(20, 10, (400, 300)), "the log loses a row");
+}

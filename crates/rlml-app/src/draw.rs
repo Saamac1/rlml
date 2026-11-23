@@ -346,6 +346,41 @@ impl View {
         cam
     }
 
+    /// The layout chosen for a window of `width`×`height` cells in
+    /// portrait or landscape, its areas and their rectangles; `too_small`
+    /// when the window cannot hold it (D 11.1).
+    pub fn solve(&self, world: &World, width: usize, height: usize, portrait: bool) -> Result<(Vec<Area>, layout::Solved), String> {
+        let Some(b) = layout_block(world, width, height, portrait) else {
+            // without a layout the map fills the window
+            let mut rects = BTreeMap::new();
+            rects.insert('m', Rect::new(0, 0, width, height));
+            let area = Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None, cursor: vec![], tabs: vec![], read: false, center: false };
+            return Ok((vec![area], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 }));
+        };
+        let rows: Vec<RawItem> = b.sub("legend").cloned().collect();
+        let (areas, dims) = areas(&rows);
+        let mut grid = layout::analyze(&b.drawing).map_err(|e| e.to_string())?;
+        let _ = grid.set_sizes(&dims);
+        // a panel's drawing and border are its area's least size (D 11.1,
+        // D 11.5)
+        let mut content = BTreeMap::<char, AreaSize>::new();
+        for a in &areas {
+            let name = a.source.split('(').next().unwrap_or("");
+            if let Some(pb) = crate::panel::block(world, name) {
+                let (pw, ph) = crate::panel::size(pb);
+                let edge = if panel_style(world, name, self.truecolor).0 != Border::None { 2 } else { 0 };
+                content.insert(a.ch, AreaSize { min_width: pw + edge, min_height: ph + edge });
+            }
+            // a tabs area holds its largest content and the tab row
+            if !a.tabs.is_empty() {
+                let (pw, ph) = a.tabs.iter().filter_map(|t| content_size(world, t)).fold((0, 0), |(w, h), (pw, ph)| (w.max(pw), h.max(ph)));
+                content.insert(a.ch, AreaSize { min_width: pw, min_height: ph + tab_row_height(world, self.truecolor) });
+            }
+        }
+        let solved = grid.solve(&content, width, height);
+        Ok((areas, solved))
+    }
+
     /// Draws the game into a frame of the window's size.
     pub fn draw(&mut self, world: &mut World, lang: &str, width: usize, height: usize) -> Frame {
         let mut frame = Frame::new(width, height);
@@ -357,43 +392,11 @@ impl View {
         self.buttons.clear();
         self.read_rects.clear();
         let block = layout_block(world, width, height, self.portrait);
-        let (areas, solved) = match &block {
-            Some(b) => {
-                let rows: Vec<RawItem> = b.sub("legend").cloned().collect();
-                let (areas, dims) = areas(&rows);
-                match layout::analyze(&b.drawing) {
-                    Ok(mut grid) => {
-                        let _ = grid.set_sizes(&dims);
-                        // a panel's drawing and border are its area's least
-                        // size (D 11.1, D 11.5)
-                        let mut content = BTreeMap::<char, AreaSize>::new();
-                        for a in &areas {
-                            let name = a.source.split('(').next().unwrap_or("");
-                            if let Some(pb) = crate::panel::block(world, name) {
-                                let (pw, ph) = crate::panel::size(pb);
-                                let edge = if panel_style(world, name, self.truecolor).0 != Border::None { 2 } else { 0 };
-                                content.insert(a.ch, AreaSize { min_width: pw + edge, min_height: ph + edge });
-                            }
-                            // a tabs area holds its largest content and the tab row
-                            if !a.tabs.is_empty() {
-                                let (pw, ph) = a.tabs.iter().filter_map(|t| content_size(world, t)).fold((0, 0), |(w, h), (pw, ph)| (w.max(pw), h.max(ph)));
-                                content.insert(a.ch, AreaSize { min_width: pw, min_height: ph + tab_row_height(world, self.truecolor) });
-                            }
-                        }
-                        let solved = grid.solve(&content, width, height);
-                        (areas, solved)
-                    }
-                    Err(e) => {
-                        frame.text(0, 0, width, &format!("layout: {e}"), Role::Normal);
-                        return frame;
-                    }
-                }
-            }
-            // without a layout the map fills the window
-            None => {
-                let mut rects = BTreeMap::new();
-                rects.insert('m', Rect::new(0, 0, width, height));
-                (vec![Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None, cursor: vec![], tabs: vec![], read: false, center: false }], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 })
+        let (areas, solved) = match self.solve(world, width, height, self.portrait) {
+            Ok(x) => x,
+            Err(e) => {
+                frame.text(0, 0, width, &format!("layout: {e}"), Role::Normal);
+                return frame;
             }
         };
         if solved.too_small {

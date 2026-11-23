@@ -17,8 +17,12 @@ const canvas = document.getElementById('screen');
 const ctx = canvas.getContext('2d', { alpha: false });
 
 // a phone takes a larger font, so the map and the log read well on its
-// small screen
-const FONT_PX = Math.min(window.innerWidth, window.innerHeight) < 520 ? 18 : 16;
+// small screen; a larger default font (the reader's own setting) makes it
+// larger still. The font shrinks from this until the game's layout fits
+// the window (`fits` in the worker), down to MIN_FONT_PX.
+const ROOT_PX = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+const FONT_PX = Math.round((Math.min(window.innerWidth, window.innerHeight) < 520 ? 18 : 16) * Math.max(1, ROOT_PX / 16));
+const MIN_FONT_PX = 7;
 const LINE = 1.2;
 const FAMILY = 'Menlo, Monaco, "SF Mono", "DejaVu Sans Mono", Consolas, "Liberation Mono", monospace';
 // cells.rs: the flags over the character's 21 bits
@@ -33,34 +37,54 @@ function show(text, error) {
 }
 
 // cell size in device pixels, from the font's own measures; measured
-// again when the pixel ratio changes (zoom, another screen)
-let dpr, fontPx, cellW, cellH;
+// again when the pixel ratio changes (zoom, another screen) or the worker
+// picks another font size
+let dpr, fontCss = FONT_PX, fontPx, cellW, cellH;
 function font(flags) {
   return `${flags & ITALIC ? 'italic ' : ''}${flags & BOLD ? 'bold ' : ''}${fontPx}px ${FAMILY}`;
 }
+function cellOf(css) {
+  const px = Math.round(css * dpr);
+  ctx.font = `${px}px ${FAMILY}`;
+  return [px, Math.ceil(ctx.measureText('M').width), Math.ceil(px * LINE)];
+}
 function measure() {
   dpr = window.devicePixelRatio || 1;
-  fontPx = Math.round(FONT_PX * dpr);
+  [fontPx, cellW, cellH] = cellOf(fontCss);
   ctx.font = font(0);
-  cellW = Math.ceil(ctx.measureText('M').width);
-  cellH = Math.ceil(fontPx * LINE);
 }
 // the page's own room: the body, which a host may pad (safe areas)
 function room() {
   const b = document.body;
   return [b.clientWidth || window.innerWidth, b.clientHeight || window.innerHeight];
 }
-function grid() {
+function gridOf(cw, ch) {
   const [w, h] = room();
-  return [Math.max(20, Math.floor((w * dpr) / cellW)), Math.max(10, Math.floor((h * dpr) / cellH))];
+  return [Math.max(20, Math.floor((w * dpr) / cw)), Math.max(10, Math.floor((h * dpr) / ch))];
 }
-measure();
-let [cols, rows] = grid();
 const pixels = () => {
   const [w, h] = room();
   return { pw: Math.round(w * dpr), ph: Math.round(h * dpr) };
 };
-let lastPixels = pixels();
+// the window in cells at each font size from the largest down: the
+// worker takes the first whose grid holds the layout
+function fonts() {
+  dpr = window.devicePixelRatio || 1;
+  const out = [];
+  let last = '';
+  for (let css = FONT_PX; css >= MIN_FONT_PX; css--) {
+    const [, cw, ch] = cellOf(css);
+    const [cols, rows] = gridOf(cw, ch);
+    const key = `${cols}x${rows}`;
+    if (key !== last) out.push({ css, cols, rows });
+    last = key;
+  }
+  ctx.font = font(0);
+  return out;
+}
+measure();
+let [cols, rows] = gridOf(cellW, cellH);
+let sent = '';
 
 function size(w, h) {
   canvas.width = w * cellW;
@@ -248,21 +272,20 @@ canvas.addEventListener('wheel', (e) => {
   for (let i = 0; i < Math.min(Math.abs(steps), 5); i++) send({ t: 'press', name, x: c[0], y: c[1] });
 }, { passive: false });
 
-// the window's size in cells
-new ResizeObserver(() => {
-  const ratio = window.devicePixelRatio || 1;
-  const remeasured = ratio !== dpr;
-  if (remeasured) measure();
-  const [c, r] = grid();
+// the window's size in cells at each font size; the worker answers with
+// the size it took (`font`)
+function sizes() {
+  const list = fonts();
   const p = pixels();
-  const turned = (p.ph > p.pw) !== (lastPixels.ph > lastPixels.pw);
-  lastPixels = p;
-  if (c === cols && r === rows && !remeasured && !turned) return;
-  cols = c;
-  rows = r;
+  return { list, p, key: `${p.pw}x${p.ph}@${dpr}:${list.map((f) => f.css + '=' + f.cols + 'x' + f.rows).join(',')}` };
+}
+new ResizeObserver(() => {
+  const s = sizes();
+  if (s.key === sent) return;
+  sent = s.key;
   // a new cell size draws every cell again, as a new size does; the
   // pixels tell portrait from landscape (D 11.1)
-  send({ t: 'resize', cols, rows, ...pixels() });
+  send({ t: 'resize', fonts: s.list, cols: s.list[0].cols, rows: s.list[0].rows, ...s.p });
 }).observe(document.body);
 // a long press shows no menu and selects nothing (M 8.1)
 addEventListener('contextmenu', (e) => e.preventDefault());
@@ -301,6 +324,13 @@ async function start() {
           console.warn('rlml-web: no pads:', err);
         }
         break;
+      case 'font':
+        // the size the worker took: its cells come next
+        fontCss = m.css;
+        measure();
+        cols = m.cols;
+        rows = m.rows;
+        break;
       case 'cells':
         paint(new Uint32Array(m.cells));
         break;
@@ -313,7 +343,9 @@ async function start() {
         break;
     }
   };
-  worker.postMessage({ t: 'load', bundle, seed, cols, rows, ...pixels() });
+  const s = sizes();
+  sent = s.key;
+  worker.postMessage({ t: 'load', bundle, seed, fonts: s.list, cols: s.list[0].cols, rows: s.list[0].rows, ...s.p });
 }
 
 start().catch((e) => show(String(e && e.message ? e.message : e), true));

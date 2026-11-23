@@ -13,6 +13,9 @@ try { new WebGame({ main: 'game.rlml', game: { 'game.rlml': 'game G\n- start NOW
 catch (e) { print('load error shown:', String(e).split('\n')[0]); }
 const g = new WebGame(JSON.parse(readFile(`${www}/game.json`)), 1, 100, 34);
 print('bound keys:', g.bound_keys().length);
+// the page shrinks its font until the layout fits: a window too small
+// for any layout does not, a desktop one does
+if (g.fits(8, 4, 400, 300) || !g.fits(100, 34, 1000, 600)) throw new Error('fits');
 const times = { draw: [], input: [], tick: [] };
 let clock = 0;
 function frame() { while (g.next_frame() !== undefined) {} const t = now(); const c = g.draw(); times.draw.push(now() - t); return c; }
