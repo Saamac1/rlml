@@ -181,6 +181,9 @@ pub struct App<'m> {
     type_last: Duration,
     /// The teletype's characters a second, when a log area has `baud`.
     baud: Option<f64>,
+    /// A key of the keyboard has been pressed: buttons show their keys
+    /// (`<KEY>.KEYS`, D 11.5).
+    pub keyboard: bool,
 }
 
 /// The asked parameters' list menu as a layer.
@@ -329,6 +332,7 @@ impl<'m> App<'m> {
             type_chars: 0.0,
             type_last: Duration::ZERO,
             baud: None,
+            keyboard: false,
         };
         app.baud = crate::draw::log_baud(&app.r.w, "");
         match app.title() {
@@ -467,6 +471,7 @@ impl<'m> App<'m> {
         self.view.pointer = self.pointer;
         self.view.enabled = self.players_turn() && !self.menus.is_open();
         self.view.typing = self.baud.map(|_| (self.typed, self.type_chars as usize));
+        self.view.keyboard = self.keyboard;
         if self.reading.as_ref().is_some_and(|r| !r.panel) {
             // over a `read` log area the view keeps the log's place (D 11.4)
             let over = self.view.read_rects.iter().find(|(_, l, _)| self.reading.as_ref().is_some_and(|r| r.log == *l)).cloned();
@@ -805,6 +810,7 @@ impl<'m> App<'m> {
     /// A key at time `now` (M 8).
     pub fn key(&mut self, b: Binding, now: Duration) -> RtResult<()> {
         self.typed_out(now);
+        self.keyboard = true;
         self.last_key = now;
         self.clock = now;
         self.note = None;

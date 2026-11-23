@@ -39,6 +39,9 @@ pub struct PanelUi {
     pub pressed: Option<Rect>,
     pub pointer: Option<(usize, usize)>,
     pub enabled: bool,
+    /// The keyboard has been used: a button shows its text key's `.KEYS`
+    /// form, when written, with the keys (D 11.5).
+    pub keyboard: bool,
     pub buttons: Vec<(Rect, crate::menu::ItemAction)>,
 }
 
@@ -176,6 +179,7 @@ pub fn draw(frame: &mut Frame, w: &mut World, lang: &str, b: &RawBlock, call: &s
     for pos in &detected.fields {
         let Some(f) = fields.iter().find(|f| f.ch.to_string() == pos.name) else { continue };
         let texts = match &f.show {
+            Show::Button(_, key, _) if ui.keyboard && w.m.has_text(lang, &format!("{key}.KEYS")) => vec![styled(w, lang, &format!("{key}.KEYS"), &[])],
             Show::Text(key) | Show::Button(_, key, _) => vec![styled(w, lang, key, &[])],
             Show::Param(name) => env.locals.get(name).map(|v| shown(w, lang, v)).unwrap_or_default(),
             Show::Value(Err(e)) => vec![plain(e)],

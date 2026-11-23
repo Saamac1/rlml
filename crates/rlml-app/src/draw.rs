@@ -43,6 +43,10 @@ pub struct Area {
     pub read_below: Option<String>,
     /// `center`: the panel is centred in a larger area (D 11.1).
     pub center: bool,
+    /// `right` and `bottom`: the panel is at the area's right or bottom
+    /// edge; with `center` it is centred the other way (D 11.1).
+    pub right: bool,
+    pub bottom: bool,
 }
 
 /// The size a tab's content needs: a panel's drawing, a menu's rows (as
@@ -137,6 +141,9 @@ pub struct View {
     pub buttons: Vec<(Rect, crate::menu::ItemAction)>,
     /// The button held down now, which shows `button.pressed` (D 9.3).
     pub pressed: Option<Rect>,
+    /// The keyboard has been used: buttons show `<KEY>.KEYS` (D 11.5);
+    /// the app sets it.
+    pub keyboard: bool,
     /// The last frame's `read` log areas: their cells, logs and `read
     /// PANEL` panels (D 11.4).
     pub read_rects: Vec<(Rect, String, Option<String>)>,
@@ -216,7 +223,8 @@ fn areas(rows: &[RawItem]) -> (Vec<Area>, Dims) {
         let tabs = if source == "tabs" { words.iter().skip(1).take_while(|w| !w.starts_with("size")).map(|w| w.to_string()).collect() } else { vec![] };
         let (read, center) = (words.contains(&"read"), words.contains(&"center"));
         let read_below = words.iter().position(|w| *w == "read").and_then(|i| words.get(i + 1)).filter(|w| w.chars().next().is_some_and(|c| c.is_ascii_uppercase())).map(|w| w.to_string());
-        out.push(Area { ch, source, follow, menu, cursor, tabs, read, read_below, center });
+        let (right, bottom) = (words.contains(&"right"), words.contains(&"bottom"));
+        out.push(Area { ch, source, follow, menu, cursor, tabs, read, read_below, center, right, bottom });
     }
     (out, dims)
 }
@@ -362,7 +370,7 @@ impl View {
             // without a layout the map fills the window
             let mut rects = BTreeMap::new();
             rects.insert('m', Rect::new(0, 0, width, height));
-            let area = Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None, cursor: vec![], tabs: vec![], read: false, read_below: None, center: false };
+            let area = Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None, cursor: vec![], tabs: vec![], read: false, read_below: None, center: false, right: false, bottom: false };
             return Ok((vec![area], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 }));
         };
         let rows: Vec<RawItem> = b.sub("legend").cloned().collect();
@@ -462,8 +470,14 @@ impl View {
                 "tabs" => self.draw_tabs(&mut frame, world, lang, &area.tabs, inner),
                 _ => {
                     // `center`: a smaller panel in the middle of its area
+                    // `right` and `bottom` at the area's edges (D 11.1)
                     let at = match content_size(world, &area.source) {
-                        Some((w, h)) if area.center => Rect::new(inner.x + inner.w.saturating_sub(w) / 2, inner.y + inner.h.saturating_sub(h) / 2, w.min(inner.w), h.min(inner.h)),
+                        Some((w, h)) if area.center || area.right || area.bottom => {
+                            let (sx, sy) = (inner.w.saturating_sub(w), inner.h.saturating_sub(h));
+                            let x = if area.right { sx } else if area.center { sx / 2 } else { 0 };
+                            let y = if area.bottom { sy } else if area.center { sy / 2 } else { 0 };
+                            Rect::new(inner.x + x, inner.y + y, w.min(inner.w), h.min(inner.h))
+                        }
                         _ => inner,
                     };
                     if area.read {
@@ -505,6 +519,7 @@ impl View {
                     pressed: self.pressed,
                     pointer: self.pointer,
                     enabled: self.enabled,
+                    keyboard: self.keyboard,
                     buttons: vec![],
                 };
                 world.holding_view(|w| crate::panel::draw(frame, w, lang, pb, source, r, &mut ui));

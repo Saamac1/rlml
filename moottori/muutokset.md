@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 24.11.2026 (napit nurkkaan ja näppäimet nappeihin):** `right`- ja `bottom`-määreet ja napin `.KEYS`-teksti näppäimistön käytön jälkeen (luku [7.7](07-esitys.md#77-paneelit)).
+
 **Muutokset 23.11.2026 (teletype ja lukunäkymä lokin kohdalla):** lokin kirjoitus `baud`-tahdissa ja lukunäkymä `read`-lokialueen kohdalla (luku [7.4](07-esitys.md#74-loki-ja-dialogit)).
 
 **Muutokset 22.11.2026 (vieritysnapit):** lukunäkymän ja modaalisen paneelin vieritysnapit (luku [7.4](07-esitys.md#74-loki-ja-dialogit)).

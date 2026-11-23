@@ -1358,3 +1358,26 @@ fn the_reading_view_over_a_read_log_keeps_its_lines_and_shows_a_panel_under_it()
     assert!(f.rows().iter().skip(24).any(|r| r.contains("bag!")), "{:#?}", f.rows());
     assert!(!f.rows().iter().skip(24).any(|r| r.contains("PAD.H")));
 }
+
+#[test]
+fn right_and_bottom_place_a_panel_and_a_used_keyboard_shows_keys_on_buttons() {
+    let f = mini_with(|g| {
+        *g = g.replace("- keys GAME\n", "- keys GAME\n- layout MAIN\n- layout PHONE when portrait\n");
+        g.push_str(
+            "\nlayout PHONE\n\n```\nm\nl\np\n```\n\nlegend:\n- m map\n- l LOG size.height 3\n- p PAD size.height 6 right bottom\n\n\
+             panel PAD\n\n```\nhhhhh\n```\n\nlegend:\n- h button MOVE.NORTH text PAD.H\n",
+        );
+    });
+    let mut f = f;
+    f.game.get_mut("text/fi.rlml").unwrap().push_str("\nPAD.H yl\nPAD.H.KEYS yl k\n");
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (20, 30)).unwrap();
+    let frame = app.draw();
+    // the 5×1 pad at the right bottom of its 20×6 area at rows 24..30
+    let (r, _) = app.view.buttons[0].clone();
+    assert_eq!((r.x, r.y, r.w), (15, 29, 5), "{:#?}", frame.rows());
+    let label = |app: &mut App| app.draw().row(29).trim().to_string();
+    assert_eq!(label(&mut app), "yl");
+    app.key(key("x"), ms(10)).unwrap();
+    assert_eq!(label(&mut app), "yl k", "the keys once the keyboard is used");
+}
