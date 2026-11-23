@@ -1300,3 +1300,61 @@ fn a_modal_panel_scrolls_when_it_does_not_fit_and_buttons_hide_and_press() {
     app.mouse_press(click(), 1, 1, ms(50)).unwrap();
     assert!(app.reading.is_none(), "a tap closes it");
 }
+
+#[test]
+fn the_teletype_types_new_messages_and_a_press_shows_them_at_once() {
+    let f = mini_with(|g| g.push_str("\npanels\n- LOG baud 1200\n"));
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    // the start's messages typed out
+    for t in 1..200 {
+        app.tick(ms(t * 50)).unwrap();
+    }
+    let log_row = |app: &mut App| app.draw().rows().into_iter().find(|r| r.contains("N00")).map(|r| r.trim_end().to_string());
+    app.tick(ms(10_000)).unwrap();
+    app.r.w.log.push(rlml_core::rt::world::LogEntry { key: "STD.MESSAGE.COMBAT.N00".into(), args: vec![] });
+    assert_eq!(log_row(&mut app), None, "not typed yet");
+    app.tick(ms(10_080)).unwrap();
+    // 1200 baud is 120 characters a second: 80 ms types 9
+    let typed = app.draw().rows().into_iter().find(|r| r.contains("STD.MESS")).unwrap();
+    assert_eq!(typed.trim_end(), "STD.MESSA▌");
+    assert!(app.wait() <= ms(30), "the typing keeps the frames coming");
+    // a press shows the rest at once
+    app.key(key("x"), ms(10_100)).unwrap();
+    assert_eq!(log_row(&mut app).as_deref(), Some("STD.MESSAGE.COMBAT.N00"));
+}
+
+#[test]
+fn the_reading_view_over_a_read_log_keeps_its_lines_and_shows_a_panel_under_it() {
+    let f = mini_with(|g| {
+        *g = g.replace("- keys GAME\n", "- keys GAME\n- layout MAIN\n- layout PHONE when portrait\n");
+        g.push_str(
+            "\nlayout PHONE\n\n```\nm\nl\np\n```\n\nlegend:\n- m map\n- l LOG size.height 3 read BAG\n- p PAD size.height 6\n\n\
+             panel PAD\n\n```\nhhhh\n```\n\nlegend:\n- h button MOVE.NORTH text PAD.H\n\n\
+             panel BAG\n\n```\nbbbb\n```\n\nlegend:\n- b value \"bag!\"\n",
+        );
+    });
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (20, 30)).unwrap();
+    app.r.w.log.clear();
+    for n in 0..12 {
+        app.r.w.log.push(rlml_core::rt::world::LogEntry { key: format!("STD.MESSAGE.COMBAT.N{n:02}"), args: vec![] });
+    }
+    let before = app.draw();
+    let at = |f: &termplate_core::frame::Frame, y: usize| f.row(y).trim_end().to_string();
+    // the log's three rows at 21..24, each message cut to two lines
+    assert_eq!(at(&before, 23), "11");
+    app.mouse_press(click(), 3, 22, ms(10)).unwrap();
+    let f = app.draw();
+    for y in 21..24 {
+        assert_eq!(at(&f, y).split_whitespace().next(), at(&before, y).split_whitespace().next(), "row {y} stays");
+    }
+    // above them the rest of their messages, and older ones over the
+    // map, an empty line between those
+    assert_eq!(at(&f, 20), "STD.MESSAGE.COMBAT.N");
+    assert_eq!(at(&f, 19), "");
+    assert_eq!(at(&f, 18).split_whitespace().next(), Some("09"));
+    // the panel under the log, where the pad was
+    assert!(f.rows().iter().skip(24).any(|r| r.contains("bag!")), "{:#?}", f.rows());
+    assert!(!f.rows().iter().skip(24).any(|r| r.contains("PAD.H")));
+}

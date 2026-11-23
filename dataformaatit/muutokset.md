@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 23.11.2026 (teletype ja lukunäkymä lokin kohdalla):** lokialueen `panels`-rivin `baud N` kirjoittaa uudet viestit merkki kerrallaan (luku [9.3](09-ulkoasu.md#93-paneelit-lokit-ja-esitys)). `read`-lokialueen lukunäkymä avautuu lokin kohdalle, ja `read PANEELI` näyttää paneelin lokin alla (luvut [11.1](11-kayttoliittyman-data.md#111-asettelu) ja [11.4](11-kayttoliittyman-data.md#114-viestit-ja-loki)).
+
 **Muutokset 22.11.2026 (vieritysnapit):** lukunäkymässä ja modaalisessa paneelissa on vieritysnapit `↑` ja `↓`, kun sisältöä on piilossa (luku [11.4](11-kayttoliittyman-data.md#114-viestit-ja-loki)).
 
 **Muutokset 22.11.2026 (napit, osa 2):** napin `hide when EHTO`, painetun napin värit `button.pressed` ja modaalisen paneelin vieritys (luvut [9.3](09-ulkoasu.md#93-paneelit-lokit-ja-esitys) ja [11.5](11-kayttoliittyman-data.md#115-paneelit)).

@@ -38,6 +38,9 @@ pub struct Area {
     pub tabs: Vec<String>,
     /// `read`: a click on the log opens it to be read (D 11.4).
     pub read: bool,
+    /// `read PANEL`: the reading view stays over the log, and the panel
+    /// shows under it (D 11.4).
+    pub read_below: Option<String>,
     /// `center`: the panel is centred in a larger area (D 11.1).
     pub center: bool,
 }
@@ -134,8 +137,12 @@ pub struct View {
     pub buttons: Vec<(Rect, crate::menu::ItemAction)>,
     /// The button held down now, which shows `button.pressed` (D 9.3).
     pub pressed: Option<Rect>,
-    /// The last frame's `read` log areas: their cells and logs.
-    pub read_rects: Vec<(Rect, String)>,
+    /// The last frame's `read` log areas: their cells, logs and `read
+    /// PANEL` panels (D 11.4).
+    pub read_rects: Vec<(Rect, String, Option<String>)>,
+    /// The teletype (`baud`, D 9.3): the log's messages from this place on
+    /// are being typed, this many characters so far; the app sets it.
+    pub typing: Option<(usize, usize)>,
     /// Colors as 24 bits, else the nearest of the 256-color palette; the
     /// front end sets it (`rgb`).
     pub truecolor: bool,
@@ -208,7 +215,8 @@ fn areas(rows: &[RawItem]) -> (Vec<Area>, Dims) {
         let menu = (source == "menu").then(|| words.get(1).map(|w| w.to_string())).flatten();
         let tabs = if source == "tabs" { words.iter().skip(1).take_while(|w| !w.starts_with("size")).map(|w| w.to_string()).collect() } else { vec![] };
         let (read, center) = (words.contains(&"read"), words.contains(&"center"));
-        out.push(Area { ch, source, follow, menu, cursor, tabs, read, center });
+        let read_below = words.iter().position(|w| *w == "read").and_then(|i| words.get(i + 1)).filter(|w| w.chars().next().is_some_and(|c| c.is_ascii_uppercase())).map(|w| w.to_string());
+        out.push(Area { ch, source, follow, menu, cursor, tabs, read, read_below, center });
     }
     (out, dims)
 }
@@ -354,7 +362,7 @@ impl View {
             // without a layout the map fills the window
             let mut rects = BTreeMap::new();
             rects.insert('m', Rect::new(0, 0, width, height));
-            let area = Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None, cursor: vec![], tabs: vec![], read: false, center: false };
+            let area = Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None, cursor: vec![], tabs: vec![], read: false, read_below: None, center: false };
             return Ok((vec![area], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 }));
         };
         let rows: Vec<RawItem> = b.sub("legend").cloned().collect();
@@ -459,7 +467,8 @@ impl View {
                         _ => inner,
                     };
                     if area.read {
-                        self.read_rects.push((inner, name.clone()));
+                        let below = area.read_below.as_ref().map(|p| world.m.resolve(None, p).map_or(p.clone(), |d| d.full.clone()));
+                        self.read_rects.push((inner, name.clone(), below));
                     }
                     self.draw_content(&mut frame, world, lang, &area.source, at)
                 }
@@ -477,7 +486,10 @@ impl View {
         let written = source.split('(').next().unwrap_or("");
         let full = world.m.resolve(None, written).map(|d| (d.full.clone(), d.kind)).ok();
         match full {
-            Some((name, Kind::Log)) => draw_log(frame, world, lang, &name, r, tc),
+            Some((name, Kind::Log)) => {
+                let typing = self.typing.filter(|_| log_baud(world, &name).is_some());
+                draw_log_back(frame, world, lang, &name, r, tc, LogDraw { typing, ..LogDraw::default() });
+            }
             Some((name, Kind::Menu)) => {
                 self.docked_rects.insert(name.clone(), r);
                 if let Some(d) = self.docked.get(&name) {
@@ -627,43 +639,106 @@ pub fn docked_at(view: &View, x: usize, y: usize) -> Option<(String, usize)> {
     view.docked_rects.iter().find(|(_, r)| r.contains(x, y)).map(|(m, r)| (m.clone(), y - r.y)).filter(|(m, i)| view.docked.get(m).is_some_and(|d| *i < d.rows.len()))
 }
 
-/// The log's newest messages that fit, wrapped at word gaps, each in its
-/// `logs` color (D 11.4, M 7.4).
-fn draw_log(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, tc: bool) {
-    draw_log_back(frame, world, lang, name, r, tc, 0, false);
+/// How the log is drawn (D 11.4, M 7.4): `back` lines up from its
+/// newest, as the reading view scrolls it; `gap` the empty lines between
+/// messages; `typing` the teletype's place and characters typed.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LogDraw {
+    pub back: usize,
+    pub gap: Gap,
+    pub typing: Option<(usize, usize)>,
 }
 
-/// The log drawn `back` lines up from its newest, as the reading view
-/// scrolls it (D 11.4, M 7.4); `back` is cut to the oldest line. Gives
-/// the lines it holds and the `back` it drew.
+/// Where the reading view leaves an empty line between messages.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Gap {
+    #[default]
+    None,
+    All,
+    /// Only above the messages that a log area of this many rows, at the
+    /// bottom of the view, shows: they stay where they were, and the view
+    /// is drawn down to the bottom (a `read` area, D 11.4).
+    Above(usize),
+}
+
+/// The log drawn into `r` as `how` says (D 11.4, M 7.4): the newest
+/// messages that fit, wrapped at word gaps, each in its `logs` color;
+/// `back` is cut to the oldest line. Gives the lines it holds and the
+/// `back` it drew.
 #[allow(clippy::too_many_arguments)]
-pub fn draw_log_back(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, tc: bool, back: usize, gap: bool) -> (usize, usize) {
+pub fn draw_log_back(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, tc: bool, how: LogDraw) -> (usize, usize) {
     let history = world.m.defs.get(name).and_then(|d| d.block()).and_then(|b| b.arg_after("history")).and_then(|n| n.parse::<usize>().ok()).unwrap_or(usize::MAX);
     let selects = log_rows(world, name);
-    // each line with its color and its message's place in the log
-    let mut lines: Vec<(String, Option<Rgb>, usize)> = Vec::new();
-    let entries: Vec<_> = world.log.iter().filter(|l| selects.is_empty() || selects.iter().any(|s| l.key == *s || l.key.starts_with(&format!("{s}.")))).collect();
+    let entries: Vec<(usize, &rlml_core::rt::world::LogEntry)> = world.log.iter().enumerate().filter(|(_, l)| selects.is_empty() || selects.iter().any(|s| l.key == *s || l.key.starts_with(&format!("{s}.")))).collect();
     let from = entries.len().saturating_sub(history);
-    for (n, l) in entries.iter().enumerate().skip(from) {
+    // each message's lines and color; the teletype shows the typed part
+    // of its messages and none of those it has not reached (D 9.3)
+    let mut budget = how.typing.map(|(_, n)| n);
+    let mut messages: Vec<(Vec<String>, Option<Rgb>)> = Vec::new();
+    for (i, l) in entries.iter().skip(from) {
         let text = world.text(lang, &l.key, &l.args);
-        let color = log_color(world, &l.key);
-        // the reading view leaves an empty line between messages (M 7.4)
-        if gap && !lines.is_empty() {
-            lines.push((String::new(), color, n));
+        let mut parts = wrap(&text, r.w.max(1));
+        if let (Some((start, _)), Some(left)) = (how.typing, budget.as_mut())
+            && *i >= start
+        {
+            if *left == 0 {
+                break;
+            }
+            let mut out = Vec::new();
+            for part in parts {
+                let n = part.chars().count();
+                if *left >= n {
+                    *left -= (n + 1).min(*left);
+                    out.push(part);
+                } else {
+                    let mut cut: String = part.chars().take(*left).collect();
+                    cut.push('▌');
+                    *left = 0;
+                    out.push(cut);
+                    break;
+                }
+            }
+            parts = out;
         }
-        for part in wrap(&text, r.w.max(1)) {
-            lines.push((part, color, n));
-        }
+        messages.push((parts, log_color(world, &l.key)));
     }
-    let back = back.min(lines.len().saturating_sub(r.h));
+    // the reading view leaves an empty line between messages (M 7.4); with
+    // `Above(rows)` only above the messages that the log area shows
+    let plain = |gap_from: usize| {
+        let mut lines: Vec<(String, Option<Rgb>, usize)> = Vec::new();
+        for (n, (parts, color)) in messages.iter().enumerate() {
+            if n > 0 && n <= gap_from {
+                lines.push((String::new(), *color, n));
+            }
+            lines.extend(parts.iter().map(|p| (p.clone(), *color, n)));
+        }
+        lines
+    };
+    let lines = match how.gap {
+        Gap::None => plain(0),
+        Gap::All => plain(usize::MAX),
+        Gap::Above(rows) => {
+            let flat = plain(0);
+            let top = flat.len().saturating_sub(rows);
+            plain(flat.get(top).map_or(0, |l| l.2))
+        }
+    };
+    let back = how.back.min(lines.len().saturating_sub(r.h));
     let end = lines.len() - back;
     let shown = &lines[end.saturating_sub(r.h)..end];
+    // over a log area the lines keep its rows: from its top while they
+    // fit in it, else down to the bottom
+    let y0 = match how.gap {
+        Gap::Above(rows) if shown.len() <= rows => r.y + r.h.saturating_sub(rows),
+        Gap::Above(_) => r.y + r.h - shown.len(),
+        _ => r.y,
+    };
     // `fade`: the newest message is the brightest, the oldest shown the
     // dimmest (D 9.3)
     let fade = panel_fade(world, name);
     let (oldest, newest) = (shown.first().map_or(0, |l| l.2), shown.last().map_or(0, |l| l.2));
     for (i, (line, color, n)) in shown.iter().enumerate() {
-        frame.text(r.x, r.y + i, r.w, line, Role::Normal);
+        frame.text(r.x, y0 + i, r.w, line, Role::Normal);
         let share = match fade {
             Some((f, _)) if newest > oldest => f * (newest - n) as f32 / (newest - oldest) as f32,
             _ => 0.0,
@@ -676,10 +751,26 @@ pub fn draw_log_back(frame: &mut Frame, world: &World, lang: &str, name: &str, r
             (None, _) => style.attrs.dim = share >= 0.5,
         }
         if style != Style::default() {
-            paint(frame, Rect::new(r.x, r.y + i, r.w, 1), style);
+            paint(frame, Rect::new(r.x, y0 + i, r.w, 1), style);
         }
     }
     (lines.len(), back)
+}
+
+/// A log area's teletype, `baud N` on its `panels` row (D 9.3): the
+/// characters it types a second, ten bits each.
+pub fn log_baud(w: &World, name: &str) -> Option<f64> {
+    let mut baud = None;
+    for (_, item) in w.m.section_rows("panels") {
+        let (_, row) = item.marker();
+        let ns = row.namespace.as_deref();
+        if !name.is_empty() && names::qualify(ns, row.key()) != name && row.key() != name {
+            continue;
+        }
+        let words: Vec<&str> = row.tokens.iter().map(|t| t.text.as_str()).collect();
+        baud = words.iter().position(|x| *x == "baud").and_then(|i| words.get(i + 1)).and_then(|n| n.parse::<f64>().ok()).filter(|n| *n > 0.0).or(baud);
+    }
+    baud.map(|b| b / 10.0)
 }
 
 /// The message keys or groups a `log` block selects (D 11.4).

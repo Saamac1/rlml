@@ -174,6 +174,13 @@ pub struct App<'m> {
     pub overlay: Option<String>,
     /// `settings - targeting cursor|list|auto` (D 3.2), `cursor` by default.
     targeting: String,
+    /// The log's teletype (`baud`, D 9.3): the messages from `typed` on
+    /// are being typed, `type_chars` characters so far, as of `type_last`.
+    typed: usize,
+    type_chars: f64,
+    type_last: Duration,
+    /// The teletype's characters a second, when a log area has `baud`.
+    baud: Option<f64>,
 }
 
 /// The asked parameters' list menu as a layer.
@@ -247,6 +254,9 @@ pub struct Focus {
     pub row: usize,
 }
 
+/// How often the teletype's typing shows (D 9.3).
+const TYPE_PACE: Duration = Duration::from_millis(30);
+
 /// The least time between two travel steps, so a travel shows even
 /// without `presentation frame` (M 8.1).
 const STEP_PACE: Duration = Duration::from_millis(80);
@@ -315,7 +325,12 @@ impl<'m> App<'m> {
             held: None,
             overlay: None,
             targeting: setting("targeting").unwrap_or_else(|| "cursor".into()),
+            typed: 0,
+            type_chars: 0.0,
+            type_last: Duration::ZERO,
+            baud: None,
         };
+        app.baud = crate::draw::log_baud(&app.r.w, "");
         match app.title() {
             Some(title) => {
                 app.menus.open(&mut app.r.w, &title, false);
@@ -451,7 +466,13 @@ impl<'m> App<'m> {
         self.view.portrait = self.portrait();
         self.view.pointer = self.pointer;
         self.view.enabled = self.players_turn() && !self.menus.is_open();
+        self.view.typing = self.baud.map(|_| (self.typed, self.type_chars as usize));
         if self.reading.as_ref().is_some_and(|r| !r.panel) {
+            // over a `read` log area the view keeps the log's place (D 11.4)
+            let over = self.view.read_rects.iter().find(|(_, l, _)| self.reading.as_ref().is_some_and(|r| r.log == *l)).cloned();
+            if self.playing && let Some((rect, _, below)) = over {
+                return self.draw_reading_over(w, h, rect, below);
+            }
             return self.draw_reading(w, h);
         }
         let mut f = if self.playing { self.view.draw(&mut self.r.w, &self.lang, w, h) } else { Frame::new(w, h) };
@@ -617,9 +638,56 @@ impl<'m> App<'m> {
             f.text(0, h - 1, w, t, termplate_core::frame::Role::Dim);
         }
         let rect = termplate_core::layout::Rect::new(0, top, w, h.saturating_sub(top + bottom));
-        let (lines, back) = crate::draw::draw_log_back(&mut f, &self.r.w, &self.lang, &r.log, rect, self.view.truecolor, r.back, true);
+        let (lines, back) = crate::draw::draw_log_back(&mut f, &self.r.w, &self.lang, &r.log, rect, self.view.truecolor, crate::draw::LogDraw { back: r.back, gap: crate::draw::Gap::All, typing: None });
         let arrows = self.draw_arrows(&mut f, rect, lines > back + rect.h, back > 0);
         self.reading = Some(Reading { back, page: rect.h, arrows, ..r });
+        f
+    }
+
+    /// The reading view over a `read` log area (D 11.4): the game under
+    /// it, the log's messages on its rows as they were and the older ones
+    /// above them over the map, an empty line between those, the title at
+    /// the top. The area's `read PANEL` and the `<LOG>.READ` hint go under
+    /// the log, or right of it when it reaches the bottom.
+    fn draw_reading_over(&mut self, w: usize, h: usize, area: termplate_core::layout::Rect, below: Option<String>) -> Frame {
+        use termplate_core::frame::Role;
+        use termplate_core::layout::Rect;
+        let mut f = self.view.draw(&mut self.r.w, &self.lang, w, h);
+        let Some(r) = self.reading.clone() else { return f };
+        let line = |key: String| self.m.has_text(&self.lang, &key).then(|| self.r.w.text(&self.lang, &key, &[]));
+        let (title, hint) = (line(format!("{}.TITLE", r.log)), line(format!("{}.READ", r.log)));
+        let bottom = (area.y + area.h).min(h);
+        let band = Rect::new(area.x, 0, area.w, bottom);
+        f.fill(band, ' ', Role::Normal);
+        let top = title.is_some() as usize;
+        if let Some(t) = &title {
+            f.text(band.x, 0, band.w, t, Role::Title);
+        }
+        let rect = Rect::new(area.x, top, area.w, bottom.saturating_sub(top));
+        let how = crate::draw::LogDraw { back: r.back, gap: crate::draw::Gap::Above(area.h), typing: None };
+        let (lines, back) = crate::draw::draw_log_back(&mut f, &self.r.w, &self.lang, &r.log, rect, self.view.truecolor, how);
+        let arrows = self.draw_arrows(&mut f, rect, lines > back + rect.h, back > 0);
+        self.reading = Some(Reading { back, page: rect.h, arrows, ..r });
+        let right = (area.x + area.w).min(w);
+        let rest = if bottom < h { Rect::new(0, bottom, w, h - bottom) } else { Rect::new(right, 0, w - right, h) };
+        if rest.w == 0 || rest.h == 0 {
+            return f;
+        }
+        f.fill(rest, ' ', Role::Normal);
+        let hint_rows = hint.is_some() as usize;
+        if let Some(t) = &hint {
+            f.text(rest.x, rest.y + rest.h - 1, rest.w, t, Role::Dim);
+        }
+        if let Some(name) = below
+            && let Some(pb) = crate::panel::block(&self.r.w, &name)
+        {
+            let (pw, ph) = crate::panel::size(pb);
+            let room = Rect::new(rest.x, rest.y, rest.w, rest.h.saturating_sub(hint_rows));
+            let at = Rect::new(room.x + room.w.saturating_sub(pw) / 2, room.y + room.h.saturating_sub(ph) / 2, pw.min(room.w), ph.min(room.h));
+            let mut ui = crate::panel::PanelUi { truecolor: self.view.truecolor, enabled: true, ..Default::default() };
+            let lang = self.lang.clone();
+            self.r.w.holding_view(|world| crate::panel::draw(&mut f, world, &lang, pb, &name, at, &mut ui));
+        }
         f
     }
 
@@ -681,6 +749,34 @@ impl<'m> App<'m> {
         (from, used)
     }
 
+    /// The teletype types on to `now` (D 9.3): with all typed, the
+    /// messages after them start from their first character.
+    fn type_on(&mut self, now: Duration) {
+        // a late tick (a first one, a busy page) does not skip the typing
+        let since = now.saturating_sub(self.type_last).min(Duration::from_millis(100));
+        self.type_last = now;
+        let Some(cps) = self.baud else { return };
+        let log = &self.r.w.log;
+        if self.typed >= log.len() {
+            self.typed = log.len();
+            self.type_chars = 0.0;
+            return;
+        }
+        self.type_chars += since.as_secs_f64() * cps;
+        let left: usize = log[self.typed..].iter().map(|l| self.r.w.text(&self.lang, &l.key, &l.args).chars().count()).sum();
+        if self.type_chars >= left as f64 {
+            self.typed = log.len();
+            self.type_chars = 0.0;
+        }
+    }
+
+    /// A press shows at once what the teletype has not typed (D 9.3).
+    fn typed_out(&mut self, now: Duration) {
+        self.typed = self.r.w.log.len();
+        self.type_chars = 0.0;
+        self.type_last = now;
+    }
+
     pub fn resize(&mut self, w: usize, h: usize) {
         self.size = (w, h);
     }
@@ -708,6 +804,7 @@ impl<'m> App<'m> {
 
     /// A key at time `now` (M 8).
     pub fn key(&mut self, b: Binding, now: Duration) -> RtResult<()> {
+        self.typed_out(now);
         self.last_key = now;
         self.clock = now;
         self.note = None;
@@ -722,6 +819,7 @@ impl<'m> App<'m> {
 
     /// A pad press at time `now` (M 8.2).
     pub fn pad(&mut self, id: usize, p: PadPress, now: Duration) -> RtResult<()> {
+        self.typed_out(now);
         self.last_key = now;
         self.clock = now;
         self.note = None;
@@ -1186,11 +1284,13 @@ impl<'m> App<'m> {
     /// The clock at `now`: rounds without the player's turn and `idle`.
     pub fn tick(&mut self, now: Duration) -> RtResult<()> {
         self.clock = now;
+        self.type_on(now);
         // a held button repeats at the keys' pace (M 7.7)
         if let Some((action, next)) = self.held.clone()
             && now >= next
         {
             self.held = Some((action.clone(), now + HOLD_REPEAT));
+            self.typed_out(now);
             self.last_key = now;
             if !self.menus.is_open() && self.reading.is_none() {
                 self.button_action(action, now)?;
@@ -1253,6 +1353,10 @@ impl<'m> App<'m> {
         }
         if !self.playing || self.menus.is_open() || self.reading.is_some() {
             return Duration::from_millis(500);
+        }
+        // the teletype types on at the frames' pace (D 9.3)
+        if self.baud.is_some() && self.typed < self.r.w.log.len() {
+            return TYPE_PACE;
         }
         if self.players_turn() && self.r.awaiting().is_some_and(|n| self.r.travelling(n)) {
             return self.frame.max(STEP_PACE);
@@ -1769,6 +1873,7 @@ impl<'m> App<'m> {
             return Ok(());
         }
         self.pointer = Some((x, y));
+        self.typed_out(now);
         self.last_key = now;
         self.clock = now;
         // a held panel shows until the button goes up, or the next click
@@ -1835,7 +1940,7 @@ impl<'m> App<'m> {
             return Ok(());
         }
         // a click on a `read` log opens it to be read (D 11.4)
-        if click && let Some((_, log)) = self.view.read_rects.iter().find(|(r, _)| r.contains(x, y)).cloned() {
+        if click && let Some((_, log, _)) = self.view.read_rects.iter().find(|(r, _, _)| r.contains(x, y)).cloned() {
             self.read_log(&log);
             return Ok(());
         }
