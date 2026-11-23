@@ -630,13 +630,14 @@ pub fn docked_at(view: &View, x: usize, y: usize) -> Option<(String, usize)> {
 /// The log's newest messages that fit, wrapped at word gaps, each in its
 /// `logs` color (D 11.4, M 7.4).
 fn draw_log(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, tc: bool) {
-    draw_log_back(frame, world, lang, name, r, tc, 0);
+    draw_log_back(frame, world, lang, name, r, tc, 0, false);
 }
 
 /// The log drawn `back` lines up from its newest, as the reading view
 /// scrolls it (D 11.4, M 7.4); `back` is cut to the oldest line. Gives
 /// the lines it holds and the `back` it drew.
-pub fn draw_log_back(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, tc: bool, back: usize) -> (usize, usize) {
+#[allow(clippy::too_many_arguments)]
+pub fn draw_log_back(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, tc: bool, back: usize, gap: bool) -> (usize, usize) {
     let history = world.m.defs.get(name).and_then(|d| d.block()).and_then(|b| b.arg_after("history")).and_then(|n| n.parse::<usize>().ok()).unwrap_or(usize::MAX);
     let selects = log_rows(world, name);
     // each line with its color and its message's place in the log
@@ -646,6 +647,10 @@ pub fn draw_log_back(frame: &mut Frame, world: &World, lang: &str, name: &str, r
     for (n, l) in entries.iter().enumerate().skip(from) {
         let text = world.text(lang, &l.key, &l.args);
         let color = log_color(world, &l.key);
+        // the reading view leaves an empty line between messages (M 7.4)
+        if gap && !lines.is_empty() {
+            lines.push((String::new(), color, n));
+        }
         for part in wrap(&text, r.w.max(1)) {
             lines.push((part, color, n));
         }

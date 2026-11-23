@@ -617,7 +617,7 @@ impl<'m> App<'m> {
             f.text(0, h - 1, w, t, termplate_core::frame::Role::Dim);
         }
         let rect = termplate_core::layout::Rect::new(0, top, w, h.saturating_sub(top + bottom));
-        let (lines, back) = crate::draw::draw_log_back(&mut f, &self.r.w, &self.lang, &r.log, rect, self.view.truecolor, r.back);
+        let (lines, back) = crate::draw::draw_log_back(&mut f, &self.r.w, &self.lang, &r.log, rect, self.view.truecolor, r.back, true);
         let arrows = self.draw_arrows(&mut f, rect, lines > back + rect.h, back > 0);
         self.reading = Some(Reading { back, page: rect.h, arrows, ..r });
         f

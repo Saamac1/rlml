@@ -1069,6 +1069,8 @@ fn the_log_is_read_back_to_its_start() {
         app.r.w.log.push(rlml_core::rt::world::LogEntry { key: format!("STD.MESSAGE.COMBAT.N{n:02}"), args: vec![] });
     }
     let row = |app: &mut App, y: usize| app.draw().row(y).trim_end().to_string();
+    // a row's message without a scroll button's label beside it
+    let msg = |app: &mut App, y: usize| app.draw().row(y).split_whitespace().next().unwrap_or("").to_string();
     press(&mut app, "o");
     assert!(app.reading.is_some());
     assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N29", "the newest at the bottom");
@@ -1077,20 +1079,22 @@ fn the_log_is_read_back_to_its_start() {
     assert!(down.is_none());
     let up = up.expect("older above");
     app.mouse_press(click(), up.x, up.y, ms(15)).unwrap();
-    assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N23", "half a view up");
+    // an empty line between messages: message k is line 2k
+    assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N26", "half a view up");
     assert!(app.reading.as_ref().unwrap().arrows.1.is_some(), "newer below now");
     press(&mut app, "end");
-    assert_eq!(row(&mut app, 0), "STD.MESSAGE.COMBAT.N18", "the whole window is the log");
+    assert_eq!(row(&mut app, 0), "", "the gap above the oldest shown");
+    assert_eq!(msg(&mut app, 1), "STD.MESSAGE.COMBAT.N24", "the whole window is the log");
     press(&mut app, "k");
-    assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N28");
+    assert_eq!(msg(&mut app, 10), "STD.MESSAGE.COMBAT.N28");
     press(&mut app, "pageup");
-    assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N16", "a page is the view's height");
+    assert_eq!(msg(&mut app, 10), "STD.MESSAGE.COMBAT.N22", "a page is the view's height");
     press(&mut app, "home");
     assert_eq!(row(&mut app, 0), "STD.MESSAGE.COMBAT.N00", "back to the first message");
     press(&mut app, "k");
     assert_eq!(row(&mut app, 0), "STD.MESSAGE.COMBAT.N00", "not past it");
     app.mouse_press(Binding::mouse(termplate_core::keys::Mouse::WheelDown), 5, 5, ms(20)).unwrap();
-    assert_eq!(row(&mut app, 0), "STD.MESSAGE.COMBAT.N03", "the wheel scrolls three lines");
+    assert_eq!(msg(&mut app, 1), "STD.MESSAGE.COMBAT.N02", "the wheel scrolls three lines");
     press(&mut app, "end");
     assert_eq!(row(&mut app, 11), "STD.MESSAGE.COMBAT.N29");
     // the game's time stops while reading, and esc closes
