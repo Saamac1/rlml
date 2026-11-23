@@ -19,9 +19,11 @@ enum Show {
     Text(String),
     Value(Result<Expr, String>),
     Param(String),
-    /// `button ACTION text KEY [hide when EXPR]`: the key's text; a click
-    /// does the action, and the button is gone while `hide when` holds.
-    Button(Option<crate::menu::ItemAction>, String, Option<Expr>),
+    /// `button ACTION text KEY [look NAME] [hide when EXPR]`: the key's
+    /// text; a click does the action, the `panels` row `button.NAME`
+    /// colors it over `button`, and the button is gone while `hide when`
+    /// holds.
+    Button(Option<crate::menu::ItemAction>, String, Option<Expr>, Option<String>),
 }
 
 /// What a panel's buttons need from the app and give back (D 11.5): the
@@ -87,7 +89,8 @@ fn fields(m: &rlml_core::model::Model, b: &RawBlock) -> Vec<Field> {
                 let Some(t) = words.iter().position(|w| *w == "text") else { continue };
                 let action = rlml_core::syntax::RawItem::new(&item.file, item.line, item.namespace.clone(), rest.span(1, t)).ok().and_then(|a| crate::menu::action(m, b.namespace.as_deref(), "", &a));
                 let hide = words.windows(2).position(|w| w == ["hide", "when"]).and_then(|h| rlml_core::rs::parse::parse_expr(rest.span(h + 2, end)).ok());
-                Show::Button(action, words.get(t + 1).unwrap_or(&"").to_string(), hide)
+                let look = words.iter().position(|w| *w == "look").and_then(|i| words.get(i + 1)).map(|n| n.to_string());
+                Show::Button(action, words.get(t + 1).unwrap_or(&"").to_string(), hide, look)
             }
             _ => continue,
         };
@@ -179,8 +182,8 @@ pub fn draw(frame: &mut Frame, w: &mut World, lang: &str, b: &RawBlock, call: &s
     for pos in &detected.fields {
         let Some(f) = fields.iter().find(|f| f.ch.to_string() == pos.name) else { continue };
         let texts = match &f.show {
-            Show::Button(_, key, _) if ui.keyboard && w.m.has_text(lang, &format!("{key}.KEYS")) => vec![styled(w, lang, &format!("{key}.KEYS"), &[])],
-            Show::Text(key) | Show::Button(_, key, _) => vec![styled(w, lang, key, &[])],
+            Show::Button(_, key, _, _) if ui.keyboard && w.m.has_text(lang, &format!("{key}.KEYS")) => vec![styled(w, lang, &format!("{key}.KEYS"), &[])],
+            Show::Text(key) | Show::Button(_, key, _, _) => vec![styled(w, lang, key, &[])],
             Show::Param(name) => env.locals.get(name).map(|v| shown(w, lang, v)).unwrap_or_default(),
             Show::Value(Err(e)) => vec![plain(e)],
             Show::Value(Ok(e)) => match w.eval(e, &mut env.clone()) {
@@ -193,13 +196,18 @@ pub fn draw(frame: &mut Frame, w: &mut World, lang: &str, b: &RawBlock, call: &s
             continue;
         }
         let width = rect.w.min(r.w - rect.x);
-        if let Show::Button(action, _, hide) = &f.show {
+        if let Show::Button(action, _, hide, own) = &f.show {
             if hide.as_ref().is_some_and(|e| matches!(w.eval(e, &mut env.clone()), Ok(Value::Bool(true)))) {
                 continue;
             }
             let cells = Rect::new(r.x + rect.x, r.y + rect.y, width, rect.h.min(r.h - rect.y));
             let label: String = texts.iter().flat_map(|t| t.iter().map(|c| c.0)).collect();
-            let look = if ui.pressed == Some(cells) { (ui.button.0, ui.button.1.over(ui.pressed_look)) } else { ui.button };
+            // the button's own `look` over `button`, and pressed over both
+            let base = match own {
+                Some(n) => (ui.button.0, ui.button.1.over(crate::draw::panel_style(w, &format!("button.{n}"), truecolor).1)),
+                None => ui.button,
+            };
+            let look = if ui.pressed == Some(cells) { (base.0, base.1.over(ui.pressed_look)) } else { base };
             draw_button(frame, cells, &label, look, false, false, !ui.enabled);
             if let Some(a) = action {
                 ui.buttons.push((cells, a.clone()));

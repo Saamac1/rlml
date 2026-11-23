@@ -1381,3 +1381,26 @@ fn right_and_bottom_place_a_panel_and_a_used_keyboard_shows_keys_on_buttons() {
     app.key(key("x"), ms(10)).unwrap();
     assert_eq!(label(&mut app), "yl k", "the keys once the keyboard is used");
 }
+
+#[test]
+fn a_button_look_colors_it_over_the_buttons_row() {
+    let f = mini_with(|g| {
+        *g = g.replace("- keys GAME\n", "- keys GAME\n- layout MAIN\n- layout PHONE when portrait\n");
+        g.push_str(
+            "\nlayout PHONE\n\n```\nm\nl\np\n```\n\nlegend:\n- m map\n- l LOG size.height 3\n- p PAD size.height 3\n\n\
+             panel PAD\n\n```\nhhhh oooo\n```\n\nlegend:\n- h button MOVE.NORTH text PAD.H\n- o button MOVE.SOUTH text PAD.O look dark\n\n\
+             panels\n- button fg 000000 bg ffff00\n- button.dark bg 888800\n- button.pressed bg ffffff\n",
+        );
+    });
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (20, 30)).unwrap();
+    app.view.truecolor = true;
+    app.draw();
+    let cells: Vec<_> = app.view.buttons.iter().map(|b| b.0).collect();
+    let bg = |app: &mut App, r: termplate_core::layout::Rect| app.draw().get(r.x, r.y).and_then(|c| c.style).and_then(|s| s.bg);
+    use termplate_core::style::Color::Rgb;
+    assert_eq!(bg(&mut app, cells[0]), Some(Rgb(0xff, 0xff, 0x00)));
+    assert_eq!(bg(&mut app, cells[1]), Some(Rgb(0x88, 0x88, 0x00)), "its own look");
+    let fg = app.draw().get(cells[1].x, cells[1].y).and_then(|c| c.style).and_then(|s| s.fg);
+    assert_eq!(fg, Some(Rgb(0, 0, 0)), "the rest from `button`");
+}

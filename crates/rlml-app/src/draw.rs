@@ -230,7 +230,7 @@ fn areas(rows: &[RawItem]) -> (Vec<Area>, Dims) {
 }
 
 /// A panel style row for an area name: border and colors (D 9.3).
-fn panel_style(w: &World, name: &str, tc: bool) -> (Border, Style) {
+pub(crate) fn panel_style(w: &World, name: &str, tc: bool) -> (Border, Style) {
     let mut border = Border::None;
     let mut style = Style::default();
     for (_, item) in w.m.section_rows("panels") {
