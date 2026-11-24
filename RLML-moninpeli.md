@@ -129,7 +129,7 @@ Järjestys on moottorin pelivalitsin, pelin alkuvalikko, `new_game`, liittymisru
 - **Jäsen kartalla.** Säännöt, jotka puhuvat pelaajasta kartalla, koskevat mitä tahansa jäsentä. `nosave` (M 5.2) estää tallennuksen, kun yksikin jäsen on `nosave`-kartalla.
 - **`slots 1`.** Pelikerran oma tallennus lopettaa pelin kaikilta istuimilta (M 5.4).
 - **Rollback.** Checkpoint sisältää istuintaulun. `rollback()` palauttaa jäsenyydet ja ohjattavat checkpointin mukaisiksi. Istuin, joka on liitetty checkpointin jälkeen, säilyy liitettynä mutta jää tyhjäksi. Laitteet eivät muutu.
-- **Toisto.** Syötelokin jokainen rivi kertoo istuimen. Syöteloki on uusi kohta M 4:ään: rivi on (istuin, toiminto), ja `join` ja `leave_seat` ovat rivejä muiden joukossa.
+- **Toisto.** Syötelokin jokainen rivi kertoo istuimen. Syöteloki on luvussa [M 4.4](moottori/04-satunnaisuus-ja-toistettavuus.md#44-syöteloki): rivi on (istuin, toiminto, argumentit), ja `join` ja `leave_seat` ovat rivejä muiden joukossa.
 
 ## 5. Vuorot
 

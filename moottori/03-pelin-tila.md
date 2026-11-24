@@ -15,6 +15,8 @@ Moottori omistaa pelin koko tilan:
 - **Ajoitus:** herätysjono järjestysnumeroineen, seuraava järjestysnumero ja karttojen kellot (luku [6.1.8](06-ajo.md#618-aktiiviset-kartat-ja-jäädytys)).
 - **Pakkojen tila:** jokaisen jaetun pakan ja `deck copy` -kentän kopion nostopino ja poistopakka ([D 6.2](../dataformaatit/06-pakat-ja-taulut.md#62-tila-sekoitus-ja-nosto)). Taulut ovat tilattomia ([D 6.5](../dataformaatit/06-pakat-ja-taulut.md#65-taulut)).
 - **Satunnaisvirtojen tila** (luku [4](04-satunnaisuus-ja-toistettavuus.md)).
+- **Äänet ja kuulo:** soivat jatkuvat äänet jäljellä olevine kestoineen, herätysvälien kertaäänet ja jokaisen kuulijan herätysvälin alku sekä edellisellä herätyksellä kuullut äänet (luku [6.8](06-ajo.md#68-äänet-ja-kuuleminen)). Ne kuuluvat tilaan, koska `hear` tulee vain uusista äänistä ja jatkuvasta äänestä vain silloin, kun se alkaa kuulua.
+- **Pelaajan viimeinen näkökenttä**, jota esitys ja `sees(player, …)` käyttävät, kun pelaajaa ei ole (luku [7.2](07-esitys.md#72-kartan-piirtäminen)).
 - **Kohtausten tila:** etualan jono, käynnissä olevat taustakohtaukset kahvoineen ja pelin ajan tweenien jäljellä olevat reitit ([RS 9.1](../roguescript/09-kohtaukset-ja-aikajanat.md#91-rivi)).
 
 ## 3.2 Ilmentymän syntyminen

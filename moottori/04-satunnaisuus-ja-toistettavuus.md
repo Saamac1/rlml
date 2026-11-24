@@ -45,6 +45,44 @@ Toistettavuus vaatii, että satunnaisuuden lisäksi kaikki järjestys on määr�
 
 Kun käyttöpaikka tarvitsee yhden ruudun ja saa joukon (`at`, `move`, `spawn`, `tile`), moottori arpoo ruudun kutsujan virrasta indeksillä `below(count)` joukon lukujärjestyksessä (lista omassa järjestyksessään, luku [4.1](#41-satunnaisvirrat)) ([D 8.8](../dataformaatit/08-kartat-ja-prefabit.md#88-paikkahaku-at-near-ja-from), [RS 6.2](../roguescript/06-ruudut-ja-paikkahaku.md#62-operaatiot)). Siirtymässä saapumisruutu arvotaan samoin, ellei `align` pyydä samaa indeksiä (luku [6.7](06-ajo.md#67-siirtyminen-kartalta-toiselle)).
 
+## 4.4 Syöteloki
+
+Syöteloki kirjaa pelikerran syötteet siinä järjestyksessä kuin moottori ajaa ne. Pelin kulku määräytyy kokonaan lähtötilasta ja lokista: sama data, sama lähtötila ja sama loki tuottavat saman pelin. Toisto ajaa lokin rivi kerrallaan ilman laitteita, ja `rlml run` -transkriptit ovat toistoja.
+
+- **Lähtötila.** Uudessa pelissä lähtötila on aloituksen syötteet: siemen, profiilin tilannekuva ja liitettyjen istuinten määrä (luku [5.1](05-aloitus-tallennus-ja-checkpointit.md#51-uusi-peli)). Toisto laskee niistä checkpointin 0 kuten uusi peli. Lokin lähtötila voi olla myös tallennus (luku [5.2](05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)). Silloin toisto lataa tallennuksen ja ajaa lokin siitä eteenpäin.
+- **Rivi** on (istuin, toiminto, argumentit) ja hetki `game.time`, jolloin moottori ajoi sen. Istuin on se, jonka syötettä moottori odotti, tai `join`-rivillä uusi istuin. Yksinpelissä istuin on 1.
+- **Hetki on tarkistus.** Toisto vertaa jokaisen rivin hetkeä omaan `game.time`-arvoonsa ennen rivin ajoa. Jos hetket eroavat, data tai moottori on muuttunut lokin kirjoittamisen jälkeen. Toisto pysähtyy silloin ajon varoitukseen, joka kertoo rivin, eikä ajoa jatketa väärällä syötteellä.
+
+**Mitä kirjataan.** Lokiin kirjataan syöte, jonka vaikutus riippuu muustakin kuin pelin tilasta. Rivi kirjataan vasta, kun moottori ajaa toiminnon, ei painalluksen hetkellä.
+
+| Syöte | Rivi |
+| --- | --- |
+| pelaajan komento | komento täytettyine argumentteineen, myös parametrikyselyn vastaukset, `count`-lähteen luku ([RS 7.1](../roguescript/07-komennot-ja-tekoaly.md#71-komennot)) ja verbivalikon klikkaukset (luku [8.1](08-syote.md#81-hiiri)); näppäimiä, klikkauksia ja kyselyn vaiheita ei kirjata |
+| `pass` | `pass` |
+| `idle`-ajastimen laukeaminen | `idle`; toisto laskee komennon uudelleen tekoälystä tai varakomennosta (luku [6.1.2](06-ajo.md#612-toimijat-ja-ajoitin)) |
+| klikkausmatka | `travel_to` kohderuutuineen, koska osoitin ei kuulu tilaan; toisto laskee askeleet uudelleen (luku [8.1](08-syote.md#81-hiiri)) |
+| seuraaminen | `follow` kohteineen ja jokainen seuraajan vuoro rivinä `follow.step`, jonka toisto laskee uudelleen |
+| matkan tai seuraamisen katkaisu | `stop`; painallus, joka katkaisee, ja vanhentuneen ennakkokäskyn peruutus kirjataan näin, koska talteen otettu näkökenttä ei kuulu tilaan |
+| ennakkokäsky | käskyn matka tai seuraaminen silloin, kun moottori ajaa sen, ei silloin, kun käsky annettiin |
+| istuimet | `join` ja `leave_seat` (luku [8.2](08-syote.md#82-istuimet-ja-laitteet)) |
+| valikon kohta, joka ajaa komennon tai pelin toiminnon | ajettu komento tai toiminto kuten pelaajan komento |
+
+**Mitä ei kirjata.** Esitys ei kuulu lokiin, koska se ei muuta tilaa: osoitin ja hover, kursorin liike, valikkojen selaus, lukunäkymä, välilehdet, kamera, valittu verbi ennen komentoa ja ennakkokäsky ennen ajoa. Moottorin toiminnot, jotka eivät muuta pelin kulkua, eivät myöskään kuulu lokiin: `save`, `help` ja taukovalikon avaus ja sulku. Logiikan omat kutsut (`rollback`, `checkpoint`, `autosave`) seuraavat lokin riveistä, joten niistä ei kirjata rivejä.
+
+**Lokin loppu.** `quit`, `new_game` ja `load_game` päättävät lokin. Ladattu peli aloittaa uuden lokin, jonka lähtötila on ladattu tallennus. Profiili kirjoitetaan tiedostoon pelikerran aikana (luku [5.6](05-aloitus-tallennus-ja-checkpointit.md#56-profiili)), mutta toisto käyttää lähtötilan tilannekuvaa. Siksi toisto ei riipu koneen profiilista, eikä se kirjoita profiilia.
+
+**Muoto** on moottorin oma kuten tallennuksen. Esitysmuoto alla on havainnollistus, ei tiedostomuoto:
+
+```
+seed 7  seats 2
+0      1 STD.MOVE dir: north
+120    2 STD.MOVE dir: west
+240    1 travel_to pos(14, 6)
+600    1 stop
+600    2 STD.WAIT
+840    3 join
+```
+
 ---
 
 ← [3. Pelin tila](03-pelin-tila.md) · [Sisällys](README.md) · [5. Aloitus, tallennus ja checkpointit](05-aloitus-tallennus-ja-checkpointit.md) →

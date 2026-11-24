@@ -38,6 +38,10 @@ Checkpoint 0 on tila `begin`-käsittelijöiden jälkeen. Jonoon laitetut etualan
 | keskeneräinen tweeni pelin ajan taustakohtauksessa | jäljellä oleva reitti tai ruudut ([RS 9.1](../roguescript/09-kohtaukset-ja-aikajanat.md#91-rivi)) |
 | profiili | aloitushetken tilannekuva ja pelikerran omat kirjoitukset (luku [5.6](#56-profiili)) |
 | kuollut kahva | laji ja tuhohetken nimi (luku [9.5](09-moottorin-funktiot-ja-tapahtumat.md#95-ilmentymän-elinkaari-ja-komponentit)) |
+| äänet ja kuulo | soivat äänet ja kuulijoiden herätysvälit (luku [3.1](03-pelin-tila.md#31-tilan-osat)) |
+| pelaajan viimeinen näkökenttä | ruudut, kun pelaajaa ei ole (luku [7.2](07-esitys.md#72-kartan-piirtäminen)) |
+| viestiloki | lokin muistissa olevat viestit (`history`, [D 11.4](../dataformaatit/11-kayttoliittyman-data.md#114-viestit-ja-loki)); ne ovat esitystä eivätkä vaikuta ajoon, mutta ladattu peli näyttää ne lukunäkymässä |
+| syöteloki | ei mitään: tallennus on lähtötila, ja ladattu peli aloittaa uuden lokin (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)) |
 
 - **Lataus.** Ladattu peli jatkaa tilannekuvasta. Tapahtuma `begin` ei laukea. Odottava komento jatkaa suorituskohdastaan, tai se hylätään, jos komennon runko on muuttunut tallennuksen jälkeen (luku [6.1.6](06-ajo.md#616-monivaiheinen-komento)).
 

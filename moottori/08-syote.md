@@ -97,7 +97,7 @@ Hiiri on valinnainen syöte: kaiken, minkä hiirellä voi tehdä, voi tehdä my�
 - `confirm` aloittaa matkan kuten `look`-kontekstissa, mutta kursori pysyy auki ja jää matkan kohteeseen. `back` ja `cursor` sulkevat sen.
 - **Ennakkokäsky.** Moninpelissä istuin liikuttaa pysyvää kursoriaan myös muiden vuorolla. `confirm` tai `follow` muiden vuorolla ei aja mitään, vaan tallentaa istuimelle ennakkokäskyn: matkan kursorin ruutuun tai seuraamisen. Moottori ajaa käskyn, kun se seuraavan kerran alkaa odottaa istuimen syötettä, ja kuluttaa sen. Uusi käsky korvaa vanhan, ja `back` peruu odottavan käskyn ennen kuin se sulkee kursorin.
 - **Vanhentunut käsky.** Moottori ottaa talteen yhteisen näkökentän toimijat, kun käsky annetaan. Käskyn ensimmäinen askel otetaan aina, mutta ennen toista askelta moottori vertaa näkökenttää talteen otettuun: jos näkyvissä on toimija, jota käskyä annettaessa ei näkynyt, käsky perutaan ennen toista askelta. Sen jälkeen matkan tavalliset pysähtymisehdot ovat voimassa. Pelaaja ehtii siis nähdä tilanteen, joka syntyi hänen suunnittelunsa jälkeen, ennen kuin hahmo kulkee pidemmälle.
-- Kursori ja ennakkokäsky ovat esitystä eivätkä kuulu pelin tilaan eivätkä tallennukseen. Syöteloki kirjaa käskyn vasta silloin, kun moottori ajaa sen (luku [4](04-satunnaisuus-ja-toistettavuus.md)), joten toisto ei riipu siitä, milloin käsky annettiin. Vanhentuneen käskyn peruutus kirjataan omana rivinään kuten katkaiseva painallus, koska talteen otettu näkökenttä ei kuulu pelin tilaan.
+- Kursori ja ennakkokäsky ovat esitystä eivätkä kuulu pelin tilaan eivätkä tallennukseen. Syöteloki kirjaa käskyn vasta silloin, kun moottori ajaa sen (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)), joten toisto ei riipu siitä, milloin käsky annettiin. Vanhentuneen käskyn peruutus kirjataan omana rivinään kuten katkaiseva painallus, koska talteen otettu näkökenttä ei kuulu pelin tilaan.
 - Kartalla näkyvät kaikkien istuinten pysyvät kursorit ja ennakkokäskyjen kohteet `map`-alueen määreen `cursor TYYLI` tyylillä ([D 11.1](../dataformaatit/11-kayttoliittyman-data.md#111-asettelu)). Ilman määrettä moottori käyttää alleviivausta.
 - `hover`-alue näyttää vuorossa olevan istuimen kursorin, ja muiden vuorolla viimeksi liikutetun kursorin.
 - Yhden istuimen pelissä pysyvä kursori on sama kuin `look`, mutta se ei sulkeudu matkan alkaessa.
@@ -182,7 +182,7 @@ Moninpelissä (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)) laite on näpp�
 
 **Tallennus ja lataus.** Tallennukseen kuuluvat istuinten numerot, jäsenyydet, ohjattavat ja `player`, mutta eivät laitteet (luku [5.2](05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)). Latauksessa liittymisruutu kysyy laitteen jokaiselle tallennetulle istuimelle numerojärjestyksessä. Istuin, jolle ei tule laitetta (`skip` tai `confirm` ennen sitä), poistuu kuten `part` ennen ensimmäistä syötettä. Uusia istuimia voi liittää ylärajaan asti.
 
-**Syöteloki.** Toisto ja `rlml run` -transkriptit kirjaavat syötteet pareina (istuin, toiminto), ja `join` ja `leave_seat` ovat rivejä muiden joukossa (luku [4](04-satunnaisuus-ja-toistettavuus.md)).
+**Syöteloki.** Toisto ja `rlml run` -transkriptit kirjaavat syötteet riveinä (istuin, toiminto, argumentit), ja `join` ja `leave_seat` ovat rivejä muiden joukossa (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)).
 
 ---
 

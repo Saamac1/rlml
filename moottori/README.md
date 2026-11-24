@@ -29,6 +29,7 @@ Muutoshistoria: [muutokset.md](muutokset.md).
   - [4.1 Satunnaisvirrat](04-satunnaisuus-ja-toistettavuus.md#41-satunnaisvirrat)
   - [4.2 Määrätty järjestys](04-satunnaisuus-ja-toistettavuus.md#42-määrätty-järjestys)
   - [4.3 Yksi ruutu joukosta](04-satunnaisuus-ja-toistettavuus.md#43-yksi-ruutu-joukosta)
+  - [4.4 Syöteloki](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)
 - [5. Aloitus, tallennus ja checkpointit](05-aloitus-tallennus-ja-checkpointit.md)
   - [5.1 Uusi peli](05-aloitus-tallennus-ja-checkpointit.md#51-uusi-peli)
   - [5.2 Tallennus](05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)

@@ -4,6 +4,16 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (syöteloki):**
+- Uusi luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki), joka kuvaa syötelokin:
+  - lähtötila on aloituksen syötteet tai tallennus,
+  - rivi on (istuin, toiminto, argumentit), ja sen hetki on toiston tarkistus,
+  - luku luettelee, mitä kirjataan ja mitä ei. Matkan ja seuraamisen katkaisu on rivi `stop`.
+  - `quit`, `new_game` ja `load_game` päättävät lokin.
+- Tilan osiin lisätään äänet ja kuulo sekä pelaajan viimeinen näkökenttä (luku [3.1](03-pelin-tila.md#31-tilan-osat)).
+- Tallennus sisältää nämä ja lokin muistissa olevat viestit esitystä varten, mutta ei syötelokia (luku [5.2](05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)).
+- Luvun [8](08-syote.md) viittaukset osoittavat uuteen lukuun.
+
 **Muutokset 24.11.2026 (napin sävy):** napin `look NIMI` värittää sen `button.NIMI`-rivillä `button`-rivin päälle, ja painettu väri tulee kummankin päälle (luku [7.7](07-esitys.md#77-paneelit)).
 
 **Muutokset 24.11.2026 (napit nurkkaan ja näppäimet nappeihin):** `right`- ja `bottom`-määreet ja napin `.KEYS`-teksti näppäimistön käytön jälkeen (luku [7.7](07-esitys.md#77-paneelit)).
