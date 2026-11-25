@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (moottorin komponentit):** luvun [3.4](03-pelin-tila.md#34-moottorin-komponentit) taulukkoon lisättiin `hearing` ja `sound`.
+
 **Muutokset 25.11.2026 (profiili):**
 - Profiilitiedostoon kirjoitetaan vain pelikerran muuttamat kentät (luku [5.6](05-aloitus-tallennus-ja-checkpointit.md#56-profiili)).
 - Moottorin valikossa on kohta `ENGINE.RESET_PROFILE` (luku [8](08-syote.md)).

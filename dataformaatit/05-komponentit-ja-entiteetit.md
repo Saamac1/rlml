@@ -105,10 +105,12 @@ Moottori lukee muutamaa komponenttia nimeltä. Ne ovat sanastoa ja kirjoitetaan 
 | Komponentti | Kentät |
 | --- | --- |
 | `render` | `tile name` |
-| `movement` | `mode name`, `speed number default 10` |
+| `movement` | `mode name`, `speed number default 10`, `through name`, `dirs number default 8`, `corners bool default false` |
 | `ai` | `behavior name` |
-| `sight` | `radius number`, `arc number default 360`, `dir dir`, `dark number default 1` |
+| `sight` | `radius number`, `arc number default 360`, `dir dir`, `dark number default 1`, `through name` |
 | `light` | `radius number`, `arc number default 360` |
+| `hearing` | `acuity number default 0` |
+| `sound` | `kind name` |
 | `facing` | `dir dir` (ei `none`) |
 | `timer` | `TAPAHTUMA interval`, `delay`, `count` (rivi kutakin ajastinta kohti) |
 | `interior` | `map name` |
@@ -125,6 +127,7 @@ Moottori lukee muutamaa komponenttia nimeltä. Ne ovat sanastoa ja kirjoitetaan 
 - **Istuin.** `seat` tekee entiteetistä ihmispelaajan istuimen jäsenen: `- seat 1`. Yleensä logiikka antaa sen kutsulla `control(e, seat: n)`, ja datan rivi on testejä ja valmiita ryhmiä varten. Jäsen on toimija ilman `ai`-komponenttiakin. Numero yli `game`-lohkon `seats`-ylärajan on latausvirhe (luku [3.3](03-tiedostot-ja-include.md#33-aloitus); moottoridokumentti, luku [6.1.2](../moottori/06-ajo.md#612-toimijat-ja-ajoitin)).
 - **Paljastettu.** `revealed` piirtää entiteetin myös näkökentän ulkopuolella, esimerkiksi hirviöiden aistimisen ajan. Se ei muuta näkökenttää, joten `sees` ja säännöt pysyvät ennallaan (moottoridokumentti, luku [7.2](../moottori/07-esitys.md#72-kartan-piirtäminen)).
   - **Esto ja läpäisy.** Moottorin komponentti `blocks` antaa entiteetille saman eston kuin tilen ominaisuus (luku [7.5](07-tilet-maastokerrokset-tilejoukot-ja-ominaisuudet.md#75-tilen-ominaisuudet-tiles)): `- blocks move sight`. `movement` ja `sight` saavat kentän `through`, tilejoukon, jonka esto ei koske niitä: `- movement mode PHASE through WALLS` ja `- sight radius 6 through WALLS`. `movement` saa myös kentät `dirs` (4 tai 8, oletus 8) ja `corners` (oletus `false`, eli vinoaskel seinän kulman ohi on kielletty): `- movement dirs 4`. Ammuksen esto on liikkumistapa `MISSILE`: `- WINDOW blocks move MISSILE` pysäyttää kävelijän ja ammuksen mutta ei näköä (moottoridokumentti, luku [9.3](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).
+- **Kuulo ja ääni.** `hearing` antaa entiteetille kuulon, ja `acuity` lisätään kuultuun tasoon (luku [12](12-aanten-ilmoitukset.md)). `sound` tekee entiteetistä jatkuvan äänen lähteen niin kauan kuin se on olemassa (moottoridokumentti, luku [6.8](../moottori/06-ajo.md#68-äänet-ja-kuuleminen)).
 - **Aika.** `movement`-komponentin `speed` skaalaa komentojen hinnan viiveeksi, ja normaalinopeus on 10. `timer`-rivien ajat ovat kierroksia (moottoridokumentti, luku [6.1](../moottori/06-ajo.md#61-aika-ja-vuorot)).
 - **Lisäys ja poisto ajossa.** Logiikka voi lisätä ja poistaa moottorin komponentin kuten minkä tahansa komponentin (`add`, `remove`). Esimerkiksi `ai`-komponentin lisäys laittaa ilmentymän herätysjonoon (moottoridokumentti, luku [9.5](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#95-ilmentymän-elinkaari-ja-komponentit)).
 

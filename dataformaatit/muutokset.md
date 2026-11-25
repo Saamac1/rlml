@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (moottorin komponentit):** luvun [5.3](05-komponentit-ja-entiteetit.md#53-moottorin-komponentit) taulukkoon lisättiin puuttuneet `hearing` ja `sound` sekä kentät `movement.through`, `movement.dirs`, `movement.corners` ja `sight.through`.
+
 **Muutokset 25.11.2026 (kartan paikka):** `center`, `right` ja `bottom` sijoittavat kirjoitetun kokoisen kartan alueeseensa kuten paneelin (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)).
 
 **Muutokset 24.11.2026 (napin sävy):** napin `look NIMI` ja `panels`-rivi `button.NIMI` (luvut [9.3](09-ulkoasu.md#93-paneelit-lokit-ja-esitys) ja [11.5](11-kayttoliittyman-data.md#115-paneelit)).

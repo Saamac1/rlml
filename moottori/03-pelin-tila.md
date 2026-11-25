@@ -60,6 +60,8 @@ Moottori määrittelee pienillä kirjoitetut komponentit, ja vain se antaa niill
 | `seat` | tekee ilmentymästä istuimen `n` jäsenen ja toimijan; logiikka antaa sen yleensä kutsulla `control(e, seat: n)` (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)) |
 | `sight` | laskee näkökentän säteillä `radius` (valaistut ruudut) ja `dark` (pimeät ruudut, oletus 1): `sees()`, `fog`-kerros ja `remember` (luku [7.2](07-esitys.md#72-kartan-piirtäminen)) |
 | `light` | laskee valon säteen ja kaaren; valaistu ruutu näkyy koko näkösäteellä (luku [7.2](07-esitys.md#72-kartan-piirtäminen)) |
+| `hearing` | antaa kuulon: ilmentymä kuulee herätysvälinsä äänet, ja `acuity` lisätään kuultuun tasoon (luku [6.8](06-ajo.md#68-äänet-ja-kuuleminen)) |
+| `sound` | tekee ilmentymästä jatkuvan äänen lähteen niin kauan kuin se on olemassa ja komponentti on paikallaan (luku [6.8](06-ajo.md#68-äänet-ja-kuuleminen)) |
 | `facing` | antaa suhteellisille suunnille vertailukohdan |
 | `timer` | lähettää ajastetut tapahtumat kierroksen rajalla (luku [6.1.4](06-ajo.md#614-mikroaskeleen-vaiheet)) |
 | `interior` | liittää ilmentymään oman kartan |
