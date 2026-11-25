@@ -29,6 +29,9 @@ pub enum Status {
     /// There is no player, or the player has no wake; `rounds` rounds went
     /// by (M 6.1.2).
     NoPlayer { rounds: i64 },
+    /// A foreground scene waits for the player (`Runner::scene_pause`);
+    /// the game's time stands (RS 9).
+    Scene,
 }
 
 #[derive(Clone)]
@@ -72,6 +75,8 @@ pub struct Runner<'m> {
     /// Seats joined (`true`) and left in the action now, for its end
     /// (M 6.1.7).
     seat_calls: Vec<(SeatId, bool)>,
+    /// The foreground scene running now (RS 9).
+    pub(crate) scene: Option<Box<super::scene::ActiveScene>>,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -100,6 +105,7 @@ impl<'m> Runner<'m> {
             inputs_seen: 0,
             counted: None,
             seat_calls: vec![],
+            scene: None,
         };
         // calls in `begin` are its own: checkpoint 0 is taken here anyway
         r.w.saves = Default::default();
@@ -170,7 +176,13 @@ impl<'m> Runner<'m> {
 
     fn run_on(&mut self, rounds: i64, seen: &mut dyn FnMut(&mut World)) -> RtResult<Status> {
         let start_turn = self.w.s.game.turn();
+        // scenes queued before the runner, as `begin`'s, start first
+        self.start_scenes()?;
         loop {
+            // a scene stops the game's time until it ends (RS 9)
+            if self.scene.is_some() {
+                return Ok(Status::Scene);
+            }
             let Some(map) = self.w.s.active_map() else { return Ok(Status::NoPlayer { rounds: 0 }) };
             let now = self.clock(map);
             // phase 4: the wakes of this moment, by sequence number
@@ -313,13 +325,14 @@ impl<'m> Runner<'m> {
         self.w.emit("wake", vec![Value::Entity(e)], &env)
     }
 
-    fn end_action(&mut self) -> RtResult<()> {
+    pub(crate) fn end_action(&mut self) -> RtResult<()> {
         self.w.end_action()?;
         let env = engine_env("<action end>");
         self.w.flush_created(&env)?;
         self.seat_events()?;
         self.save_calls();
-        Ok(())
+        // step 6: the queued foreground scenes (M 6.1.7)
+        self.start_scenes()
     }
 
     /// The action end's seats (M 6.1.7 step 1): `join` and `part` by seat

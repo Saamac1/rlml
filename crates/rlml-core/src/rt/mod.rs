@@ -10,6 +10,7 @@ pub mod play;
 pub mod profile;
 pub mod run;
 pub mod save;
+pub mod scene;
 pub mod senses;
 pub mod state;
 pub mod store;

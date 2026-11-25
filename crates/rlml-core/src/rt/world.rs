@@ -43,6 +43,10 @@ pub struct World<'m> {
     pub sounds: Vec<Noise>,
     /// Travels waiting for the action's end (M 6.1.7).
     pub travels: Vec<Travel>,
+    /// What the running scene waits for, set by `say` and `wait confirm`.
+    pub pause: Option<Pause>,
+    /// A scene is skipped: `say`, `log` and `wait confirm` pass (RS 9.8).
+    pub scene_skipping: bool,
     /// `checkpoint`, `rollback`, `delete_save` and `autosave` calls waiting
     /// for the action's end (M 6.1.7 steps 2–5).
     pub saves: SaveCalls,
@@ -100,11 +104,22 @@ pub enum Point {
     Rollback,
 }
 
-/// A `log` call: the message key and its text arguments.
+/// A `log` call: the message key and its text arguments. `speech` marks
+/// a `say` line, which the log group `SPEECH` shows (M 7.4).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LogEntry {
     pub key: String,
     pub args: Vec<(String, Value)>,
+    pub speech: bool,
+}
+
+/// What a foreground scene waits for (RS 9.5, M 7.4).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Pause {
+    /// `say`: a modal window until the player confirms.
+    Say { key: String, args: Vec<(String, Value)>, speaker: Option<EntityId> },
+    /// `wait confirm`: a confirmation without a text.
+    Confirm,
 }
 
 /// A `noise` call (M 6.8).
@@ -150,7 +165,7 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], saves: SaveCalls::default(), depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area(), looks: Default::default(), flags: Default::default(), profile_touched: Default::default(), profile_start: vec![], held_view: None }
+        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], pause: None, scene_skipping: false, saves: SaveCalls::default(), depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area(), looks: Default::default(), flags: Default::default(), profile_touched: Default::default(), profile_start: vec![], held_view: None }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {
@@ -185,6 +200,10 @@ impl<'m> World<'m> {
     /// Is the player's own save stopped: a member is on a `nosave` map
     /// (D 8.1, M 5.2)? Automatic saves and checkpoints go on.
     pub fn save_blocked(&self) -> bool {
+        // a scene, a dialogue or an `open` menu waits (M 5.2)
+        if self.pause.is_some() {
+            return true;
+        }
         let members = self.s.players().into_iter().chain(self.s.player);
         members.filter_map(|e| self.s.at(e)).any(|p| {
             let name = &self.s.maps[p.map].name;

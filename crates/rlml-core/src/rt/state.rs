@@ -246,6 +246,20 @@ pub struct State {
     /// The camera's target from `follow(camera, e)`, or `None` for the
     /// default: the group, or `player` (M 7.1).
     pub camera: Option<EntityId>,
+    /// Foreground scenes waiting to start, in starting order (RS 9).
+    pub scene_queue: Vec<QueuedScene>,
+    /// Scenes started so far: the next start's number for its
+    /// presentation stream (M 4.1).
+    pub scene_starts: u64,
+}
+
+/// A foreground scene in the queue: its call, who started it and the map
+/// it was started on (RS 9).
+#[derive(Debug, Clone, PartialEq)]
+pub struct QueuedScene {
+    pub call: super::value::CommandValue,
+    pub opener: Option<EntityId>,
+    pub map: Option<MapId>,
 }
 
 impl State {

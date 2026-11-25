@@ -584,7 +584,7 @@ impl<'m> App<'m> {
             return;
         }
         if self.r.w.save_blocked() {
-            self.note = Some("the game cannot be saved here".into());
+            self.note = Some(if self.r.in_scene() { "the game cannot be saved in a scene".into() } else { "the game cannot be saved here".into() });
             return;
         }
         let Some(saves) = self.saves.as_mut() else {
@@ -691,6 +691,10 @@ impl<'m> App<'m> {
         if self.joining.is_some() {
             return vec!["JOIN".into()];
         }
+        // a scene takes `SCENE` over the game's keys (M 8)
+        if self.r.in_scene() && !self.menus.is_open() {
+            return self.stack.iter().cloned().chain(["SCENE".to_string()]).collect();
+        }
         self.stack.iter().cloned().chain(self.menus.contexts().map(String::from)).collect()
     }
 
@@ -759,6 +763,10 @@ impl<'m> App<'m> {
             return self.draw_reading(w, h);
         }
         let mut f = if self.playing { self.view.draw(&mut self.r.w, &self.lang, w, h) } else { Frame::new(w, h) };
+        // a scene's line over the map, under any menu (M 7.4)
+        if let Some(pause) = self.r.scene_pause().cloned() {
+            menu::draw_say(&mut f, &self.r.w, &self.lang, &pause);
+        }
         self.menu_drawn = match self.menus.layers.last() {
             Some(layer) => menu::draw(&mut f, &self.r.w, &self.lang, layer),
             None => Default::default(),
@@ -1253,6 +1261,21 @@ impl<'m> App<'m> {
 
     /// An engine action from a key or a menu item (M 8, M 9.1).
     fn engine(&mut self, a: &str, now: Duration) -> RtResult<()> {
+        // a scene's own actions (RS 9.8): `rewind` comes with timelines
+        if self.r.in_scene() && !self.menus.is_open() {
+            match a {
+                "confirm" => self.r.scene_confirm()?,
+                "skip" => self.r.scene_skip()?,
+                "restart" => self.r.scene_restart()?,
+                "rewind" => self.note = Some("`rewind` comes with timelines".into()),
+                _ => return self.engine_action(a, now),
+            }
+            return self.advance(0);
+        }
+        self.engine_action(a, now)
+    }
+
+    fn engine_action(&mut self, a: &str, now: Duration) -> RtResult<()> {
         if let Some(layer) = self.menus.top() {
             match a {
                 "cursor.north" => {
@@ -2210,6 +2233,11 @@ impl<'m> App<'m> {
         self.typed_out(now);
         self.last_key = now;
         self.clock = now;
+        // a tap or a click confirms a scene's line (M 7.4)
+        if self.r.in_scene() && !self.menus.is_open() && b == Binding::mouse(termplate_core::keys::Mouse::Click) {
+            self.r.scene_confirm()?;
+            return self.advance(0);
+        }
         // a held panel shows until the button goes up, or the next click
         if self.overlay.is_some() && !self.releases {
             self.overlay = None;

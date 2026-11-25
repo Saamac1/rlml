@@ -310,6 +310,35 @@ impl Drawn {
     }
 }
 
+/// The scene's dialogue window (M 7.4): `say`'s line, its speaker's name
+/// in the border, at the bottom of the frame over the map; `wait confirm`
+/// shows only a small mark.
+pub fn draw_say(frame: &mut Frame, w: &World, lang: &str, pause: &rlml_core::rt::world::Pause) {
+    use rlml_core::rt::world::Pause;
+    let Pause::Say { key, args, speaker } = pause else {
+        let (x, y) = (frame.width.saturating_sub(3), frame.height.saturating_sub(1));
+        frame.text(x, y, 3, " ▼ ", Role::Title);
+        return;
+    };
+    let text = w.text(lang, key, args);
+    let width = (frame.width.saturating_sub(4)).clamp(10, 60).min(frame.width);
+    let inner = width.saturating_sub(4).max(1);
+    let lines = wrap(&text, inner);
+    let height = (lines.len() + 2).min(frame.height);
+    let r = Rect::new((frame.width - width) / 2, frame.height - height, width, height);
+    frame.set_area(vec!["SCENE".into()]);
+    frame.fill(r, ' ', Role::Normal);
+    frame.border(r, Border::Single, Role::Border);
+    if let Some(s) = speaker {
+        let name = format!(" {} ", w.name_text(lang, &Value::Entity(*s)));
+        frame.text(r.x + 2, r.y, inner, &name, Role::Title);
+    }
+    for (i, line) in lines.iter().enumerate().take(height.saturating_sub(2)) {
+        frame.text(r.x + 2, r.y + 1 + i, inner, line, Role::Normal);
+    }
+    frame.text(r.x + width - 3, r.y + height - 1, 1, "▼", Role::Title);
+}
+
 /// Draws the top layer as a window in the middle of the frame, or next to
 /// its cell: the title in its border, the body text and the items, the
 /// cursor's row selected and disabled ones dim.

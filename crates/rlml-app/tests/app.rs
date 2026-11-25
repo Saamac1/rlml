@@ -1094,7 +1094,7 @@ fn a_log_fades_from_the_newest_message() {
     let mut app = App::new(&m, 7, (40, 12)).unwrap();
     app.view.truecolor = true;
     for _ in 0..3 {
-        app.r.w.log.push(rlml_core::rt::world::LogEntry { key: "STD.MESSAGE.COMBAT.MISS".into(), args: vec![] });
+        app.r.w.log.push(rlml_core::rt::world::LogEntry { key: "STD.MESSAGE.COMBAT.MISS".into(), args: vec![], speech: false });
     }
     let frame = app.draw();
     let fg = |y: usize| frame.get(0, y).and_then(|c| c.style).and_then(|s| s.fg);
@@ -1129,7 +1129,7 @@ fn the_log_is_read_back_to_its_start() {
     let m = model(&f);
     let mut app = App::new(&m, 7, (40, 12)).unwrap();
     for n in 0..30 {
-        app.r.w.log.push(rlml_core::rt::world::LogEntry { key: format!("STD.MESSAGE.COMBAT.N{n:02}"), args: vec![] });
+        app.r.w.log.push(rlml_core::rt::world::LogEntry { key: format!("STD.MESSAGE.COMBAT.N{n:02}"), args: vec![], speech: false });
     }
     let row = |app: &mut App, y: usize| app.draw().row(y).trim_end().to_string();
     // a row's message without a scroll button's label beside it
@@ -1242,7 +1242,7 @@ fn a_button_acts_and_held_it_repeats() {
 fn tabs_change_by_click_and_by_action() {
     let m = model(&mini_phone());
     let mut app = App::new(&m, 7, (30, 30)).unwrap();
-    app.r.w.log.push(rlml_core::rt::world::LogEntry { key: "STD.MESSAGE.COMBAT.N1".into(), args: vec![] });
+    app.r.w.log.push(rlml_core::rt::world::LogEntry { key: "STD.MESSAGE.COMBAT.N1".into(), args: vec![], speech: false });
     app.draw();
     // a click on the LOG title shows the log under the tab row
     let (tx, ty) = tab_title(&app, 1);
@@ -1375,7 +1375,7 @@ fn the_teletype_types_new_messages_and_a_press_shows_them_at_once() {
     }
     let log_row = |app: &mut App| app.draw().rows().into_iter().find(|r| r.contains("N00")).map(|r| r.trim_end().to_string());
     app.tick(ms(10_000)).unwrap();
-    app.r.w.log.push(rlml_core::rt::world::LogEntry { key: "STD.MESSAGE.COMBAT.N00".into(), args: vec![] });
+    app.r.w.log.push(rlml_core::rt::world::LogEntry { key: "STD.MESSAGE.COMBAT.N00".into(), args: vec![], speech: false });
     assert_eq!(log_row(&mut app), None, "not typed yet");
     app.tick(ms(10_080)).unwrap();
     // 1200 baud is 120 characters a second: 80 ms types 9
@@ -1401,7 +1401,7 @@ fn the_reading_view_over_a_read_log_keeps_its_lines_and_shows_a_panel_under_it()
     let mut app = App::new(&m, 7, (20, 30)).unwrap();
     app.r.w.log.clear();
     for n in 0..12 {
-        app.r.w.log.push(rlml_core::rt::world::LogEntry { key: format!("STD.MESSAGE.COMBAT.N{n:02}"), args: vec![] });
+        app.r.w.log.push(rlml_core::rt::world::LogEntry { key: format!("STD.MESSAGE.COMBAT.N{n:02}"), args: vec![], speech: false });
     }
     let before = app.draw();
     let at = |f: &termplate_core::frame::Frame, y: usize| f.row(y).trim_end().to_string();
@@ -1836,4 +1836,42 @@ fn follow_camera_watches_a_rat_and_comes_back() {
     assert_eq!(app.r.w.s.camera, None);
     app.draw();
     assert_eq!(app.view.camera[&map], home);
+}
+
+// ---- scenes (RS 9, RLML-kohtaukset.md step 1) ----
+
+fn scene_game() -> MemFiles {
+    let mut f = mini_with(|g| {
+        g.push_str(
+            "\n```roguescript\non begin() as OPENING:\n    start(GREETING(player))\n\n\
+             scene GREETING(hero: entity):\n    say(LINE.ONE, speaker: hero)\n    wait confirm\n    say(LINE.TWO)\n    say(LINE.THREE)\n```\n",
+        );
+    });
+    let t = f.game.get_mut("text/fi.rlml").unwrap();
+    t.push_str("\nLINE.ONE Tervetuloa luolaan, matkalainen.\nLINE.TWO Rotat ovat nälkäisiä.\nLINE.THREE Onnea matkaan.\n");
+    f
+}
+
+#[test]
+fn a_scene_shows_its_lines_and_takes_confirm_tap_and_skip() {
+    let m = model(&scene_game());
+    let mut app = App::new(&m, 7, (40, 16)).unwrap();
+    assert_eq!(app.status, Status::Scene, "begin's scene before the first turn");
+    let s = screen(&mut app);
+    assert!(s.contains("Tervetuloa luolaan") && s.contains(" sinä "), "the line and its speaker (M 7.4):\n{s}");
+    assert!(app.r.w.save_blocked(), "no saving in a scene (M 5.2)");
+    let time = app.r.w.s.game.time;
+    press(&mut app, "l");
+    assert!(app.r.in_scene() && app.r.w.s.game.time == time, "the game's keys do nothing in a scene");
+    press(&mut app, "enter");
+    assert!(screen(&mut app).contains('▼'), "`wait confirm`: a mark only");
+    // a tap confirms too, for a phone
+    app.mouse_press(click(), 5, 5, ms(10)).unwrap();
+    assert!(screen(&mut app).contains("Rotat ovat"));
+    press(&mut app, "tab");
+    assert!(!app.r.in_scene(), "`tab` skipped the rest (RS 9.8)");
+    assert!(app.players_turn());
+    assert!(!app.r.w.log.iter().any(|l| l.key == "LINE.THREE"), "the skipped line was left out");
+    assert!(!screen(&mut app).contains("Tervetuloa"), "the minigame's log does not take SPEECH");
+    replays_the_same(&m, &app);
 }

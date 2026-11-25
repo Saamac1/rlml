@@ -271,6 +271,9 @@ pub enum Value {
     Deck(String),
     Table(String),
     Command(CommandValue),
+    /// A scene with its arguments, as `start` and `wait scene` take it
+    /// (RS 9).
+    Scene(CommandValue),
     Component(ComponentValue),
     Sound(Sound),
     /// Presentation time in milliseconds.
@@ -341,6 +344,7 @@ impl Value {
             Value::Deck(_) => "deck",
             Value::Table(_) => "table",
             Value::Command(_) => "command",
+            Value::Scene(_) => "scene",
             Value::Component(_) => "component",
             Value::Sound(_) => "sound",
             Value::Time(_) => "time",
@@ -372,7 +376,7 @@ impl fmt::Display for Value {
             Value::Collection(v) => write!(f, "collection of {}", v.len()),
             Value::List(v) => write!(f, "list of {}", v.len()),
             Value::Dict(v) => write!(f, "dict of {}", v.len()),
-            Value::Command(c) => write!(f, "{}(…)", c.name),
+            Value::Command(c) | Value::Scene(c) => write!(f, "{}(…)", c.name),
             Value::Component(c) => write!(f, "{}(…)", c.name),
             Value::Sound(s) => write!(f, "sound {}", s.kind),
             Value::Time(ms) => write!(f, "{ms}ms"),

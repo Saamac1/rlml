@@ -61,6 +61,12 @@ pub enum Act {
     Join,
     /// `leave_seat`: the row's seat left.
     Leave,
+    /// A scene's line or confirmation confirmed (`scene.confirm`).
+    SceneConfirm,
+    /// A scene skipped (`skip`, RS 9.8).
+    SceneSkip,
+    /// A scene from its start again (`restart`).
+    SceneRestart,
     /// The end of the log: the world went on to this moment.
     End,
 }
@@ -188,6 +194,9 @@ impl fmt::Display for Row {
             Act::Stop => f.write_str(" stop"),
             Act::Join => f.write_str(" join"),
             Act::Leave => f.write_str(" leave_seat"),
+            Act::SceneConfirm => f.write_str(" scene.confirm"),
+            Act::SceneSkip => f.write_str(" skip"),
+            Act::SceneRestart => f.write_str(" restart"),
             Act::End => f.write_str(" end"),
         }
     }
@@ -307,6 +316,9 @@ fn read_row(line: &str) -> Result<Row, String> {
         "stop" => Act::Stop,
         "join" => Act::Join,
         "leave_seat" => Act::Leave,
+        "scene.confirm" => Act::SceneConfirm,
+        "skip" => Act::SceneSkip,
+        "restart" => Act::SceneRestart,
         name => {
             let mut args = Vec::new();
             for w in rest {
@@ -490,6 +502,18 @@ impl<'m> Replay<'m> {
                 if self.r.join().map_err(err)? != Some(seat) {
                     return Err(err("the seat does not join as it did".into()));
                 }
+                self.status = self.r.run(0)?;
+            }
+            Act::SceneConfirm | Act::SceneSkip | Act::SceneRestart => {
+                if !self.r.in_scene() {
+                    return Err(err("no scene waits".into()));
+                }
+                match row.act {
+                    Act::SceneConfirm => self.r.scene_confirm(),
+                    Act::SceneSkip => self.r.scene_skip(),
+                    _ => self.r.scene_restart(),
+                }
+                .map_err(err)?;
                 self.status = self.r.run(0)?;
             }
             Act::Leave => {

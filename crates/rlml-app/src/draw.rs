@@ -689,7 +689,7 @@ pub enum Gap {
 pub fn draw_log_back(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, tc: bool, how: LogDraw) -> (usize, usize) {
     let history = world.m.defs.get(name).and_then(|d| d.block()).and_then(|b| b.arg_after("history")).and_then(|n| n.parse::<usize>().ok()).unwrap_or(usize::MAX);
     let selects = log_rows(world, name);
-    let entries: Vec<(usize, &rlml_core::rt::world::LogEntry)> = world.log.iter().enumerate().filter(|(_, l)| selects.is_empty() || selects.iter().any(|s| l.key == *s || l.key.starts_with(&format!("{s}.")))).collect();
+    let entries: Vec<(usize, &rlml_core::rt::world::LogEntry)> = world.log.iter().enumerate().filter(|(_, l)| selects.is_empty() || selects.iter().any(|s| (s == "SPEECH" && l.speech) || l.key == *s || l.key.starts_with(&format!("{s}.")))).collect();
     let from = entries.len().saturating_sub(history);
     // each message's lines and color; the teletype shows the typed part
     // of its messages and none of those it has not reached (D 9.3)

@@ -45,6 +45,25 @@ Alla on alkuperäinen tehtävälista.
 
 ### 1. Korutiinikohtaus ja `say`
 
+Tehty 25.11.2026 haarassa `claude/kohtaukset-1`:
+- **Ydin (`rt::scene`):**
+  - `start(X())` laittaa kohtauksen jonoon (`State::scene_queue`), ja jono alkaa toiminnon lopussa sekä ennen ensimmäistä vuoroa `begin`-käsittelijän jälkeen.
+  - Kohtaus kulkee kehyksinä: `say` ja `wait confirm` pysäyttävät sen (`World::pause`, `Status::Scene`), ja `wait scene` ajaa alikohtauksen samalla pinolla.
+  - Luonnos on tilannekuva. `restart` palauttaa sen ja poistaa ajon viestit, ja `skip` jättää repliikit ja `log`-viestit pois.
+  - Esityksen virta lasketaan siemenestä, nimestä ja käynnistyslaskurista (`State::scene_starts`).
+  - Syötelokin rivit ovat `scene.confirm`, `skip` ja `restart`, ja toisto ajaa ne.
+- **Kohtauskutsu** on arvo `Value::Scene`. `say` toimii vain kohtauksessa.
+- **Sovellus:**
+  - dialogi-ikkuna kartan alareunassa: puhujan nimi reunassa ja rivitetty repliikki, `wait confirm` näkyy merkkinä `▼`,
+  - konteksti `SCENE` (`enter` tai `space` kuittaa, `tab` ohittaa, `r` aloittaa alusta) ja napautus kuittaa,
+  - tallennus on estetty kohtauksen aikana, joten myös `quit` jättää tallentamatta,
+  - lokin ryhmä `SPEECH` näyttää repliikit.
+- **Pääte ilman käyttöliittymää:** `rlml run` kuittaa näppäimillä `enter` ja `space`, ohittaa näppäimellä `tab` ja aloittaa alusta näppäimellä `r`.
+- **Ei tehty:** `rewind`, joka tulee aikajanojen kanssa. Kohtauksen ohjaajaa ei vielä rajata avaajan istuimeen, vaan mikä tahansa laite kuittaa.
+- **Valmiusehto muuttui.** Esimerkkipelin kohtaukset tarvitsevat heti valintoja ja tekstikentän (vaihe 2), joten vaihe 1 testattiin omalla pelillä (`crates/rlml-core/tests/scenes.rs` ja sovellustesti). Oz-esimerkin portinvartija näyttää ensimmäisen repliikkinsä ja pysähtyy nimen kysymiseen.
+
+Alla on alkuperäinen tehtävälista.
+
 - **Ytimessä:**
   - `start(X(…))` laittaa etualan kohtauksen jonoon (nimi ja argumentit) ja palauttaa kahvan.
   - Toiminnon lopun vaihe 6 (M 6.1.7) aloittaa jonon kohtaukset aloitusjärjestyksessä.

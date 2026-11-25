@@ -25,7 +25,7 @@ use super::input::InputLog;
 use super::path::{LoopState, PathLoop};
 use super::rng::Rng;
 use super::run::Runner;
-use super::state::{DeckState, Game, Instance, MapState, Place, Seat, State, Wake};
+use super::state::{DeckState, Game, Instance, MapState, Place, QueuedScene, Seat, State, Wake};
 use super::value::{Area, Card, CommandValue, ComponentValue, Dir, Pos, Side, Sound, Value};
 use super::world::{LogEntry, Noise, RtResult, World};
 use crate::model::Model;
@@ -286,7 +286,8 @@ form!(ComponentValue, "comp", name, fields);
 form!(CommandValue, "cmd", name, args);
 form!(Sound, "sound", kind, at, source, level);
 form!(Noise, "noise", at, kind, source, time);
-form!(LogEntry, "msg", key, args);
+form!(LogEntry, "msg", key, args, speech);
+form!(QueuedScene, "queued", call, opener, map);
 form!(Wake, "wake", entity, at, seq);
 form!(DeckState, "deck", draw, discard);
 form!(Seat, "seat", n, members, active);
@@ -433,6 +434,7 @@ impl Put for Value {
             Value::Deck(n) => one(w, "deckname", n),
             Value::Table(n) => one(w, "table", n),
             Value::Command(c) => c.put(w),
+            Value::Scene(c) => one(w, "scene", c),
             Value::Component(c) => c.put(w),
             Value::Sound(s) => s.put(w),
             Value::Time(ms) => one(w, "ms", ms),
@@ -497,6 +499,7 @@ impl Get for Value {
             "deckname" => Value::Deck(Get::get(r)?),
             "table" => Value::Table(Get::get(r)?),
             "ms" => Value::Time(Get::get(r)?),
+            "scene" => Value::Scene(<CommandValue as Get>::get(r)?),
             "size" => {
                 let (a, b) = Get::get(r)?;
                 Value::Size(a, b)
@@ -666,6 +669,7 @@ impl Put for State {
         (self.acting, self.last_player_map).put(w);
         w.line();
         (&self.profile, self.camera).put(w);
+        (&self.scene_queue, self.scene_starts).put(w);
         w.close();
     }
 }
@@ -693,8 +697,9 @@ impl Get for State {
         let (party_each, (leash, seat_range)) = Get::get(r)?;
         let (acting, last_player_map) = Get::get(r)?;
         let (profile, camera) = Get::get(r)?;
+        let (scene_queue, scene_starts) = Get::get(r)?;
         r.close()?;
-        Ok(State { entities, game, maps, wakes, next_seq, decks, player, seats, party_each, acting, leash, seat_range, last_player_map, profile, camera })
+        Ok(State { entities, game, maps, wakes, next_seq, decks, player, seats, party_each, acting, leash, seat_range, last_player_map, profile, camera, scene_queue, scene_starts })
     }
 }
 

@@ -82,6 +82,11 @@ pub enum Flow {
     /// `wait N` in microsteps, before speed (M 6.1.6).
     Wait(i64),
     Cancel,
+    /// A scene waits for the player: `say` or `wait confirm` set
+    /// `World::pause` (RS 9.5).
+    Pause,
+    /// `wait scene X()`: the scene runs X and goes on after it (RS 9).
+    Sub(CommandValue),
 }
 
 /// A command waiting at `wait` (M 6.1.6, RS 11.1): its name, the hash of
@@ -153,6 +158,10 @@ impl World<'_> {
                     if let Some(flow) = self.exec(&stmt, frames, env)? {
                         return Ok(flow);
                     }
+                    // `say` waits for the player after its statement
+                    if self.pause.is_some() {
+                        return Ok(Flow::Pause);
+                    }
                 }
                 Frame::For { var, items, k, body } => {
                     if *k >= items.len() {
@@ -195,6 +204,7 @@ impl World<'_> {
         let mut frames = vec![Frame::Block { stmts: body.to_vec(), i: 0 }];
         match self.run_frames(&mut frames, env)? {
             Flow::Wait(_) => Err(format!("{}: runtime error: `wait` outside a command", env.file)),
+            Flow::Pause | Flow::Sub(_) => Err(format!("{}: runtime error: `say`, `wait confirm` and `wait scene` belong in a scene", env.file)),
             f => Ok(f),
         }
     }
@@ -285,6 +295,20 @@ impl World<'_> {
                 let n = self.eval(e, env)?;
                 let n = self.number(n, env, e.pos)?;
                 return Ok(Some(Flow::Wait(n)));
+            }
+            // a scene waits for the player's confirmation (RS 9.5); skipped,
+            // it goes on (RS 9.8)
+            StmtKind::Wait(WaitArg::Confirm) if env.kind == BodyKind::Scene => {
+                if !self.scene_skipping {
+                    self.pause = Some(super::world::Pause::Confirm);
+                    return Ok(Some(Flow::Pause));
+                }
+            }
+            StmtKind::Wait(WaitArg::Scene(e)) if env.kind == BodyKind::Scene => {
+                return match self.eval(e, env)? {
+                    Value::Scene(call) => Ok(Some(Flow::Sub(call))),
+                    v => Err(self.rt_err(env, e.pos, format!("`wait scene` takes a scene, not `{v}`"))),
+                };
             }
             StmtKind::Wait(_) | StmtKind::WaitInput { .. } | StmtKind::Open(_) | StmtKind::OpenValue { .. } | StmtKind::Choice(_) => {
                 return Err(self.rt_err(env, s.pos, "scenes, dialogs, menus and input waits are not supported yet"));
@@ -950,6 +974,8 @@ impl World<'_> {
                         Ok(Value::Card(card))
                     }
                     Kind::Component => Ok(Value::Component(self.component_value(&def.full, vals))),
+                    // a scene call is a value for `start` and `wait scene` (RS 9)
+                    Kind::Scene => Ok(Value::Scene(CommandValue { name: def.full.clone(), args: vals })),
                     k => Err(self.rt_err(env, f.pos, format!("a {k} cannot be called"))),
                 }
             }
@@ -1036,6 +1062,11 @@ impl World<'_> {
 
     /// Binds a function's or command's parameters (RS 2.5): positional,
     /// named, then defaults; a number parameter rolls dice (D 5.2).
+    /// Binds a scene's parameters (RS 9).
+    pub(crate) fn bind_params(&mut self, params: &[Param], args: Vec<(Option<String>, Value)>, env: &mut Env, ns: Option<&str>, pos: Pos) -> RtResult<()> {
+        self.bind(params, args, env, ns, pos)
+    }
+
     fn bind(&mut self, params: &[Param], args: Vec<(Option<String>, Value)>, env: &mut Env, ns: Option<&str>, pos: Pos) -> RtResult<()> {
         let mut given: Vec<Option<Value>> = vec![None; params.len()];
         let mut next = 0;
@@ -1213,6 +1244,9 @@ impl World<'_> {
             }
             Flow::Done(_) => Ok(Outcome::Done { cost }),
             Flow::Cancel => Err(format!("{}: runtime error: `cancel` in a command", env.file)),
+            // a command's `wait scene` and `wait confirm` come with step 3
+            // of RLML-kohtaukset.md; the checker keeps `say` out of commands
+            Flow::Pause | Flow::Sub(_) => Err(format!("{}: runtime error: a command does not wait for a scene yet", env.file)),
         }
     }
 
@@ -1653,7 +1687,10 @@ impl World<'_> {
             "log" => {
                 let Value::Name(key) = a0 else { return Err(self.rt_err(env, pos, "`log` takes a message key")) };
                 let named = args.iter().filter_map(|(n, v)| n.clone().map(|n| (n, v.clone()))).collect();
-                self.log.push(LogEntry { key, args: named });
+                if self.scene_skipping {
+                    return Ok(Value::None);
+                }
+                self.log.push(LogEntry { key, args: named, speech: false });
                 Value::None
             }
             // presentation without a screen does nothing (M 9.3)
@@ -1723,6 +1760,37 @@ impl World<'_> {
                     (Some(a), Some(b)) => Value::List(self.ray(a, b, who, range, mode.as_deref()).into_iter().map(Value::Pos).collect()),
                     _ => Value::List(vec![]),
                 }
+            }
+            // a foreground scene to the queue; it starts at the action's end
+            // (RS 9, M 6.1.7 step 6)
+            "start" => {
+                let Value::Scene(call) = a0 else { return Err(self.rt_err(env, pos, "`start` takes a scene")) };
+                let timeline = self.decl_of(&call.name).is_some_and(|(item, _, _)| matches!(item.kind, ItemKind::Timeline { .. }));
+                if timeline {
+                    return Err(self.rt_err(env, pos, format!("timeline scenes do not run yet (`{}`, RLML-kohtaukset.md step 4)", call.name)));
+                }
+                let opener = env.actor.or(self.s.player);
+                self.s.scene_queue.push(super::state::QueuedScene { call, opener, map: env.map });
+                Value::None
+            }
+            // a modal line in a scene, also to the log group SPEECH (RS 9.6,
+            // M 7.4); skipped, it is left out (RS 9.8)
+            "say" => {
+                if env.kind != BodyKind::Scene {
+                    return Err(self.rt_err(env, pos, "`say` belongs in a scene (RS 9.6)"));
+                }
+                let Value::Name(key) = a0 else { return Err(self.rt_err(env, pos, "`say` takes a text key")) };
+                if self.scene_skipping {
+                    return Ok(Value::None);
+                }
+                let speaker = match self.arg(&args, usize::MAX, "speaker") {
+                    Some(Value::Entity(e)) => Some(*e),
+                    _ => None,
+                };
+                let named: Vec<(String, Value)> = args.iter().filter_map(|(n, v)| n.clone().filter(|n| n != "speaker").map(|n| (n, v.clone()))).collect();
+                self.log.push(LogEntry { key: key.clone(), args: named.clone(), speech: true });
+                self.pause = Some(super::world::Pause::Say { key, args: named, speaker });
+                Value::None
             }
             // the camera's target, or the default without one (M 7.1)
             "follow" => {

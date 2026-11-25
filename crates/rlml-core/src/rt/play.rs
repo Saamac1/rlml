@@ -117,6 +117,27 @@ impl<'m> Session<'m> {
     /// Presses a key on the player's turn and runs to the next one. Returns
     /// a note for the transcript.
     pub fn press(&mut self, key: &str) -> RtResult<String> {
+        // a scene takes the engine's SCENE keys (M 8): `enter` or `space`
+        // confirms, `tab` skips and `r` starts it again
+        if self.r.in_scene() {
+            let note = match key {
+                "enter" | "space" => {
+                    self.r.scene_confirm()?;
+                    "scene.confirm"
+                }
+                "tab" => {
+                    self.r.scene_skip()?;
+                    "skip"
+                }
+                "r" => {
+                    self.r.scene_restart()?;
+                    "restart"
+                }
+                _ => return Ok(format!("(a scene waits: `{key}` does nothing)")),
+            };
+            self.r.run(0)?;
+            return Ok(note.into());
+        }
         let player_alive = self.r.w.s.player.is_some_and(|p| self.r.w.s.get(p).alive);
         let note = match self.action(key).cloned() {
             None => return Ok(format!("(key `{key}` is not bound)")),
@@ -140,7 +161,7 @@ impl<'m> Session<'m> {
             }
         };
         match self.r.run(0)? {
-            Status::Input => {}
+            Status::Input | Status::Scene => {}
             // a dead player: the world goes on at the `round` pace for a round
             Status::NoPlayer { .. } => {
                 self.r.run(1)?;
