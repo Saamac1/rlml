@@ -231,18 +231,6 @@ turn 18  time 2160  HP 8/10
 
 > l  STD.MOVE.EAST
 turn 19  time 2280  HP 8/10
-[CAVE_A]
-
-
-        ######
-        #....#
-        #..@.#
-        #....#
-       ......#
-      ########
-
-> >  STD.TAKE_EXIT
-turn 20  time 2400  HP 8/10
 [CAVE_B]
 ########
 #......#
@@ -253,7 +241,7 @@ turn 20  time 2400  HP 8/10
 ############
 
 > s  STD.WAIT
-turn 21  time 2520  HP 8/10
+turn 20  time 2400  HP 8/10
 [CAVE_B]
 ########
 #......#
@@ -264,7 +252,7 @@ turn 21  time 2520  HP 8/10
 ############
 
 > <  STD.TAKE_EXIT
-turn 22  time 2640  HP 8/10
+turn 21  time 2520  HP 8/10
 [CAVE_A]
 
 

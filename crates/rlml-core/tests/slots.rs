@@ -187,11 +187,12 @@ fn the_runner_saves_at_its_points() {
 #[test]
 fn arriving_on_a_map_saves_once() {
     let m = model(&mini("autosave\n- slots 5\n- on arrive\n"));
-    // walking to the stairs and down (golden stairs_down_and_back)
-    let s = session(&m, "s s s j h j j j l l l l l l l k k l l");
+    // walking to the stairs, and the step onto them takes the player down
+    // (golden stairs_down_and_back)
+    let s = session(&m, "s s s j h j j j l l l l l l l k k l");
     assert!(s.r.due.is_empty(), "no point before the stairs");
     let mut s = s;
-    s.press(">").unwrap();
+    s.press("l").unwrap();
     assert_eq!(s.r.due.len(), 1, "`on arrive`: one save");
     assert_eq!(s.r.due[0].now.s.maps.len(), 2, "taken after the player arrived on the second cave");
 }

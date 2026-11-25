@@ -26,6 +26,8 @@
 | `BLOCKER(who: entity, to: pos) -> entity` | `query` | ensimmäinen entiteetti, jonka oma `blocks` estää liikkeen ruudussa `to`, tai `none` |
 | `DO_STEP(who: entity, to: pos)` | `fn` | siirtää `who`:n ja pitää askeleen äänen; ei tarkista estoa |
 | `STRIKE(attacker: entity, target: entity) -> bool` | `fn` | lyö viereistä kohdetta ja pitää taistelun äänen; `false`, jos lyönti ei ole mahdollinen |
+| `USE_EXIT(who: entity, exit: entity) -> bool` | `fn` | käyttää uloskäyntiä: siirtää `who`:n tai sen ryhmän tai kysyy muiden jättämisestä; `false`, jos siirto jää kysymyksen varaan |
+| `EXIT_CELL(who: entity, p: pos) -> bool` | `query` | ruudussa `p` on askeleella käytettävä uloskäynti (`step`); pelin `walk_avoid` |
 
 Peli, joka muuttaa iskua, korvaa ytimen `STD.STRIKE` eikä komentoa, jolloin muutos koskee myös törmäystä ja pelin omia silmukoita.
 
@@ -153,18 +155,30 @@ scene EXIT.LEAVE_OTHERS(who: entity, door: entity):
         NO:
             return
 
+fn USE_EXIT(who: entity, exit: entity) -> bool:
+    if seat_of(who) == none:
+        travel(who, exit.EXIT.to, at: exit.EXIT.at)
+        return true
+    away = players where it.map == who.map and distance(it, exit) > 1
+    if away.count > 0:
+        start(EXIT.LEAVE_OTHERS(who, exit))
+        return false
+    TRAVEL_GROUP(who, exit)
+    return true
+
 command TAKE_EXIT() cost 120:
     exit = (entities(in: actor.at) where it has EXIT).first
     if exit == none:
         return false
-    if seat_of(actor) == none:
-        travel(actor, exit.EXIT.to, at: exit.EXIT.at)
-        return
-    away = players where it.map == actor.map and distance(it, exit) > 1
-    if away.count > 0:
-        start(EXIT.LEAVE_OTHERS(actor, exit))
-        return false
-    TRAVEL_GROUP(actor, exit)
+    return USE_EXIT(actor, exit)
+
+after enter(who, p, prev) as EXIT_STEP when prev != none and seat_of(who) != none:
+    exit = (entities(in: p) where it has EXIT and it.EXIT.step).first
+    if exit != none:
+        USE_EXIT(who, exit)
+
+query EXIT_CELL(who: entity, p: pos) -> bool:
+    return (entities(in: p) where it has EXIT and it.EXIT.step).count > 0
 
 on arrive(who, map, p) as GROUP_ARRIVAL when seat_of(who) != none or who has FOLLOW:
     if (entities(in: p) where it != who and blocks(it, move, for: who, tiles: false)).count == 0:
@@ -225,7 +239,8 @@ command DROP(item: entity from actor.PACK.items) cost 120:
 - **Ei paikanvaihtoa kahden ihmisen välillä.** Kun sekä törmääjää että törmättyä ohjaa ihminen (`controlled`: istuimen ohjattava, säännöllä `party each` jokainen jäsen), paikkaa ei vaihdeta, ja törmäys epäonnistuu ilman ajan kulumista. Muuten kaksi samaan suuntaan kulkevaa pelaajaa vaihtaisivat paikkaa vuorotellen eivätkä pääsisi eteenpäin. Takana kulkeva odottaa tai kiertää. Seuraaja ja tekoälyn ohjaama jäsen vaihtavat paikkaa ihmisen ohjaaman kanssa kumpaankin suuntaan kuten ennen, joten lemmikki pääsee käytävässä pelaajan ohi.
 - **Ryhmä uloskäynnillä.** Kun saman kartan jäsenet ovat uloskäynnin ruudussa tai sen vieressä, `TAKE_EXIT` siirtää koko ryhmän ja jäsenten seuraajat, jotka ovat uloskäynnin vieressä. Muuten komento epäonnistuu ilman ajan kulumista ja käynnistää dialogin `EXIT.LEAVE_OTHERS`, jonka `YES` siirtää ryhmän. Vahvistettu siirto ei maksa komennon hintaa, koska dialogi alkaa vasta toiminnon lopussa. `GROUP_ARRIVAL` siirtää kohdekartalla saapujan vapaaseen ruutuun, jos saapumisruudussa on jo estävä entiteetti.
 - **Ryhmän vaihto.** `SWITCH` ja `SWITCH.PREV` (hinta 0) tekevät istuimen seuraavasta tai edellisestä elävästä jäsenestä ohjattavan, ja ne epäonnistuvat, jos muita jäseniä ei ole. Vaihto ei anna ylimääräisiä vuoroja (moottoridokumentti, luku [6.1.10](../moottori/06-ajo.md#6110-istuimet-ja-ryhmä)). STD ei sido näppäimiä, joten peli sitoo komennot omaan peruskontekstiinsa (esimerkiksi `- SWITCH tab` ja `- SWITCH.PREV shift+tab`).
-- **`TAKE_EXIT`** käyttää ruudun ensimmäistä uloskäyntiä. Siirto tehdään toiminnon lopussa, ja saapumisruudussa ei lähetetä `enter`-tapahtumaa (moottoridokumentti, luku [6.7](../moottori/06-ajo.md#67-siirtyminen-kartalta-toiselle)).
+- **Uloskäynti askeleella.** Uloskäynti, jonka kenttä `step` on tosi (`- EXIT to CAVE_B step true`), vie istuimen jäsenen perille, kun se astuu ruutuun: käsittelijä `EXIT_STEP` (`after enter`) kutsuu `USE_EXIT`-ydintä kuten `TAKE_EXIT`. Siirto tehdään askeleen toiminnon lopussa, joten askel maksaa tavalliseen tapaan. Saapumisruudussa `enter` ei laukea (moottoridokumentti, luku [6.7](../moottori/06-ajo.md#67-siirtyminen-kartalta-toiselle)), joten portaille saapuva ei palaa heti takaisin, vaan vasta astuttuaan ruudusta pois ja takaisin. Vain istuimen jäsen käyttää uloskäyntiä astumalla, ja siirto kokoelmasta maahan (`prev` on `none`) ei käytä sitä. Pelin `- walk_avoid STD.EXIT_CELL` pitää klikkausmatkan reitin pois tällaisista ruuduista, mutta matka kohderuutuna olevaan uloskäyntiin kulkee sen kautta (moottoridokumentti, luku [8.1](../moottori/08-syote.md#81-hiiri)).
+- **`TAKE_EXIT`** käyttää ruudun ensimmäistä uloskäyntiä, myös `step`-uloskäyntiä. Siirto tehdään toiminnon lopussa, ja saapumisruudussa ei lähetetä `enter`-tapahtumaa (moottoridokumentti, luku [6.7](../moottori/06-ajo.md#67-siirtyminen-kartalta-toiselle)).
 - **`PICK_UP`** siirtää esineen kokoelmaan kutsulla `move(item, to: kokoelma)` (moottoridokumentti, luku [9.3](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).
 
 Esimerkki pelin omasta silmukasta, joka noudattaa STD:n sääntöjä (Rogue-toteutustesti):

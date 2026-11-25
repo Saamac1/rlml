@@ -10,7 +10,7 @@
 | `DROPS` | `loot: table` | `DEATH` synnyttää taulusta kortin kuolinpaikkaan |
 | `PACK` | `items: collection` | reppu, jota `GIVE`, `PICK_UP` ja `DROP` käyttävät |
 | `ITEM` | – (merkki) | esine, jonka voi poimia |
-| `EXIT` | `to: name`, `at: label = START` | uloskäynti, jonka `TAKE_EXIT` käyttää |
+| `EXIT` | `to: name`, `at: label = START`, `step: bool = false` | uloskäynti, jonka `TAKE_EXIT` käyttää, ja `step`-uloskäynti myös astumalla ruutuun (luku [5](05-komennot.md)) |
 | `FOOD` | `points: number = 30`, `group: bool = false` | ruoka, jonka `FEED` antaa; `group` muuttaa koko lajin suhdetta |
 | `SNEAKING` | – (merkki) | hiipiminen, jonka `SNEAK` kytkee |
 | `LISTENER` | `last: number = -1` | `game`-lohkossa: ryhmän kuuloviestin tahti (luku [8](08-kasittelijat.md)) |

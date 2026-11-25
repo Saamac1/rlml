@@ -12,6 +12,7 @@ game MINI
 - layout MAIN
 - layout PHONE when portrait and width < 70
 - walk STD.MOVE
+- walk_avoid STD.EXIT_CELL
 - PLAYER HERO
 
 include lib/std.rlml
@@ -39,10 +40,10 @@ entity RAT
 - render GLYPH.RAT
 
 entity STAIRS_DOWN
-- EXIT to CAVE_B
+- EXIT to CAVE_B step true
 
 entity STAIRS_UP
-- EXIT to CAVE_A
+- EXIT to CAVE_A step true
 
 keys ALWAYS
 - open PAUSE esc
@@ -77,8 +78,8 @@ Asettelut, kosketusnapit (`panel PAD`), kartat `CAVE_A` ja `CAVE_B` sekä `tiles
 - **Lyönti:** rotan suhde pelaajaan on `50 - |-100 - 0|` = −50, joten törmäys palauttaa `ATTACK`-komennon ja `HUNTER` hyökkää näkemäänsä tai kuulemaansa pelaajaan (luvut [6](06-tekoaly.md) ja [7](07-suhteet-ja-vihamielisyys.md)).
 - **Kuolema:** `APPLY_DAMAGE` ja `DEATH` tuhoavat kuolleen, myös pelaajan, ja maailma jatkaa `round 250ms` -tahdilla (luku [8](08-kasittelijat.md)).
 - **Valaistus:** `- default blocks none lit` valaisee koko luolan, joten pelaaja ja rotat näkevät koko näkösäteensä (`sight radius`). Ilman sitä mikään ruutu ei ole valaistu, ja jokainen näkee vain viereiset ruudut (moottoridokumentti, luku [7.2](../moottori/07-esitys.md#72-kartan-piirtäminen)).
-- **Kosketusnapit:** pystyssä olevassa puhelimessa (`PHONE`) lokin alla ovat napit `button`-kenttinä (dataformaatit, luku [11.5](../dataformaatit/11-kayttoliittyman-data.md#115-paneelit)). Ne tekevät samat toiminnot kuin näppäimet: suunnat, `WAIT`, `pass`, `open PAUSE` ja `TAKE_EXIT`. Portaat-nappi näkyy aina, koska `TAKE_EXIT` epäonnistuu muualla eikä vie aikaa. Kartta on keskellä nappien yläpuolella (`- m map size 20x8 center`), ja sitä napauttamalla kävellään ruutuun (`walk STD.MOVE`).
-- **Kartanvaihto:** `TAKE_EXIT` kutsuu `travel`-funktiota, siirto tehdään toiminnon lopussa ja pelaaja saapuu kohdekartan `START`-nimiöön (luku [5](05-komennot.md)).
+- **Kosketusnapit:** pystyssä olevassa puhelimessa (`PHONE`) lokin alla ovat napit `button`-kenttinä (dataformaatit, luku [11.5](../dataformaatit/11-kayttoliittyman-data.md#115-paneelit)). Ne tekevät samat toiminnot kuin näppäimet: suunnat, `WAIT` ja `open PAUSE`. Kartta on keskellä nappien yläpuolella (`- m map size 20x8 center`), ja sitä napauttamalla kävellään ruutuun (`walk STD.MOVE`).
+- **Kartanvaihto:** portaat ovat askeleella käytettäviä uloskäyntejä (`step true`): portaille astuminen kutsuu `travel`-funktiota käsittelijän `EXIT_STEP` kautta, ja `TAKE_EXIT` (`>` ja `<`) tekee saman portailla seistessä. Siirto tehdään toiminnon lopussa, ja pelaaja saapuu kohdekartan `START`-nimiöön, joka on portaiden ruudussa. Saapuminen ei laukaise `enter`-tapahtumaa, joten pelaaja palaa vasta astuttuaan pois portailta ja takaisin. `walk_avoid STD.EXIT_CELL` pitää klikkausmatkan reitin pois portailta (luku [5](05-komennot.md)).
 
 ---
 

@@ -16,6 +16,4 @@ PAD.SOUTH ↓
 PAD.WEST ←
 PAD.EAST →
 PAD.WAIT odota
-PAD.PASS ohita
 PAD.MENU valikko
-PAD.STAIRS portaat

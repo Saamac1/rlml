@@ -11,6 +11,7 @@ game MINI
 - layout MAIN
 - layout PHONE when portrait and width < 70
 - walk STD.MOVE
+- walk_avoid STD.EXIT_CELL
 - PLAYER HERO
 
 include lib/std.rlml
@@ -42,7 +43,7 @@ entity RAT
 - render GLYPH.RAT
 
 entity STAIRS_DOWN
-- EXIT to CAVE_B
+- EXIT to CAVE_B step true
 
 entity STAIRS_UP
-- EXIT to CAVE_A
+- EXIT to CAVE_A step true

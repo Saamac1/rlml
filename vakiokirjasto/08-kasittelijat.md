@@ -7,6 +7,7 @@
 | `SPAWN_PLAYER` | `on begin` | 0 | luo jokaiselle istuimelle hahmon: istuimelle 1 kohtaan `game.at`, muille vapaisiin ruutuihin sen ympärille, ja antaa ne hallintaan |
 | `JOIN_PLAYER` | `on join` | 0 | luo kesken pelin liittyvälle istuimelle hahmon `player`-hahmon viereen |
 | `PART_PLAYER` | `on part` | 0 | tekee poistuvan istuimen jäsenistä seuraajia (luku [6.1](06-tekoaly.md#61-seuraaja)) |
+| `EXIT_STEP` | `after enter` | 0 | istuimen jäsen, joka astuu `step`-uloskäynnin ruutuun, käyttää sitä (`USE_EXIT`, luku [5](05-komennot.md)) |
 | `GROUP_ARRIVAL` | `on arrive` | 0 | siirtää saapuvan jäsenen tai seuraajan vapaaseen ruutuun, jos saapumisruudussa on jo estävä entiteetti (luku [5](05-komennot.md)) |
 | `APPLY_DAMAGE` | `on HIT` | 0 | vähentää elinvoimaa ja lähettää `DIED` osuman syyn kanssa |
 | `HIT_MESSAGE` | `after HIT` | -10 | kirjaa osuman lokiin, jos pelaaja näki sen |

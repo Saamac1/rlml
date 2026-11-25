@@ -4,6 +4,13 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (portaat askeleella):**
+- `EXIT`-komponentilla on kenttä `step`. Istuimen jäsen, joka astuu tällaisen uloskäynnin ruutuun, käyttää sitä (`EXIT_STEP`).
+- `TAKE_EXIT`-komennon runko on ydin `USE_EXIT`.
+- `EXIT_CELL` on valmis `walk_avoid`-kysely.
+- Kirjattiin avoin kysymys siitä, miten muut kuin jäsenet käyttävät portaita, kun moottori ajaa useaa aktiivista karttaa (luvut [3](03-komponentit-ja-oletuspelaaja.md), [5](05-komennot.md), [8](08-kasittelijat.md) ja [14](14-avoimet-kysymykset.md)).
+- Minipelin portaat toimivat askeleella, ja sen napeista poistuivat portaat ja ohita (luku [12](12-minipeli-std-lla.md)).
+
 **Muutokset 25.11.2026 (minipelin kosketusnapit):** minipelissä on pystyssä olevan puhelimen asettelu `PHONE` kosketusnappeineen, `walk STD.MOVE` karttaa napauttamalla kävelyyn ja taukovalikon `SAVE` (luku [12](12-minipeli-std-lla.md)).
 
 **Muutokset 17.11.2026 (seurattava):** `LEADER_OF` antaa ensin lähimmän ihmisen ohjaaman jäsenen (`controlled`) ja vasta sitten lähimmän muun jäsenen, joten `follow` ei ala seurata toisen istuimen seuraajaa, joka seisoo yhtä lähellä (luku [6.1](06-tekoaly.md#61-seuraaja)).

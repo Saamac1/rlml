@@ -27,7 +27,7 @@ Peli ottaa koko STD:n mukaan rivillä `include lib/std.rlml`. Rivin kannattaa ol
 | `lib/std/relations.rlml` | `ALIGNMENT`, `FACTION`, `BONDS`, `STANCE`, `FACTIONS`, `GROUP.PLAYER`, `ATTITUDE`, `BEFRIEND` | – |
 | `lib/std/ai.rlml` | `HUNTER`, `HOSTILES`, `APPROACH`, `FLEE`, `WANDER`, `FOLLOWER`, `FOLLOW`, `LEADER_OF`, `PART_PLAYER` | move, combat, relations |
 | `lib/std/items.rlml` | `PACK`, `ITEM`, `GIVE`, `PICK_UP`, `DROP` | – |
-| `lib/std/exits.rlml` | `EXIT`, `TAKE_EXIT`, `TRAVEL_GROUP`, `EXIT.LEAVE_OTHERS`, `GROUP_ARRIVAL` | core, ai |
+| `lib/std/exits.rlml` | `EXIT`, `TAKE_EXIT`, `USE_EXIT`, `EXIT_STEP`, `EXIT_CELL`, `TRAVEL_GROUP`, `EXIT.LEAVE_OTHERS`, `GROUP_ARRIVAL` | core, ai |
 | `lib/std/adjacency.rlml` | `ADJACENT`, `APART` ja niiden käsittelijät | – |
 | `lib/std/sound.rlml` | äänilajit ja kuulemisen viestit | – |
 | `lib/std/gen.rlml` | generointialgoritmit (luku [10](10-generointi.md)) | – |

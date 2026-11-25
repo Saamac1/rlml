@@ -764,7 +764,7 @@ fn golden_the_player_kills_a_rat() {
 
 #[test]
 fn golden_stairs_down_and_back() {
-    golden("stairs_down_and_back", "s s s j h j j j l l l l l l l k k l l > s <");
+    golden("stairs_down_and_back", "s s s j h j j j l l l l l l l k k l l s <");
 }
 
 // ---- seats (M 6.1.10) ----
@@ -1453,4 +1453,33 @@ fn other_game_saves_and_replays() {
         }
         eprintln!("ok {} ({} keys)", t.display(), keys.len());
     }
+}
+
+// ---- exits by a step (STD 5) ----
+
+#[test]
+fn a_member_stepping_onto_step_stairs_goes_and_a_rat_does_not() {
+    let m = model(&mini());
+    let mut w = started(&m);
+    let stairs = cells_of(&std::fs::read_to_string(repo().join("esimerkit/mini/maps/caves.rlml")).unwrap(), "CAVE_A", '>')[0];
+    // a rat west of the stairs steps onto them: no travel (STD 14: later,
+    // with several active maps, also others will use them)
+    let rat = kinds(&w, "RAT")[0];
+    put(&mut w, rat, (stairs.0 - 1, stairs.1));
+    w.start_command(rat, &cmd("STD.MOVE.EAST")).unwrap();
+    assert_eq!(at(&w, rat), stairs);
+    assert!(w.travels.is_empty(), "only a seat's member takes `step` stairs");
+    // the player in its place steps onto them: travel at the action's end
+    let p = player(&w);
+    put(&mut w, rat, (1, 1));
+    put(&mut w, p, (stairs.0 - 1, stairs.1));
+    w.start_command(p, &cmd("STD.MOVE.EAST")).unwrap();
+    assert_eq!(w.travels.len(), 1, "EXIT_STEP asked for the travel");
+    assert_eq!(w.travels[0].map, "CAVE_B");
+    // walk_avoid's query knows the stairs
+    let mut env = rlml_core::rt::eval::Env::new(rlml_core::rt::eval::BodyKind::Handler, "test", None, "test");
+    env.map = Some(0);
+    let on = |w: &mut World, env: &mut rlml_core::rt::eval::Env, (x, y): (i32, i32)| w.call_function("STD.EXIT_CELL", vec![(None, Value::Entity(p)), (None, Value::Pos(Pos { map: 0, x, y }))], env).unwrap();
+    assert_eq!(on(&mut w, &mut env, stairs), Value::Bool(true));
+    assert_eq!(on(&mut w, &mut env, (2, 2)), Value::Bool(false));
 }

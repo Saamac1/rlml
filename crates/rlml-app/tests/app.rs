@@ -1622,10 +1622,10 @@ fn the_minigames_buttons_show_on_a_phone_held_upright() {
     // a phone held upright: 40 columns, 60 rows
     app.resize(40, 60);
     let s = screen(&mut app);
-    for t in ["↑", "↓", "←", "→", "odota", "ohita", "valikko", "portaat"] {
+    for t in ["↑", "↓", "←", "→", "odota", "valikko"] {
         assert!(s.contains(t), "{t}:\n{s}");
     }
-    assert_eq!(app.view.buttons.len(), 8);
+    assert_eq!(app.view.buttons.len(), 6);
 }
 
 #[test]
@@ -1642,9 +1642,6 @@ fn the_minigames_buttons_play_it() {
     let time = app.r.w.s.game.time;
     tap(&mut app, "WAIT", 50);
     assert_eq!(app.r.w.s.game.time, time + 120, "odota waits a turn");
-    // the stairs button does nothing off the stairs, and takes no time
-    tap(&mut app, "TAKE_EXIT", 60);
-    assert_eq!((player_at(&app), app.r.w.s.game.time), ((x, y), time + 120));
     // valikko opens the pause menu, which has Save
     tap(&mut app, "open PAUSE", 70);
     assert!(app.menus.is_open());
@@ -1653,7 +1650,7 @@ fn the_minigames_buttons_play_it() {
 }
 
 #[test]
-fn the_minigames_pass_button_and_a_tap_on_the_map() {
+fn a_tap_on_the_minigames_map_walks_and_stairs_take_you_down() {
     let m = model(&mini_as_is());
     let mut app = App::new(&m, 7, (40, 60)).unwrap();
     // a tap on the map walks there (`walk STD.MOVE`)
@@ -1664,12 +1661,17 @@ fn the_minigames_pass_button_and_a_tap_on_the_map() {
     app.mouse_release();
     run_ticks(&mut app, 10, 5);
     assert_eq!(player_at(&app), (x + 1, y + 1), "walked to the tapped cell");
-    // without the player, ohita runs the next round at once (`pass`)
-    let p = app.r.w.s.player.unwrap();
-    app.r.w.destroy(p, &Env::new(BodyKind::Handler, "test", None, "test")).unwrap();
-    let turn = app.r.w.s.game.turn();
-    tap(&mut app, "pass", 1000);
-    assert_eq!(app.r.w.s.game.turn(), turn + 1);
+    // a tap on the stairs walks onto them, and the step takes the player
+    // down (`EXIT ... step true`)
+    let stairs = app.r.w.s.maps[0].label("START")[0];
+    app.r.w.s.maps[0].remembered = (0..8).flat_map(|y| (0..20).map(move |x| (x, y))).collect();
+    app.draw();
+    let (sx, sy) = screen_of(&app, stairs.0, stairs.1);
+    app.mouse_press(click(), sx, sy, ms(1000)).unwrap();
+    app.mouse_release();
+    run_ticks(&mut app, 1000, 40);
+    let p = app.r.w.s.at(app.r.w.s.player.unwrap()).unwrap();
+    assert_eq!(app.r.w.s.maps[p.map].name, "CAVE_B", "down the stairs");
 }
 
 #[test]

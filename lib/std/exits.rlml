@@ -11,6 +11,7 @@ include ai.rlml
 component EXIT
 - to name
 - at label default START
+- step bool default false
 
 ```roguescript
 fn TRAVEL_GROUP(who: entity, door: entity):
@@ -29,18 +30,30 @@ scene EXIT.LEAVE_OTHERS(who: entity, door: entity):
         NO:
             return
 
+fn USE_EXIT(who: entity, exit: entity) -> bool:
+    if seat_of(who) == none:
+        travel(who, exit.EXIT.to, at: exit.EXIT.at)
+        return true
+    away = players where it.map == who.map and distance(it, exit) > 1
+    if away.count > 0:
+        start(EXIT.LEAVE_OTHERS(who, exit))
+        return false
+    TRAVEL_GROUP(who, exit)
+    return true
+
 command TAKE_EXIT() cost 120:
     exit = (entities(in: actor.at) where it has EXIT).first
     if exit == none:
         return false
-    if seat_of(actor) == none:
-        travel(actor, exit.EXIT.to, at: exit.EXIT.at)
-        return
-    away = players where it.map == actor.map and distance(it, exit) > 1
-    if away.count > 0:
-        start(EXIT.LEAVE_OTHERS(actor, exit))
-        return false
-    TRAVEL_GROUP(actor, exit)
+    return USE_EXIT(actor, exit)
+
+after enter(who, p, prev) as EXIT_STEP when prev != none and seat_of(who) != none:
+    exit = (entities(in: p) where it has EXIT and it.EXIT.step).first
+    if exit != none:
+        USE_EXIT(who, exit)
+
+query EXIT_CELL(who: entity, p: pos) -> bool:
+    return (entities(in: p) where it has EXIT and it.EXIT.step).count > 0
 
 on arrive(who, map, p) as GROUP_ARRIVAL when seat_of(who) != none or who has FOLLOW:
     if (entities(in: p) where it != who and blocks(it, move, for: who, tiles: false)).count == 0:

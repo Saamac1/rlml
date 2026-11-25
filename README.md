@@ -81,7 +81,7 @@ RLML on roguelike-pelien kuvauskieli: pelin data kirjoitetaan tekstitiedostoina 
 
 ## Esimerkit
 
-- [Minipeli](esimerkit/mini/) (`esimerkit/mini/`): vakiokirjaston valmiustestin peli kokonaisena, kaksi luolaa, rotat ja portaat ilman RogueScriptiä ([STD 12](vakiokirjasto/12-minipeli-std-lla.md)). Pystyssä olevassa puhelimessa lokin alla ovat kosketusnapit: suunnat, odota, ohita (`z`), valikko (`esc`) ja portaat (`>` `<`).
+- [Minipeli](esimerkit/mini/) (`esimerkit/mini/`): vakiokirjaston valmiustestin peli kokonaisena, kaksi luolaa, rotat ja portaat ilman RogueScriptiä ([STD 12](vakiokirjasto/12-minipeli-std-lla.md)). Portaille astuminen vie toiseen luolaan. Pystyssä olevassa puhelimessa lokin alla ovat kosketusnapit: suunnat, odota ja valikko (`esc`).
 - [Ryhmä](esimerkit/ryhma/) (`esimerkit/ryhma/`): paikallisen moninpelin esimerkki ([RLML-moninpeli](RLML-moninpeli.md), [M 6.1.10](moottori/06-ajo.md#6110-istuimet-ja-ryhmä)). Kaksi istuinta pelaa vuorotellen samalla näppäimistöllä. Istuimella 1 on seuralainen Robin, jota pelaaja voi ohjata (`tab` ja `shift+tab`), ja talutushihna pitää ryhmän 20×8 solun kartta-alueen sisällä.
 
 ## Lataaja

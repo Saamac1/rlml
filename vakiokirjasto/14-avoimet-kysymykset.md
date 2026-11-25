@@ -13,6 +13,7 @@
 - **Jäsenen nimi.** Oletuspelaajan nimi on “sinä”, joten ryhmän viestit (`HIT`, `DIED`, `ALLY_PICKUP`) näyttävät “sinä ottaa”. Ratkaistu osin 7.11.2026: peli antaa istuimille omat nimet avaimella `<ENTITEETTI>.SEATn.NAME` (dataformaatit, luku [10](../dataformaatit/10-tekstit.md)). Avoinna on, antaako STD itse oletusnimet, kuten `STD.DEFAULT.PLAYER.SEAT2.NAME`.
 - **Viimeinen kuolema.** `SOLO` on tosi myös moninpelissä, kun viimeinen istuin on yksin, joten viimeisen jäsenen kuolema näkyy muodossa “Kuolet.” (luku [8](08-kasittelijat.md)).
 - **Vahvistettu ryhmäsiirto** dialogin `EXIT.LEAVE_OTHERS` kautta ei maksa komennon hintaa (luku [5](05-komennot.md)). Pitäisikö dialogin `YES`-haaran viedä ohjattavalta aikaa?
+- **Muut kuin jäsenet portailla.** `EXIT_STEP` koskee vain istuimen jäseniä, eikä tekoäly käytä uloskäyntejä, koska kartalla, jolla ei ole jäsentä, aika on jäädytetty (moottoridokumentti, luku [6.1.8](../moottori/06-ajo.md#618-aktiiviset-kartat-ja-jäädytys)). Kun moottori ajaa useaa aktiivista karttaa, myös muiden kuin jäsenten (hirviöt, kauppiaat, seuraajat) on voitava käyttää portaita: astumalla `step`-uloskäyntiin ja komennolla `TAKE_EXIT`, ja tekoäly tarvitsee tavan valita uloskäynti (esimerkiksi `HUNTER` seuraa pelaajaa toiselle kartalle). Lisätty 25.11.2026.
 - **Hihna kiertävällä kartalla.** `LEASHED` ei laske suorakulmiota lyhimmän välin mukaan (luku [5](05-komennot.md)).
 
 **Lataajan ensimmäinen versio 31.10.2026.** STD on nyt tiedostoina kansiossa `lib/std/`, ja lataaja tarkistaa sen. Seuraavat kohdat jouduttiin arvaamaan:

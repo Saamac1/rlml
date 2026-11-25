@@ -32,37 +32,33 @@ legend:
 
 ## Kosketusnapit
 
-> Suuntanapit odota-napin ympärillä. Ylhäällä vasemmalla `ohita` antaa
-> kierroksen kulua, kun pelaajalla ei ole vuoroa (`pass`, näppäin `z`),
-> ylhäällä oikealla `valikko` avaa taukovalikon (`esc`) ja alhaalla
-> oikealla `portaat` kulkee portaita (`>` ja `<`). Portaat-nappi näkyy
-> aina: muualla se ei tee mitään eikä vie aikaa. Muut kuin suuntanapit ovat
-> tummempia (`look dark`). Pohjassa pidetty nappi toistaa. Lokia
-> napauttamalla avautuu koko loki (`read`).
+> Suuntanapit odota-napin ympärillä ja ylhäällä oikealla `valikko`, joka
+> avaa taukovalikon (`esc`). Portaille astuminen vie toiseen luolaan
+> (`EXIT ... step true`, `game.rlml`), joten portaille ei tarvita nappia.
+> Odota- ja valikko-nappi ovat tummempia (`look dark`). Pohjassa pidetty
+> nappi toistaa. Lokia napauttamalla avautuu koko loki (`read`).
 
 panel PAD
 
 ```
-pppppppp nnnnnnnn mmmmmmmm
-pppppppp nnnnnnnn mmmmmmmm
-pppppppp nnnnnnnn mmmmmmmm
+         nnnnnnnn mmmmmmmm
+         nnnnnnnn mmmmmmmm
+         nnnnnnnn mmmmmmmm
 wwwwwwww cccccccc eeeeeeee
 wwwwwwww cccccccc eeeeeeee
 wwwwwwww cccccccc eeeeeeee
-         ssssssss xxxxxxxx
-         ssssssss xxxxxxxx
-         ssssssss xxxxxxxx
+         ssssssss
+         ssssssss
+         ssssssss
 ```
 
 legend:
-- p button pass text PAD.PASS look dark
 - n button MOVE.NORTH text PAD.NORTH
 - m button open PAUSE text PAD.MENU look dark
 - w button MOVE.WEST text PAD.WEST
 - c button WAIT text PAD.WAIT look dark
 - e button MOVE.EAST text PAD.EAST
 - s button MOVE.SOUTH text PAD.SOUTH
-- x button TAKE_EXIT text PAD.STAIRS look dark
 
 log LOG history 50
 - STD.MESSAGE.COMBAT
