@@ -1483,3 +1483,75 @@ fn a_member_stepping_onto_step_stairs_goes_and_a_rat_does_not() {
     assert_eq!(on(&mut w, &mut env, stairs), Value::Bool(true));
     assert_eq!(on(&mut w, &mut env, (2, 2)), Value::Bool(false));
 }
+
+// ---- joining and leaving mid-game (M 8.2, moninpeli vaihe 3) ----
+
+fn one_seat(m: &Model) -> Runner<'_> {
+    let mut r = seats_game(m, 1, |_| {});
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    r
+}
+
+#[test]
+fn a_seat_joins_mid_game_and_gets_a_character() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = one_seat(&m);
+    assert_eq!(r.w.s.seats.len(), 1);
+    assert_eq!(r.join().unwrap(), Some(2), "the lowest free number");
+    let hero = r.w.s.active(1).unwrap();
+    let new = r.w.s.active(2).expect("JOIN_PLAYER gave seat 2 a character (STD 7.2)");
+    assert!(at(&r.w, new).0.abs_diff(at(&r.w, hero).0) <= 2, "next to the player");
+    assert_eq!(r.join().unwrap(), None, "`seats 1..2`: no third seat");
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+}
+
+#[test]
+fn a_seat_leaves_and_its_members_follow() {
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = one_seat(&m);
+    r.join().unwrap();
+    r.run(0).unwrap();
+    let left = r.w.s.active(2).unwrap();
+    assert!(r.leave_seat(2).unwrap());
+    assert!(r.w.s.seat(2).is_none(), "the seat is free");
+    assert_eq!(r.w.s.seat_of(left), None, "its member lost `seat`");
+    assert!(r.w.s.get(left).has("ai") && r.w.s.get(left).has("STD.FOLLOW"), "PART_PLAYER made it a follower");
+    assert!(!r.leave_seat(1).unwrap(), "`seats 1..2`: the last seat leaves by quitting");
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    // the freed number goes to the next to join
+    assert_eq!(r.join().unwrap(), Some(2));
+}
+
+#[test]
+fn joining_and_leaving_replay_and_save() {
+    use rlml_core::rt::input::{InputLog, Replay};
+    use rlml_core::rt::save::Save;
+    let f = files(&[("game.rlml", SEATS)]);
+    let m = model(&f);
+    let mut r = one_seat(&m);
+    let wait = |r: &mut Runner| {
+        let n = r.awaiting().unwrap();
+        r.input(n, &cmd("STD.WAIT")).unwrap();
+        r.run(0).unwrap();
+    };
+    wait(&mut r);
+    r.join().unwrap();
+    r.run(0).unwrap();
+    for _ in 0..4 {
+        wait(&mut r);
+    }
+    // saved and loaded with two seats, they go on the same
+    let save = Save::read(&r.save().write()).unwrap();
+    let mut loaded = Runner::load(&m, &save).unwrap();
+    loaded.run(0).unwrap();
+    assert_eq!(loaded.w.s.seats, r.w.s.seats, "the seat table goes with the save (M 5.2)");
+    r.leave_seat(2).unwrap();
+    r.run(0).unwrap();
+    wait(&mut r);
+    let text = r.input_log().write().unwrap();
+    assert!(text.contains(" 2 join\n") && text.contains(" 2 leave_seat\n"), "{text}");
+    let got = Replay::run(&m, &InputLog::read(&text).unwrap()).unwrap_or_else(|e| panic!("{e}\n{text}"));
+    assert!(got.w.s == r.w.s, "the replay joins and leaves as the game did (M 4.4)\n{text}");
+}

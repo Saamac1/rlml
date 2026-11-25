@@ -40,9 +40,18 @@ menu PAUSE
 
 ## Näppäimet
 
+> Peli alkaa liittymisruudusta (`JOIN`, M 8.2): istuin 1 on laite, joka
+> aloitti pelin, ja osa 2 liittyy näppäimellä `e`, peliohjain napilla
+> `start`. Sama näppäin aloittaa pelin, kun kumpikin istuin on liittynyt.
+> `esc` (osa 2: `x`) poistaa laitteen istuimen.
+
 > Istuin 1 pelaa näppäimistön osalla 1 (`hjkl` ja nuolet), istuin 2 osalla
 > 2 (`wasd`). Kytketty peliohjain ottaa istuimen 2 osalta 2 (M 8.2), ja
 > irrotettu ohjain palauttaa sen. Taukovalikko aukeaa kaikilta laitteilta.
+
+keys JOIN keyboard 2
+- join e
+- back x
 
 keys ALWAYS
 - open PAUSE esc

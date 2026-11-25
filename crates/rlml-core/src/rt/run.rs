@@ -69,6 +69,9 @@ pub struct Runner<'m> {
     /// Input waits counted for `on input every N`, and the wake counted last.
     inputs_seen: u32,
     counted: Option<Wake>,
+    /// Seats joined (`true`) and left in the action now, for its end
+    /// (M 6.1.7).
+    seat_calls: Vec<(SeatId, bool)>,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -96,6 +99,7 @@ impl<'m> Runner<'m> {
             auto_off: false,
             inputs_seen: 0,
             counted: None,
+            seat_calls: vec![],
         };
         // calls in `begin` are its own: checkpoint 0 is taken here anyway
         r.w.saves = Default::default();
@@ -313,8 +317,62 @@ impl<'m> Runner<'m> {
         self.w.end_action()?;
         let env = engine_env("<action end>");
         self.w.flush_created(&env)?;
+        self.seat_events()?;
         self.save_calls();
         Ok(())
+    }
+
+    /// The action end's seats (M 6.1.7 step 1): `join` and `part` by seat
+    /// number after the travels. After `part`'s handlers the seat's
+    /// members lose `seat`, and the seat is free.
+    fn seat_events(&mut self) -> RtResult<()> {
+        let mut calls = std::mem::take(&mut self.seat_calls);
+        calls.sort_by_key(|&(n, _)| n);
+        for (n, joined) in calls {
+            let env = engine_env(if joined { "join" } else { "part" });
+            self.w.emit_to(if joined { "join" } else { "part" }, vec![Value::Number(n as i64)], &env, Scope::General)?;
+            self.w.flush_created(&env)?;
+            if !joined {
+                self.w.s.part_seat(n);
+            }
+        }
+        Ok(())
+    }
+
+    /// `join` (M 8.2): a new seat with the lowest free number, as an action
+    /// of its own, while there are fewer than the game's `seats` most.
+    /// `join(seat)` gives it a character (STD `JOIN_PLAYER`).
+    pub fn join(&mut self) -> RtResult<Option<SeatId>> {
+        let hi = self.w.s.seat_range.1;
+        if self.w.s.seats.len() >= hi as usize {
+            return Ok(None);
+        }
+        let n = self.w.s.free_seat();
+        self.record(Some(n), super::input::Act::Join);
+        self.w.s.join_seat(n);
+        self.seat_calls.push((n, true));
+        self.end_action()?;
+        Ok(Some(n))
+    }
+
+    /// `leave_seat` (M 8.2): seat `n` leaves, as an action of its own, while
+    /// there are more seats than the game's `seats` least. `part(seat)`
+    /// keeps its members in the group (STD `PART_PLAYER`); the other seats
+    /// keep their numbers.
+    pub fn leave_seat(&mut self, n: SeatId) -> RtResult<bool> {
+        let lo = self.w.s.seat_range.0;
+        if self.w.s.seat(n).is_none() || self.w.s.seats.len() <= lo as usize {
+            return Ok(false);
+        }
+        self.record(Some(n), super::input::Act::Leave);
+        self.travels.remove(&n);
+        self.orders.remove(&n);
+        if self.awaiting == Some(n) {
+            self.awaiting = None;
+        }
+        self.seat_calls.push((n, false));
+        self.end_action()?;
+        Ok(true)
     }
 
     /// An actor's turn that is not the player's choice (M 6.1.5): `wake`,

@@ -12,6 +12,14 @@ ROBIN.NAME Robin
 RAT.NAME rotta
 MESSAGE.WALL {WHO} kolauttaa seinään.
 RAT.DESC Iso harmaa rotta. Se on nälkäinen.
+ENGINE.JOIN.TITLE Liity peliin
+ENGINE.JOIN.SEAT Istuin {N}
+ENGINE.JOIN.KEYBOARD näppäimistön osa {N}
+ENGINE.JOIN.PAD peliohjain {N}
+ENGINE.JOIN.WAITING odottaa laitetta
+ENGINE.JOIN.SKIPPED ohitettu
+ENGINE.JOIN.HINT Liity vapaalla laitteella (enter, e tai start) ja aloita samalla näppäimellä.
+
 PAUSE.TITLE Tauko
 PAUSE.RESUME Jatka
 PAUSE.QUIT Lopeta

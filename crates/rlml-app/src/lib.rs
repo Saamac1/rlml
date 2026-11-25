@@ -8,6 +8,7 @@ pub mod cursor;
 pub mod draw;
 pub mod events;
 pub mod input;
+pub mod join;
 pub mod menu;
 pub mod pad;
 pub mod panel;

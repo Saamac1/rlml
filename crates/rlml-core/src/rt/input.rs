@@ -57,6 +57,10 @@ pub enum Act {
     Step,
     /// A press that stopped a travel, or an order gone stale (M 8.1).
     Stop,
+    /// `join`: the row's seat joined (M 8.2).
+    Join,
+    /// `leave_seat`: the row's seat left.
+    Leave,
     /// The end of the log: the world went on to this moment.
     End,
 }
@@ -182,6 +186,8 @@ impl fmt::Display for Row {
             Act::Follow(e) => write!(f, " follow #{e}"),
             Act::Step => f.write_str(" step"),
             Act::Stop => f.write_str(" stop"),
+            Act::Join => f.write_str(" join"),
+            Act::Leave => f.write_str(" leave_seat"),
             Act::End => f.write_str(" end"),
         }
     }
@@ -299,6 +305,8 @@ fn read_row(line: &str) -> Result<Row, String> {
         },
         "step" => Act::Step,
         "stop" => Act::Stop,
+        "join" => Act::Join,
+        "leave_seat" => Act::Leave,
         name => {
             let mut args = Vec::new();
             for w in rest {
@@ -478,6 +486,18 @@ impl<'m> Replay<'m> {
                 self.status = self.r.run(0)?;
             }
             Act::Stop => self.r.stop_travel(seat),
+            Act::Join => {
+                if self.r.join().map_err(err)? != Some(seat) {
+                    return Err(err("the seat does not join as it did".into()));
+                }
+                self.status = self.r.run(0)?;
+            }
+            Act::Leave => {
+                if !self.r.leave_seat(seat).map_err(err)? {
+                    return Err(err("the seat does not leave".into()));
+                }
+                self.status = self.r.run(0)?;
+            }
             Act::End => {}
         }
         Ok(Some(row))

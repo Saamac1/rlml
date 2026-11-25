@@ -204,6 +204,13 @@ pub struct App<'m> {
     pub saves: Option<Saves<Box<dyn Store>>>,
     /// The game's profile file, when the front end gives a store (M 5.6).
     pub profile: Option<Profile<Box<dyn Store>>>,
+    /// The join screen, while it is open (M 8.2).
+    pub joining: Option<crate::join::JoinScreen>,
+    /// The device of the last press: it chose `new_game`, so it is seat 1.
+    last_device: Device,
+    /// The seats' devices came from the join screen or a join: a pad that
+    /// connects does not take a seat then.
+    chosen_devices: bool,
 }
 
 /// The asked parameters' list menu as a layer.
@@ -355,6 +362,9 @@ impl<'m> App<'m> {
             keyboard: false,
             saves: None,
             profile: None,
+            joining: None,
+            last_device: Device::Keyboard(1),
+            chosen_devices: false,
         };
         app.baud = crate::draw::log_baud(&app.r.w, "");
         match app.title() {
@@ -390,10 +400,97 @@ impl<'m> App<'m> {
         Ok(())
     }
 
-    /// Starts a new game with `seed` and runs it to the player's first turn
-    /// (M 5.1); the menus close. The profile's snapshot is taken from its
-    /// file now.
+    /// The game's `seats` least and most (D 3.3).
+    fn seat_range(&self) -> (u8, u8) {
+        let g = self.m.named_game();
+        let row = g.and_then(|g| g.items.iter().find(|i| i.key() == "seats")).map(|i| i.rest(1).to_string());
+        let (lo, hi) = row.as_deref().and_then(rlml_core::rt::world::seat_range).unwrap_or((1, 1));
+        (lo.min(hi).max(1), lo.max(hi).max(1))
+    }
+
+    /// A new game with `seed`: through the join screen when more than one
+    /// seat may play (M 8.2), with the device that chose it as seat 1.
     fn start(&mut self, seed: u64) -> RtResult<()> {
+        let range = self.seat_range();
+        if range.1 > 1 {
+            self.menus.clear();
+            self.playing = false;
+            self.joining = Some(crate::join::JoinScreen::new_game(seed, range, self.last_device));
+            return Ok(());
+        }
+        self.start_with(seed, None)
+    }
+
+    /// The join screen's start: a new game with its seats, or the save with
+    /// its seats' devices, skipped seats leaving and new ones joining.
+    fn finish_join(&mut self) -> RtResult<()> {
+        use crate::join::Slot as JoinSlot;
+        let Some(j) = self.joining.take() else { return Ok(()) };
+        match j.load {
+            None => {
+                let devices: Vec<Device> = j.seats.iter().filter_map(|(_, s)| if let JoinSlot::Taken(d) = s { Some(*d) } else { None }).collect();
+                self.start_with(j.seed, Some(devices.len() as u8))?;
+                self.seat_devices = (1..).zip(devices).collect();
+            }
+            Some(save) => {
+                let r = Runner::load(self.m, &save)?;
+                self.seed = r.w.s.game.seed;
+                self.play(r)?;
+                self.seat_devices.clear();
+                for (n, slot) in j.seats {
+                    let saved = save.now.s.seat(n).is_some();
+                    match slot {
+                        JoinSlot::Taken(d) if saved => {
+                            self.seat_devices.insert(n, d);
+                        }
+                        JoinSlot::Taken(d) => {
+                            if let Some(k) = self.r.join()? {
+                                self.seat_devices.insert(k, d);
+                            }
+                        }
+                        // a saved seat without a device leaves before the
+                        // first input (M 8.2)
+                        JoinSlot::Skipped | JoinSlot::Waiting => {
+                            self.r.leave_seat(n)?;
+                        }
+                    }
+                }
+                self.advance(0)?;
+            }
+        }
+        self.chosen_devices = true;
+        Ok(())
+    }
+
+    /// A press on the join screen, by `JOIN`'s bindings only.
+    fn join_press(&mut self, device: Device, press: &Press) -> RtResult<()> {
+        use crate::join::JoinStep;
+        let action = self.input.keys.lookup_only("JOIN", device, press).cloned();
+        let Some(j) = self.joining.as_mut() else { return Ok(()) };
+        let step = match action {
+            Some(Action::Engine(a)) => match a.as_str() {
+                "join" | "confirm" => j.join(device),
+                "back" => j.back(device),
+                "skip" => j.skip(),
+                _ => JoinStep::Stay,
+            },
+            _ => JoinStep::Stay,
+        };
+        match step {
+            JoinStep::Start => self.finish_join(),
+            JoinStep::Cancel => {
+                self.joining = None;
+                self.quit_game();
+                Ok(())
+            }
+            JoinStep::Stay => Ok(()),
+        }
+    }
+
+    /// Starts a new game with `seed` and `seats` joined seats (`None`: the
+    /// game's least) and runs it to the player's first turn (M 5.1); the
+    /// menus close. The profile's snapshot is taken from its file now.
+    fn start_with(&mut self, seed: u64, seats: Option<u8>) -> RtResult<()> {
         let file = match self.profile.as_mut() {
             Some(p) => {
                 let (file, warning) = p.load();
@@ -404,7 +501,7 @@ impl<'m> App<'m> {
             }
             None => None,
         };
-        let mut w = World::new_game_with(self.m, seed, None, file.as_deref())?;
+        let mut w = World::new_game_with(self.m, seed, seats, file.as_deref())?;
         w.begin()?;
         if let Some(saves) = self.saves.as_mut() {
             saves.new_session(self.m);
@@ -418,6 +515,14 @@ impl<'m> App<'m> {
     fn load(&mut self, slot: Slot) -> RtResult<()> {
         let Some(saves) = self.saves.as_mut() else { return Ok(()) };
         let save = saves.load(self.m, slot)?;
+        // more than one seat: each saved seat asks for its device (M 8.2)
+        let range = self.seat_range();
+        if range.1 > 1 {
+            self.menus.clear();
+            self.playing = false;
+            self.joining = Some(crate::join::JoinScreen::load(save, range));
+            return Ok(());
+        }
         let r = Runner::load(self.m, &save)?;
         self.seed = r.w.s.game.seed;
         self.play(r)
@@ -427,6 +532,7 @@ impl<'m> App<'m> {
     /// close.
     fn play(&mut self, r: Runner<'m>) -> RtResult<()> {
         self.r = r;
+        self.chosen_devices = false;
         self.view = View { truecolor: self.view.truecolor, ..View::default() };
         self.menus.clear();
         self.frames.clear();
@@ -521,6 +627,9 @@ impl<'m> App<'m> {
     /// connects takes a seat from a keyboard part, since it is plugged in
     /// to play.
     fn assign_devices(&mut self) {
+        if self.chosen_devices {
+            return;
+        }
         let parts = self.input.keys.keyboard_parts();
         let devices = [Device::Keyboard(1)].into_iter().chain(self.pads.iter().map(|&p| Device::Pad(p))).chain(parts.into_iter().filter(|&p| p != 1).map(Device::Keyboard));
         self.seat_devices = self.r.w.s.seats.iter().map(|s| s.n).zip(devices).collect();
@@ -537,6 +646,10 @@ impl<'m> App<'m> {
 
     pub fn pad_disconnected(&mut self, id: usize) {
         self.pads.retain(|&p| p != id);
+        // a seat whose pad went is played from keyboard part 1 (M 8.2)
+        if self.chosen_devices {
+            self.seat_devices.retain(|_, d| *d != Device::Pad(id));
+        }
         self.assign_devices();
     }
 
@@ -572,8 +685,12 @@ impl<'m> App<'m> {
         rlml_core::rt::rng::splitmix64(&mut s)
     }
 
-    /// The key contexts now: the game's, then the open menus' (M 8).
+    /// The key contexts now: the game's, then the open menus' (M 8); the
+    /// join screen's `JOIN` alone while it is open.
     pub fn contexts(&self) -> Vec<String> {
+        if self.joining.is_some() {
+            return vec!["JOIN".into()];
+        }
         self.stack.iter().cloned().chain(self.menus.contexts().map(String::from)).collect()
     }
 
@@ -606,6 +723,18 @@ impl<'m> App<'m> {
     }
 
     pub fn draw(&mut self) -> Frame {
+        if let Some(j) = &self.joining {
+            // the join screen: its lines in the window's middle (M 8.2)
+            let (w, h) = self.size;
+            let mut f = Frame::new(w, h);
+            let lines = j.lines(&self.r.w, &self.lang);
+            let width = lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+            let (x, y) = (w.saturating_sub(width) / 2, h.saturating_sub(lines.len()) / 2);
+            for (i, l) in lines.iter().enumerate() {
+                f.text(x, y + i, w.saturating_sub(x), l, termplate_core::frame::Role::Normal);
+            }
+            return f;
+        }
         self.view.marked = self.turn_marker();
         self.expire_verb();
         self.view.hover = match &self.verb_hint {
@@ -988,6 +1117,23 @@ impl<'m> App<'m> {
     /// there), the game's context on a turn from the awaited seat's device
     /// only; other presses are dropped.
     fn press(&mut self, device: Device, press: Press, now: Duration) -> RtResult<()> {
+        self.last_device = device;
+        if self.joining.is_some() {
+            return self.join_press(device, &press);
+        }
+        // `join` from a free device adds a seat mid-game (M 8.2); in a menu,
+        // a dialogue or a scene the press is dropped
+        if self.playing
+            && !self.menus.is_open()
+            && !self.seat_devices.values().any(|d| *d == device)
+            && matches!(self.input.keys.lookup_on(&self.contexts(), device, &press), Some(Action::Engine(a)) if a == "join")
+        {
+            if let Some(n) = self.r.join()? {
+                self.seat_devices.insert(n, device);
+                self.chosen_devices = true;
+            }
+            return self.advance(0);
+        }
         let always = self.input.keys.is_always(device, &press);
         // a key closes a held panel (D 11.5)
         if self.overlay.take().is_some() {
@@ -1150,6 +1296,18 @@ impl<'m> App<'m> {
                 self.last_round = now;
             }
             "save" => self.save_game(),
+            // the seat whose device opened the menu leaves (M 8.2)
+            "leave_seat" if self.playing => {
+                let owner = self.menu_owner.unwrap_or(self.last_device);
+                let seat = self.seat_devices.iter().find(|(_, d)| **d == owner).map(|(n, _)| *n).or_else(|| self.r.w.s.seats.first().map(|s| s.n));
+                if let Some(n) = seat
+                    && self.r.leave_seat(n)?
+                {
+                    self.seat_devices.remove(&n);
+                    self.menus.clear();
+                    self.advance(0)?;
+                }
+            }
             "reset_profile" => {
                 if let Some(p) = self.profile.as_mut() {
                     p.reset();

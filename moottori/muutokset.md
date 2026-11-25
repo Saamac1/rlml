@@ -4,6 +4,10 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (liittymisruutu):**
+- Laitteet tulevat liittymisruudusta, kun istuimia voi olla useampi. Kytketty peliohjain ei silloin ota istuinta, ja irrotettu ohjain jättää istuimensa näppäimistöosalle 1.
+- Kontekstin `JOIN` oletussidonnat ja tekstiavaimet `ENGINE.JOIN.*` (luku [8.2](08-syote.md#82-istuimet-ja-laitteet)).
+
 **Muutokset 25.11.2026 (moottorin komponentit):** luvun [3.4](03-pelin-tila.md#34-moottorin-komponentit) taulukkoon lisättiin `hearing` ja `sound`.
 
 **Muutokset 25.11.2026 (profiili):**

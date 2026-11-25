@@ -482,6 +482,17 @@ Vaiheet 0–2 tehdään nyt. Vaiheet 3–8 odottavat tallennusta, syötelokia, k
 
 ### Vaihe 3: istuimet ja syöte (odottaa tallennusta ja syötelokia)
 
+Tehty 25.11.2026 haarassa `claude/moninpeli-istuimet`:
+- **Ydin.** `Runner::join` ja `Runner::leave_seat` ovat omia toimintojaan. Niiden `join`- ja `part`-tapahtumat lähetetään toiminnon lopussa istuinnumeron järjestyksessä ennen rollbackia, ja `part`-käsittelijöiden jälkeen istuin vapautuu. Syötelokin rivit ovat `join` ja `leave_seat`, ja toisto ajaa ne.
+- **Tallennus.** Tallennus ja checkpoint sisältävät istuintaulun.
+- **Liittymisruutu** (`rlml-app/src/join.rs`, konteksti `JOIN`):
+  - uusi peli, kun istuimia voi olla yli yksi,
+  - latauksessa laite jokaiselle tallennetulle istuimelle, ja `skip` poistaa istuimen ennen ensimmäistä syötettä,
+  - uudet istuimet ylärajaan asti.
+- **Pelin aikana.** Vapaan laitteen `join` liittää istuimen kesken pelin, ja taukovalikon `leave_seat` poistaa valikon avanneen istuimen. Kohta näkyy vain, kun istuimia on yli alarajan.
+- **Ryhmäesimerkki** alkaa liittymisruudusta. Osa 2 liittyy näppäimellä `e`, ja tekstit ovat suomeksi.
+- **Ei tehty:** `idle` istuinkohtaisena. Ajastin on yhä yhteinen, ja mikä tahansa painallus nollaa sen.
+
 - Käyttöliittymän puolella `DeviceId`: näppäimistöosa tai peliohjain. Reititin kuvaa laitteen istuimeksi ja hylkää muiden istuinten painallukset (luku 6.5). Hiiri reititetään odotetulle istuimelle.
 - Liittymisruutu (konteksti `JOIN`), `join` kesken pelin, `leave_seat` ja latauksen uudelleenliittyminen.
 - Tallennukseen istuintaulu, ja syötelokiin rivit muodossa (istuin, toiminto).

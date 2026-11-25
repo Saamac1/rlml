@@ -270,6 +270,17 @@ fn items_hide_disable_and_open_menus() {
 }
 
 
+/// The group example past its join screen: keyboard part 1 chose the
+/// game, part 2 joins with `e`, and `enter` starts it (M 8.2).
+fn joined(m: &Model, seed: u64, size: (usize, usize)) -> rlml_core::rt::world::RtResult<App<'_>> {
+    let mut app = App::new(m, seed, size)?;
+    assert!(app.joining.is_some(), "more than one seat: the join screen");
+    app.key(key("e"), ms(0))?;
+    app.key(key("enter"), ms(0))?;
+    assert!(app.joining.is_none() && app.playing, "both seats joined");
+    Ok(app)
+}
+
 fn ryhma() -> MemFiles {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut files = MemFiles::default();
@@ -283,7 +294,7 @@ fn ryhma() -> MemFiles {
 fn the_turn_marker_flashes_and_blinks() {
     let f = ryhma();
     let m = model(&f);
-    let mut app = App::new(&m, 7, (40, 14)).unwrap();
+    let mut app = joined(&m, 7, (40, 14)).unwrap();
     assert!(app.players_turn());
     let p = app.r.w.s.player.unwrap();
     let reversed = |app: &mut App| {
@@ -326,7 +337,7 @@ fn the_camera_follows_the_group_and_falls_back_to_the_player() {
     use rlml_core::rt::value::Pos;
     let f = ryhma();
     let m = model(&f);
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     let members = app.r.w.s.players();
     let player = app.r.w.s.player.unwrap();
     let place = |app: &mut App, xs: &[i32]| {
@@ -356,7 +367,7 @@ fn the_map_shows_its_written_size_in_a_wide_window() {
     let f = ryhma();
     let m = model(&f);
     for size in [(34, 13), (80, 24)] {
-        let mut app = App::new(&m, 7, size).unwrap();
+        let mut app = joined(&m, 7, size).unwrap();
         let frame = app.draw();
         let r = app.view.map_rect.expect("the map is drawn");
         assert_eq!((r.x, r.y, r.w, r.h), (0, 0, 20, 8), "the written 20x8 in {size:?}: what the leash measures (M 7.1)");
@@ -374,7 +385,7 @@ fn the_map_shows_its_written_size_in_a_wide_window() {
         assert_eq!(rlml_app::draw::cell_at(&app.view, 0, 30, sy), None, "beside the map is no map cell");
     }
     // a window too small for the layout draws no map, and keeps no rect
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     app.draw();
     app.resize(10, 5);
     app.draw();
@@ -386,9 +397,9 @@ fn each_seat_plays_from_its_own_device() {
     use rlml_app::input::{Device, PadPress};
     let f = ryhma();
     let m = model(&f);
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     assert_eq!(app.seat_devices.get(&1), Some(&Device::Keyboard(1)));
-    assert_eq!(app.seat_devices.get(&2), Some(&Device::Keyboard(2)), "keyboard parts first (M 8.2)");
+    assert_eq!(app.seat_devices.get(&2), Some(&Device::Keyboard(2)), "part 2 joined with `e` (M 8.2)");
     assert_eq!(app.r.awaiting(), Some(1));
     // seat 2's key on seat 1's turn is dropped
     app.key(key("."), ms(10)).unwrap_or(());
@@ -398,17 +409,17 @@ fn each_seat_plays_from_its_own_device() {
     assert_eq!((app.r.awaiting(), app.r.w.s.game.time), (Some(2), t), "`.` is part 1's: dropped on seat 2's turn");
     app.key(key("q"), ms(30)).unwrap();
     assert_eq!(app.r.awaiting(), Some(1), "`q` is part 2's: seat 2 waited");
-    // a pad that connects plays seat 2 instead of keyboard part 2
+    // the join screen chose the devices: a pad that connects takes no seat
     app.pad(0, PadPress::parse("south").unwrap(), ms(40)).unwrap();
-    assert_eq!(app.r.awaiting(), Some(1), "seat 1's turn: the pad's press is dropped");
-    assert_eq!(app.seat_devices.get(&2), Some(&Device::Pad(0)), "pads before the other keyboard parts (M 8.2)");
+    assert_eq!(app.r.awaiting(), Some(1), "a free pad's press is dropped");
+    assert_eq!(app.seat_devices.get(&2), Some(&Device::Keyboard(2)));
     app.pad_disconnected(0);
-    assert_eq!(app.seat_devices.get(&2), Some(&Device::Keyboard(2)), "back to its keyboard part");
+    assert_eq!(app.seat_devices.get(&2), Some(&Device::Keyboard(2)));
     replays_the_same(&m, &app);
 }
 
 #[test]
-fn a_pad_takes_the_first_seat_without_a_device() {
+fn a_pad_joins_on_the_join_screen() {
     use rlml_app::input::{Device, PadPress};
     let f = {
         let mut f = ryhma();
@@ -425,8 +436,11 @@ fn a_pad_takes_the_first_seat_without_a_device() {
     };
     let m = model(&f);
     let mut app = App::new(&m, 7, (80, 24)).unwrap();
-    assert_eq!(app.seat_devices.get(&2), None, "one keyboard part: seat 2 has no device yet");
-    app.pad_connected(3);
+    // one keyboard part: the pad joins on the join screen with `south`,
+    // and the keyboard starts the game (M 8.2)
+    app.pad(3, PadPress::parse("south").unwrap(), ms(0)).unwrap();
+    app.key(key("enter"), ms(0)).unwrap();
+    assert!(app.playing);
     assert_eq!(app.seat_devices.get(&2), Some(&Device::Pad(3)));
     // seat 1 waits from the keyboard; the pad is seat 2's
     app.pad(3, PadPress::parse("south").unwrap(), ms(10)).unwrap();
@@ -564,7 +578,7 @@ fn the_mouse_follows_the_turn() {
     let g = f.game.get_mut("game.rlml").unwrap();
     *g = g.replace("- PLAYER HERO\n", "- PLAYER HERO\n- walk STD.MOVE\n");
     let m = model(&f);
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     // seat 1 waits; now it is seat 2's turn, and the mouse is seat 2's
     app.key(key("."), ms(10)).unwrap();
     assert_eq!(app.r.awaiting(), Some(2));
@@ -620,7 +634,7 @@ fn seat_2_waits_while_ticking(app: &mut App, n: u64) {
 #[test]
 fn the_cursor_opens_moves_and_travels_and_stays() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     let (x, y) = seat_at(&app, 1);
     press(&mut app, "c");
     assert_eq!(cursor_of(&app, 1), Some((x, y)), "it starts at the seat's hero");
@@ -641,7 +655,7 @@ fn the_cursor_opens_moves_and_travels_and_stays() {
 #[test]
 fn with_the_cursor_open_other_keys_do_nothing() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     press(&mut app, "c .");
     assert_eq!((app.r.awaiting(), app.r.w.s.game.time), (Some(1), 0), "`.` did not wait: the cursor's context is modal");
     press(&mut app, "backspace");
@@ -653,7 +667,7 @@ fn with_the_cursor_open_other_keys_do_nothing() {
 #[test]
 fn an_order_on_another_seats_turn_runs_on_the_seats_next_one() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     let (x, y) = seat_at(&app, 1);
     press(&mut app, ".");
     assert_eq!(app.r.awaiting(), Some(2));
@@ -676,7 +690,7 @@ fn an_order_on_another_seats_turn_runs_on_the_seats_next_one() {
 #[test]
 fn back_cancels_the_order_first() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     press(&mut app, ". c j enter");
     assert!(app.r.orders.contains_key(&1));
     press(&mut app, "backspace");
@@ -690,7 +704,7 @@ fn back_cancels_the_order_first() {
 #[test]
 fn seat_2_moves_its_cursor_from_its_keyboard_part_on_seat_1s_turn() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     assert_eq!(app.r.awaiting(), Some(1));
     let (x, y) = seat_at(&app, 2);
     press(&mut app, "x d");
@@ -728,7 +742,7 @@ fn examined(app: &App) -> usize {
 #[test]
 fn the_verbs_menu_shows_the_turns_shortcuts() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     let rows = screen(&mut app);
     let row = |rows: &str, label: &str| rows.lines().find(|l| l.contains(label)).unwrap().trim_end().to_string();
     assert!(row(&rows, "Odota").ends_with('.'), "seat 1 waits with `.`: {rows}");
@@ -744,7 +758,7 @@ fn the_verbs_menu_shows_the_turns_shortcuts() {
 #[test]
 fn a_verb_without_targets_runs_at_once() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     app.draw();
     let (x, y) = verb_row(&app, 2);
     app.mouse_press(click(), x, y, ms(10)).unwrap();
@@ -756,7 +770,7 @@ fn a_verb_without_targets_runs_at_once() {
 #[test]
 fn a_verb_takes_its_target_from_a_click() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     app.draw();
     let (x, y) = verb_row(&app, 0);
     app.mouse_press(click(), x, y, ms(10)).unwrap();
@@ -786,7 +800,7 @@ fn a_verb_takes_its_target_from_a_click() {
 #[test]
 fn a_right_click_drops_the_verb() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     app.draw();
     let (x, y) = verb_row(&app, 0);
     app.mouse_press(click(), x, y, ms(10)).unwrap();
@@ -798,7 +812,7 @@ fn a_right_click_drops_the_verb() {
 #[test]
 fn the_verbs_menu_from_the_keys() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     press(&mut app, "v");
     app.draw();
     assert_eq!(app.view.docked["VERBS"].focused, Some(0), "`focus VERBS` gives the menu the keys");
@@ -824,7 +838,7 @@ fn the_verbs_menu_from_the_keys() {
 #[test]
 fn the_verb_belongs_to_the_turn() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     app.draw();
     let (x, y) = verb_row(&app, 0);
     app.mouse_press(click(), x, y, ms(10)).unwrap();
@@ -844,7 +858,7 @@ fn coin_open(app: &App) -> bool {
 #[test]
 fn a_right_click_opens_the_verbs_that_fit_the_cell() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     app.draw();
     let (_, rp) = robin(&app);
     let (sx, sy) = screen_of(&app, rp.x, rp.y);
@@ -866,7 +880,7 @@ fn a_right_click_opens_the_verbs_that_fit_the_cell() {
 #[test]
 fn nothing_opens_where_no_verb_fits() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     app.draw();
     let (sx, sy) = screen_of(&app, 0, 0);
     app.mouse_press(rclick(), sx, sy, ms(10)).unwrap();
@@ -876,7 +890,7 @@ fn nothing_opens_where_no_verb_fits() {
 #[test]
 fn the_coin_from_the_look_cursor() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     let hero = seat_at(&app, 1);
     let (_, rp) = robin(&app);
     let step = if rp.x > hero.0 { "l" } else { "h" };
@@ -890,7 +904,7 @@ fn the_coin_from_the_look_cursor() {
 #[test]
 fn menus_take_the_mouse() {
     let m = model(&ryhma_walking());
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     press(&mut app, "esc");
     assert!(app.menus.is_open(), "the pause menu");
     app.draw();
@@ -947,7 +961,7 @@ fn aim_at(app: &App) -> Option<(i32, i32)> {
 #[test]
 fn a_key_bound_command_asks_its_from_parameter() {
     let m = model(&ryhma_asking(""));
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     press(&mut app, "i");
     assert_eq!(asked(&app).as_deref(), Some("list"), "a list of what to examine, no runtime error");
     press(&mut app, "backspace");
@@ -960,7 +974,7 @@ fn a_key_bound_command_asks_its_from_parameter() {
 #[test]
 fn the_aiming_cursor_stays_in_range() {
     let m = model(&ryhma_asking(""));
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     let (x, y) = seat_at(&app, 1);
     press(&mut app, "p");
     assert_eq!(aim_at(&app), Some((x, y)), "no candidates: the cursor starts at the player");
@@ -976,7 +990,7 @@ fn the_aiming_cursor_stays_in_range() {
 #[test]
 fn a_direction_is_one_key() {
     let m = model(&ryhma_asking(""));
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     press(&mut app, "o");
     assert_eq!(asked(&app).as_deref(), Some("direction"));
     press(&mut app, "l");
@@ -987,18 +1001,18 @@ fn a_direction_is_one_key() {
 #[test]
 fn targeting_auto_and_list() {
     let m = model(&ryhma_asking("auto"));
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     press(&mut app, "u");
     assert_eq!((asked(&app), examined(&app)), (None, 1), "`auto` takes the nearest candidate without asking");
     let m = model(&ryhma_asking("list"));
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     press(&mut app, "u");
     assert_eq!(asked(&app).as_deref(), Some("list"), "`list` shows the candidates");
     press(&mut app, "enter");
     assert_eq!((asked(&app), examined(&app)), (None, 1));
     // `cursor` starts at the nearest candidate
     let m = model(&ryhma_asking("cursor"));
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     let (_, rp) = robin(&app);
     press(&mut app, "u");
     assert_eq!(aim_at(&app), Some((rp.x, rp.y)), "Robin is the nearest other member");
@@ -1008,7 +1022,7 @@ fn targeting_auto_and_list() {
 #[test]
 fn the_mouse_aims_and_gives_directions() {
     let m = model(&ryhma_asking(""));
-    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
     app.draw();
     let (x, y) = seat_at(&app, 1);
     press(&mut app, "p");
@@ -1695,4 +1709,90 @@ fn a_sized_map_area_is_placed_as_a_panel() {
     let map = app.r.w.s.active_map().unwrap();
     let (sx, sy) = screen_of(&app, p.x, p.y);
     assert_eq!(rlml_app::draw::cell_at(&app.view, map, sx, sy), Some(p));
+}
+
+// ---- the join screen, joining and leaving (M 8.2, moninpeli vaihe 3) ----
+
+#[test]
+fn the_join_screen_starts_the_group_when_both_seats_joined() {
+    use rlml_app::input::Device;
+    let m = model(&ryhma());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    let s = screen(&mut app);
+    assert!(s.contains("Liity peliin") && s.contains("Istuin 1  näppäimistön osa 1"), "{s}");
+    press(&mut app, "enter");
+    assert!(app.joining.is_some(), "`seats 2..2`: one seat cannot start");
+    press(&mut app, "e");
+    assert!(screen(&mut app).contains("Istuin 2  näppäimistön osa 2"));
+    press(&mut app, "x");
+    assert!(!screen(&mut app).contains("Istuin 2"), "`back` from part 2 takes its seat away");
+    press(&mut app, "e e");
+    assert!(app.playing, "`e` again joins, and on a joined part confirms");
+    assert_eq!(app.seat_devices.get(&2), Some(&Device::Keyboard(2)));
+    assert_eq!(app.r.w.s.seats.len(), 2);
+}
+
+/// The minigame for one or two seats: a pad joins mid-game with `start`
+/// and pauses with `select`, and the pause menu has Leave.
+fn mini_two_seats() -> MemFiles {
+    let mut f = mini_with(|g| {
+        *g = g.replace("- keys GAME\n", "- keys GAME\n- seats 1..2\n");
+        g.push_str("\npad GAME\n- join start\n- WAIT south\n\npad ALWAYS\n- open PAUSE select\n");
+    });
+    let ui = f.game.get_mut("ui/main.rlml").unwrap();
+    *ui = ui.replace("menu PAUSE\n- RESUME\n", "menu PAUSE\n- RESUME\n- LEAVE leave_seat\n");
+    f
+}
+
+#[test]
+fn a_pad_joins_mid_game_and_leaves_from_the_pause_menu() {
+    use rlml_app::input::{Device, PadPress};
+    let m = model(&mini_two_seats());
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    press(&mut app, "enter");
+    assert!(app.playing && app.r.w.s.seats.len() == 1, "`seats 1..2`: one seat may start");
+    // one seat: the pause menu has no Leave
+    press(&mut app, "esc");
+    assert!(!screen(&mut app).contains("Leave"), "the last seat leaves by quitting");
+    press(&mut app, "esc");
+    // a free pad's `start` joins seat 2 (JOIN_PLAYER gives it a hero)
+    app.pad(5, PadPress::parse("start").unwrap(), ms(10)).unwrap();
+    assert_eq!(app.r.w.s.seats.len(), 2);
+    assert_eq!(app.seat_devices.get(&2), Some(&Device::Pad(5)));
+    let member = app.r.w.s.active(2).expect("seat 2 has a character");
+    // the pad pauses and leaves: its seat goes, its hero follows
+    app.pad(5, PadPress::parse("select").unwrap(), ms(20)).unwrap();
+    assert!(app.menus.is_open());
+    app.pad(5, PadPress::parse("dpad.down").unwrap(), ms(30)).unwrap();
+    app.pad(5, PadPress::parse("south").unwrap(), ms(40)).unwrap();
+    assert_eq!(app.r.w.s.seats.len(), 1, "seat 2 left");
+    assert!(app.r.w.s.seat(1).is_some(), "seat 1 kept its number");
+    assert_eq!(app.r.w.s.seat_of(member), None);
+    assert!(app.r.w.s.get(member).has("STD.FOLLOW"), "PART_PLAYER");
+    assert!(!app.seat_devices.contains_key(&2));
+    replays_the_same(&m, &app);
+}
+
+#[test]
+fn a_loaded_game_asks_a_device_for_each_saved_seat() {
+    use rlml_app::input::PadPress;
+    let m = model(&mini_two_seats());
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    app.set_store(Box::new(rlml_core::rt::store::MemStore::default()));
+    press(&mut app, "enter");
+    app.pad(5, PadPress::parse("start").unwrap(), ms(10)).unwrap();
+    let pad_hero = app.r.w.s.active(2).unwrap();
+    // quit saves both seats; Load game opens the join screen for them
+    press(&mut app, "esc j j enter");
+    assert!(!app.playing);
+    press(&mut app, "j enter enter");
+    assert!(app.joining.is_some(), "the save has two seats");
+    let s = screen(&mut app);
+    assert!(s.contains("Seat 1  waiting for a device") && s.contains("Seat 2  waiting for a device"), "{s}");
+    // the keyboard takes seat 1, seat 2 is skipped, and the game goes on
+    press(&mut app, "enter tab enter");
+    assert!(app.playing);
+    assert_eq!(app.r.w.s.seats.len(), 1, "the skipped seat left before the first input");
+    assert_eq!(app.r.w.s.seat_of(pad_hero), None);
+    assert!(app.r.w.s.get(pad_hero).has("STD.FOLLOW"), "as by `part`");
 }

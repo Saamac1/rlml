@@ -147,6 +147,8 @@ fn defaults() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
         ("MENU", menu.clone()),
         ("DIALOGUE", menu),
         ("SCENE", vec![("confirm", "enter space"), ("skip", "tab"), ("restart", "r"), ("rewind", "backspace")]),
+        // a free device's `join` is a joined one's `confirm` (M 8.2)
+        ("JOIN", vec![("join", "enter"), ("back", "esc"), ("skip", "tab")]),
         ("AIM", cursor.to_vec()),
         ("LOOK", cursor.to_vec()),
         ("DIRECTION", cursor.to_vec()),
@@ -172,6 +174,7 @@ fn pad_defaults() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
         ("MENU", menu.clone()),
         ("DIALOGUE", menu),
         ("SCENE", vec![("confirm", "south"), ("skip", "start"), ("rewind", "east")]),
+        ("JOIN", vec![("join", "start south"), ("back", "east"), ("skip", "select")]),
         ("AIM", cursor.clone()),
         ("LOOK", cursor.clone()),
         ("DIRECTION", cursor),
@@ -337,6 +340,12 @@ impl Keys {
     }
 
     /// Is an action `ALWAYS`'s for this press?
+    /// A press in one context only, without `ALWAYS`: the join screen's
+    /// `back` is `esc`, which pauses elsewhere.
+    pub fn lookup_only(&self, context: &str, device: Device, press: &Press) -> Option<&Action> {
+        self.contexts.get(context).and_then(|c| c.find(device, press))
+    }
+
     pub fn is_always(&self, device: Device, press: &Press) -> bool {
         self.contexts.get("ALWAYS").is_some_and(|c| c.find(device, press).is_some())
     }

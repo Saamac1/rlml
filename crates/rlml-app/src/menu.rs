@@ -177,6 +177,11 @@ impl Layer {
             if item.hide.as_ref().is_some_and(|e| holds(w, &menu, e)) {
                 continue;
             }
+            // `leave_seat` shows while there are more seats than the
+            // game's least; the last seat leaves by `quit` (M 8.2)
+            if item.action == ItemAction::Engine("leave_seat".into()) && w.s.seats.len() <= w.s.seat_range.0.max(1) as usize {
+                continue;
+            }
             // `save` shows dim where the player cannot save (M 5.2)
             let no_save = item.action == ItemAction::Engine("save".into()) && w.save_blocked();
             let enabled = !no_save && !item.disabled.as_ref().is_some_and(|e| holds(w, &menu, e));
