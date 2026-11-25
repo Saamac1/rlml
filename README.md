@@ -88,7 +88,7 @@ RLML on roguelike-pelien kuvauskieli: pelin data kirjoitetaan tekstitiedostoina 
 
 `crates/` sisältää Rust-toteutuksen: lataajan, joka lukee pelin ja vakiokirjaston (`lib/std.rlml`, `lib/std/`) ja tarkistaa ne latausvirheiden ja -varoitusten osalta ([M 2](moottori/02-lataus.md)). RogueScript jäsennetään kokonaan ([RS 12](roguescript/12-kielioppi.md)), ja lataus tarkistaa logiikasta nimet, paikalliset nimet, odotusten ja kyselyjen säännöt sekä moottorin funktiot. Tyypit päätellään ja tarkistetaan asteittain: tyyppi, jota ei voi päätellä, ei aiheuta virhettä.
 
-Ajo ([M 3–6](moottori/README.md)) on mukana myös ilman käyttöliittymää: `rlml run` pelaa uuden pelin, jossa jokainen näppäin on yksi pelaajan vuoro, ja tulostaa jokaisen vuoron jälkeen kartan, HP:n ja lokin. Sama siemen ja samat näppäimet tuottavat aina saman tulosteen.
+Ajo ([M 3–6](moottori/README.md)) on mukana myös ilman käyttöliittymää: `rlml run` pelaa uuden pelin, jossa jokainen näppäin on yksi pelaajan vuoro, ja tulostaa jokaisen vuoron jälkeen kartan, HP:n ja lokin. Sama siemen ja samat näppäimet tuottavat aina saman tulosteen. `--log-out FILE` kirjoittaa pelikerran syötelokin ([M 4.4](moottori/04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)), myös `rlml play` -komennolla, ja `rlml replay PELI LOKI` toistaa sen.
 
 ```sh
 cargo run -p rlml -- check esimerkit/mini

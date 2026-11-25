@@ -133,13 +133,27 @@ impl World<'_> {
     /// members, or the whole map.
     pub fn player_view(&mut self, map: MapId) -> BTreeSet<(i32, i32)> {
         if let Some(v) = self.shared_view(map) {
-            self.last_view = Some((map, v.clone()));
             return v;
         }
         let m = &self.s.maps[map];
         match &self.last_view {
             Some((lm, v)) if *lm == map => v.clone(),
             _ => (0..m.height).flat_map(|y| (0..m.width).map(move |x| (x, y))).collect(),
+        }
+    }
+
+    /// What the players see now is remembered, and their view is kept for
+    /// when they are gone (M 7.2). The runner calls this whenever it
+    /// stops to wait, so memory, which routes use,
+    /// does not depend on what was drawn (M 3.1, M 4.4).
+    pub fn see(&mut self) {
+        let Some(map) = self.s.active_map() else { return };
+        let Some(view) = self.shared_view(map) else { return };
+        self.last_view = Some((map, view.clone()));
+        for cell in view {
+            if !self.s.maps[map].remembered.contains(&cell) {
+                self.s.maps[map].remembered.push(cell);
+            }
         }
     }
 
@@ -153,13 +167,10 @@ impl World<'_> {
     pub fn render_cells(&mut self, map: MapId) -> Vec<Vec<Look>> {
         let view = self.player_view(map);
         let (w, h) = (self.s.maps[map].width, self.s.maps[map].height);
-        // what the player now sees is remembered (M 7.2)
-        for &cell in &view {
-            if !self.s.maps[map].remembered.contains(&cell) {
-                self.s.maps[map].remembered.push(cell);
-            }
-        }
-        let remembered: BTreeSet<(i32, i32)> = self.s.maps[map].remembered.iter().copied().collect();
+        // what is in view shows as remembered too; drawing does not write
+        // the memory, which `see` does at fixed points (M 4.4)
+        let mut remembered: BTreeSet<(i32, i32)> = self.s.maps[map].remembered.iter().copied().collect();
+        remembered.extend(view.iter().copied());
         let blank = Look { ch: ' ', fg: None, bg: None };
         let mut grid = vec![vec![blank; w as usize]; h as usize];
         let mut drawn = vec![vec![false; w as usize]; h as usize];

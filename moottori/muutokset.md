@@ -4,6 +4,12 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (syöteloki, toteutus):** toteutus tarkensi lukua [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki):
+- Kierrokset ilman vuoroa eivät ole rivejä. Rivin hetki kertoo, mihin asti toisto ajaa kierroksia, ja loki päättyy `end`-riviin. `pass`-riviä ei ole.
+- `idle` kirjataan ajettuna komentona, koska se on pelaajan asetus.
+- Seuraamisen kohde kirjataan valmiina entiteettinä.
+- Muisti ja viimeinen yhteinen näkökenttä päivittyvät, kun ajo pysähtyy, eivät piirrettäessä (luku [7.2](07-esitys.md#72-kartan-piirtäminen)).
+
 **Muutokset 25.11.2026 (syöteloki):**
 - Uusi luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki), joka kuvaa syötelokin:
   - lähtötila on aloituksen syötteet tai tallennus,

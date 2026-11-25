@@ -45,6 +45,21 @@ fn key(s: &str) -> Binding {
     parse_binding(s).unwrap()
 }
 
+/// The app's input log, written and read back, replays to the same game
+/// (M 4.4): what keys, clicks, `idle`, travels and verbs ran is in it.
+fn replays_the_same(m: &Model, app: &App) {
+    use rlml_core::rt::input::{InputLog, Replay};
+    let text = app.r.input_log().write().unwrap();
+    let log = InputLog::read(&text).unwrap();
+    let r = Replay::run(m, &log).unwrap_or_else(|e| panic!("{e}\n{text}"));
+    for (i, (a, b)) in r.w.s.maps.iter().zip(&app.r.w.s.maps).enumerate() {
+        assert!(a == b, "map {i} differs: memory, which routes use, is state (M 3.1)\n{text}");
+    }
+    assert!(r.w.s == app.r.w.s, "the replayed state differs\n{text}");
+    assert_eq!(r.w.rng, app.r.w.rng);
+    assert_eq!(r.w.log, app.r.w.log);
+}
+
 fn ms(n: u64) -> Duration {
     Duration::from_millis(n)
 }
@@ -69,6 +84,7 @@ fn keys_move_the_player_and_walls_take_no_time() {
     assert_eq!(app.r.w.s.game.time, 240, "takes no time (M 6.1.5)");
     let frame = app.draw();
     assert_eq!(frame.rows()[2].chars().nth(10 + (x + 2) as usize), Some('@'));
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -102,6 +118,7 @@ fn idle_gives_the_turn_away() {
     app.key(key("s"), ms(1500)).unwrap();
     app.tick(ms(2400)).unwrap();
     assert_eq!(app.r.w.s.game.time, 240, "a key starts the time again");
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -111,6 +128,7 @@ fn idle_with_the_players_ai() {
     let mut app = App::new(&m, 7, (40, 12)).unwrap();
     app.tick(ms(1000)).unwrap();
     assert!(app.r.w.s.game.time > 0, "the player's HUNTER chose a command (M 6.1.2)");
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -372,6 +390,7 @@ fn each_seat_plays_from_its_own_device() {
     assert_eq!(app.seat_devices.get(&2), Some(&Device::Pad(0)), "pads before the other keyboard parts (M 8.2)");
     app.pad_disconnected(0);
     assert_eq!(app.seat_devices.get(&2), Some(&Device::Keyboard(2)), "back to its keyboard part");
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -464,6 +483,7 @@ fn a_click_on_the_map_travels_there() {
     assert_eq!(player_at(&app), (x + 2, y), "two steps east");
     assert!(!app.r.travelling(1), "arrived");
     assert_eq!(app.r.w.s.game.time, 240, "each step is a turn of its own");
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -483,6 +503,7 @@ fn a_key_stops_the_travel_and_does_nothing_else() {
     app.key(key("l"), ms(20)).unwrap();
     assert!(!app.r.travelling(1), "the key stopped it");
     assert_eq!((player_at(&app).1, app.r.w.s.game.time), (y1, t), "and did not move east");
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -549,6 +570,7 @@ fn the_mouse_follows_the_turn() {
     run_ticks(&mut app, 20, 5);
     assert_eq!(app.r.w.s.at(b), Some(target), "seat 2's hero went");
     assert_eq!(app.r.w.s.at(a), Some(pa), "seat 1's did not");
+    replays_the_same(&m, &app);
 }
 
 // ---- the staying cursor (M 8.1, M 8.2) ----
@@ -599,6 +621,7 @@ fn the_cursor_opens_moves_and_travels_and_stays() {
     assert_eq!(cursor_of(&app, 1), Some((x, y + 2)), "the cursor stays (M 8.1)");
     press(&mut app, "c");
     assert_eq!(cursor_of(&app, 1), None, "`cursor` closes it");
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -633,6 +656,7 @@ fn an_order_on_another_seats_turn_runs_on_the_seats_next_one() {
     seat_2_waits_while_ticking(&mut app, 40);
     assert_eq!(seat_at(&app, 1), (x, y + 2), "the order took seat 1 there");
     assert!(!app.r.orders.contains_key(&1));
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -646,6 +670,7 @@ fn back_cancels_the_order_first() {
     assert!(cursor_of(&app, 1).is_some(), "the cursor stayed");
     press(&mut app, "backspace");
     assert_eq!(cursor_of(&app, 1), None);
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -662,6 +687,7 @@ fn seat_2_moves_its_cursor_from_its_keyboard_part_on_seat_1s_turn() {
     assert!(app.view.hover.is_some(), "the hover shows the cursor moved last");
     press(&mut app, "x");
     assert_eq!(cursor_of(&app, 2), None);
+    replays_the_same(&m, &app);
 }
 
 // ---- the verbs menu (M 8.1) ----
@@ -710,6 +736,7 @@ fn a_verb_without_targets_runs_at_once() {
     app.mouse_press(click(), x, y, ms(10)).unwrap();
     assert_eq!(app.r.awaiting(), Some(2), "Odota waited for seat 1");
     assert!(app.verb.is_none());
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -739,6 +766,7 @@ fn a_verb_takes_its_target_from_a_click() {
     assert!(app.verb.is_none(), "the command ran");
     assert_eq!(app.r.awaiting(), Some(1), "EXAMINE is free: still seat 1's turn");
     assert_eq!(app.r.w.text("fi", &app.r.w.log.last().unwrap().key, &app.r.w.log.last().unwrap().args), "Robin: Robin, uskollinen seuralainen.");
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -776,6 +804,7 @@ fn the_verbs_menu_from_the_keys() {
     // `back` in the focused menu gives the keys back without a verb
     press(&mut app, "v backspace");
     assert!(app.focus.is_none() && app.verb.is_none());
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -789,6 +818,7 @@ fn the_verb_belongs_to_the_turn() {
     press(&mut app, ".");
     app.draw();
     assert!(app.verb.is_none(), "seat 1's turn ended");
+    replays_the_same(&m, &app);
 }
 
 // ---- the verb coin and the mouse in menus (M 8.1) ----
@@ -910,6 +940,7 @@ fn a_key_bound_command_asks_its_from_parameter() {
     assert_eq!(asked(&app), None, "`back` drops the command");
     assert!(!app.menus.is_open());
     assert_eq!((app.r.awaiting(), app.r.w.s.game.time, examined(&app)), (Some(1), 0, 0), "and takes no time");
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -925,6 +956,7 @@ fn the_aiming_cursor_stays_in_range() {
     assert!(app.view.cursors.iter().any(|p| Some((p.x, p.y)) == aim_at(&app)), "the aim is marked");
     press(&mut app, "enter");
     assert_eq!((asked(&app), examined(&app)), (None, 1));
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -935,6 +967,7 @@ fn a_direction_is_one_key() {
     assert_eq!(asked(&app).as_deref(), Some("direction"));
     press(&mut app, "l");
     assert_eq!((asked(&app), examined(&app)), (None, 1));
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -955,6 +988,7 @@ fn targeting_auto_and_list() {
     let (_, rp) = robin(&app);
     press(&mut app, "u");
     assert_eq!(aim_at(&app), Some((rp.x, rp.y)), "Robin is the nearest other member");
+    replays_the_same(&m, &app);
 }
 
 #[test]
@@ -975,6 +1009,7 @@ fn the_mouse_aims_and_gives_directions() {
     press(&mut app, "o");
     app.mouse_press(click(), sx, sy, ms(30)).unwrap();
     assert_eq!((asked(&app), examined(&app)), (None, 2), "a click gives the direction towards it");
+    replays_the_same(&m, &app);
 }
 
 #[test]

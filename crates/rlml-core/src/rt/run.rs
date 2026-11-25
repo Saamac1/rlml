@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 
 use super::eval::{BodyKind, Env, Outcome, Scope, Suspended};
+use super::input::InputLog;
 use super::state::{SeatId, Wake};
 use super::travel::{Order, Travel, TravelFields};
 use super::value::{CommandValue, EntityId, MapId, Value};
@@ -27,6 +28,7 @@ pub enum Status {
     NoPlayer { rounds: i64 },
 }
 
+#[derive(Clone)]
 pub struct Runner<'m> {
     pub w: World<'m>,
     /// Commands waiting at `wait`, by actor (M 6.1.6).
@@ -47,6 +49,8 @@ pub struct Runner<'m> {
     pub orders: BTreeMap<SeatId, Order>,
     /// The `game` fields of travel (D 3.3).
     pub fields: TravelFields,
+    /// The input run so far (M 4.4).
+    pub inputs: InputLog,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -56,7 +60,8 @@ fn engine_env(name: &str) -> Env {
 impl<'m> Runner<'m> {
     pub fn new(w: World<'m>) -> Runner<'m> {
         let fields = TravelFields::read(w.m);
-        Runner { w, waiting: BTreeMap::new(), woke: BTreeMap::new(), awaiting: None, travels: BTreeMap::new(), orders: BTreeMap::new(), fields }
+        let inputs = InputLog { seed: w.s.game.seed, seats: w.s.seats.len() as SeatId, ..InputLog::default() };
+        Runner { w, waiting: BTreeMap::new(), woke: BTreeMap::new(), awaiting: None, travels: BTreeMap::new(), orders: BTreeMap::new(), fields, inputs }
     }
 
     /// The seat whose input is awaited, after `run` returned `Input`.
@@ -111,6 +116,12 @@ impl<'m> Runner<'m> {
     /// `run`, calling `seen` after every actor's turn and every round, for
     /// the presentation's in-between frames (M 7.2).
     pub fn run_with(&mut self, rounds: i64, seen: &mut dyn FnMut(&mut World)) -> RtResult<Status> {
+        let status = self.run_on(rounds, seen)?;
+        self.w.see();
+        Ok(status)
+    }
+
+    fn run_on(&mut self, rounds: i64, seen: &mut dyn FnMut(&mut World)) -> RtResult<Status> {
         let start_turn = self.w.s.game.turn();
         loop {
             let Some(map) = self.w.s.active_map() else { return Ok(Status::NoPlayer { rounds: 0 }) };
@@ -334,6 +345,12 @@ impl<'m> Runner<'m> {
     /// (M 6.1.5). Input from a seat that is not awaited is an error; the
     /// front end drops such presses (M 8.2).
     pub fn input(&mut self, n: SeatId, cmd: &CommandValue) -> RtResult<bool> {
+        self.check_input(n)?;
+        self.record_command(n, cmd);
+        self.run_input(n, cmd)
+    }
+
+    fn check_input(&self, n: SeatId) -> RtResult<()> {
         // only the seat `run` returned `Input` for: the member it waits for
         // was the controlled one when the turn was chosen (M 6.1.10)
         if self.awaiting != Some(n) {
@@ -348,6 +365,15 @@ impl<'m> Runner<'m> {
         if wake.at > self.clock(map) {
             return Err("it is not the player's turn".into());
         }
+        Ok(())
+    }
+
+    /// `input` without a row in the log: a travel's step, whose row is
+    /// `step` (M 4.4).
+    pub(crate) fn run_input(&mut self, n: SeatId, cmd: &CommandValue) -> RtResult<bool> {
+        self.check_input(n)?;
+        let p = self.w.s.player.ok_or("no player")?;
+        let Some(wake) = self.w.s.wake_of(p) else { return Err("the player has no turn now".into()) };
         self.w.s.unschedule(p);
         self.woke.remove(&p);
         self.awaiting = None;

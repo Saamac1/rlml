@@ -2,6 +2,7 @@
 //! (D 11.3), turns from the scheduler and a text frame after each of the
 //! player's turns. Same seed and keys, same transcript.
 
+use super::input::{InputLog, Replay};
 use super::run::{Runner, Status};
 use super::value::{CommandValue, Value};
 use super::world::{RtResult, World};
@@ -77,35 +78,42 @@ impl<'m> Session<'m> {
     /// The frame: turn, time, the player's HP, the active map and the new
     /// log lines.
     pub fn frame(&mut self) -> String {
-        let w = &mut self.r.w;
-        let mut out = format!("turn {}  time {}", w.s.game.turn(), w.s.game.time);
-        if let Some(p) = w.s.player {
-            let hp = w.m.resolve(None, "HP").ok().map(|d| d.full.clone()).and_then(|hp| w.s.get(p).get(&hp).cloned());
-            if let Some(hp) = hp {
-                let now = hp.get("now").and_then(Value::as_number).unwrap_or(0);
-                let max = hp.get("max").and_then(Value::as_number).unwrap_or(0);
-                out.push_str(&format!("  HP {now}/{max}"));
-            }
-            if !w.s.get(p).alive {
-                out.push_str("  (dead)");
-            }
-        }
-        out.push('\n');
-        if let Some(map) = w.s.active_map() {
-            out.push_str(&format!("[{}]\n", w.s.maps[map].name));
-            for row in w.render(map) {
-                out.push_str(&row);
-                out.push('\n');
-            }
-        }
-        let lines: Vec<String> = w.log[self.log_seen..].iter().map(|l| w.text(&self.lang, &l.key, &l.args)).collect();
-        self.log_seen = w.log.len();
-        for l in lines {
-            out.push_str(&format!("  · {l}\n"));
-        }
-        out
+        frame(&mut self.r.w, &self.lang, &mut self.log_seen)
     }
+}
 
+/// A frame of `w` (see [`Session::frame`]); `log_seen` counts the log
+/// lines already shown.
+pub fn frame(w: &mut World, lang: &str, log_seen: &mut usize) -> String {
+    let mut out = format!("turn {}  time {}", w.s.game.turn(), w.s.game.time);
+    if let Some(p) = w.s.player {
+        let hp = w.m.resolve(None, "HP").ok().map(|d| d.full.clone()).and_then(|hp| w.s.get(p).get(&hp).cloned());
+        if let Some(hp) = hp {
+            let now = hp.get("now").and_then(Value::as_number).unwrap_or(0);
+            let max = hp.get("max").and_then(Value::as_number).unwrap_or(0);
+            out.push_str(&format!("  HP {now}/{max}"));
+        }
+        if !w.s.get(p).alive {
+            out.push_str("  (dead)");
+        }
+    }
+    out.push('\n');
+    if let Some(map) = w.s.active_map() {
+        out.push_str(&format!("[{}]\n", w.s.maps[map].name));
+        for row in w.render(map) {
+            out.push_str(&row);
+            out.push('\n');
+        }
+    }
+    let lines: Vec<String> = w.log[*log_seen..].iter().map(|l| w.text(lang, &l.key, &l.args)).collect();
+    *log_seen = w.log.len();
+    for l in lines {
+        out.push_str(&format!("  · {l}\n"));
+    }
+    out
+}
+
+impl<'m> Session<'m> {
     /// Presses a key on the player's turn and runs to the next one. Returns
     /// a note for the transcript.
     pub fn press(&mut self, key: &str) -> RtResult<String> {
@@ -144,6 +152,11 @@ impl<'m> Session<'m> {
 
 /// Plays keys from a new game and gives the whole transcript.
 pub fn transcript(m: &Model, seed: u64, keys: &[&str]) -> RtResult<String> {
+    Ok(transcript_and_log(m, seed, keys)?.0)
+}
+
+/// `transcript` and the session's input log (M 4.4).
+pub fn transcript_and_log(m: &Model, seed: u64, keys: &[&str]) -> RtResult<(String, InputLog)> {
     let mut s = Session::start(m, seed)?;
     let mut out = format!("seed {seed}\n");
     out.push_str(&s.frame());
@@ -151,6 +164,27 @@ pub fn transcript(m: &Model, seed: u64, keys: &[&str]) -> RtResult<String> {
         let note = s.press(k)?;
         out.push_str(&format!("\n> {k}  {note}\n"));
         out.push_str(&s.frame());
+    }
+    Ok((out, s.r.input_log()))
+}
+
+/// Replays an input log and gives a transcript: the first frame, then each
+/// row and the frame after it (M 4.4).
+pub fn replay_transcript(m: &Model, log: &InputLog) -> RtResult<String> {
+    let lang = m.settings().get("language").map(|i| i.rest(1).to_string()).unwrap_or_default();
+    let mut rp = Replay::start(m, log)?;
+    let mut seen = 0;
+    let mut out = format!("seed {}\n", log.seed);
+    out.push_str(&frame(&mut rp.r.w, &lang, &mut seen));
+    loop {
+        let before = rp.r.w.s.game.time;
+        let Some(row) = rp.step()? else { break };
+        // the end shows only when the world went on to it
+        if row.act == super::input::Act::End && rp.r.w.s.game.time == before {
+            continue;
+        }
+        out.push_str(&format!("\n> {row}\n"));
+        out.push_str(&frame(&mut rp.r.w, &lang, &mut seen));
     }
     Ok(out)
 }

@@ -2,6 +2,7 @@
 //! the interpreter and the scheduler.
 
 pub mod eval;
+pub mod input;
 pub mod rng;
 pub mod play;
 pub mod run;

@@ -51,17 +51,18 @@ Syöteloki kirjaa pelikerran syötteet siinä järjestyksessä kuin moottori aja
 
 - **Lähtötila.** Uudessa pelissä lähtötila on aloituksen syötteet: siemen, profiilin tilannekuva ja liitettyjen istuinten määrä (luku [5.1](05-aloitus-tallennus-ja-checkpointit.md#51-uusi-peli)). Toisto laskee niistä checkpointin 0 kuten uusi peli. Lokin lähtötila voi olla myös tallennus (luku [5.2](05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)). Silloin toisto lataa tallennuksen ja ajaa lokin siitä eteenpäin.
 - **Rivi** on (istuin, toiminto, argumentit) ja hetki `game.time`, jolloin moottori ajoi sen. Istuin on se, jonka syötettä moottori odotti, tai `join`-rivillä uusi istuin. Yksinpelissä istuin on 1.
-- **Hetki on tarkistus.** Toisto vertaa jokaisen rivin hetkeä omaan `game.time`-arvoonsa ennen rivin ajoa. Jos hetket eroavat, data tai moottori on muuttunut lokin kirjoittamisen jälkeen. Toisto pysähtyy silloin ajon varoitukseen, joka kertoo rivin, eikä ajoa jatketa väärällä syötteellä.
+- **Kierrokset ilman vuoroa.** Kun moottori ei odota kenenkään syötettä, kierrokset kulkevat `round`-tahdissa tai `pass`-painalluksesta (luku [6.1.2](06-ajo.md#612-toimijat-ja-ajoitin)). Ne eivät ole rivejä. Toisto ajaa kierroksia, kunnes seuraavan rivin hetki on käsillä.
+- **Hetki on tarkistus.** Toisto vertaa jokaisen rivin hetkeä omaan `game.time`-arvoonsa ennen rivin ajoa. Jos hetket eroavat, data tai moottori on muuttunut lokin kirjoittamisen jälkeen. Toisto pysähtyy silloin ajon virheeseen, joka kertoo rivin, eikä ajoa jatketa väärällä syötteellä.
+- **Loppu.** Lokin viimeinen rivi on `end` hetkineen, joten toisto ajaa myös viimeisen syötteen jälkeiset kierrokset.
 
 **Mitä kirjataan.** Lokiin kirjataan syöte, jonka vaikutus riippuu muustakin kuin pelin tilasta. Rivi kirjataan vasta, kun moottori ajaa toiminnon, ei painalluksen hetkellä.
 
 | Syöte | Rivi |
 | --- | --- |
 | pelaajan komento | komento täytettyine argumentteineen, myös parametrikyselyn vastaukset, `count`-lähteen luku ([RS 7.1](../roguescript/07-komennot-ja-tekoaly.md#71-komennot)) ja verbivalikon klikkaukset (luku [8.1](08-syote.md#81-hiiri)); näppäimiä, klikkauksia ja kyselyn vaiheita ei kirjata |
-| `pass` | `pass` |
-| `idle`-ajastimen laukeaminen | `idle`; toisto laskee komennon uudelleen tekoälystä tai varakomennosta (luku [6.1.2](06-ajo.md#612-toimijat-ja-ajoitin)) |
+| `idle`-ajastimen laukeaminen | ajettu komento kuten pelaajan komento; `idle` on pelaajan asetus eikä pelin dataa ([D 3.2](../dataformaatit/03-tiedostot-ja-include.md#32-pelaajan-oma-data)), joten toisto ei laske komentoa uudelleen (luku [6.1.2](06-ajo.md#612-toimijat-ja-ajoitin)) |
 | klikkausmatka | `travel_to` kohderuutuineen, koska osoitin ei kuulu tilaan; toisto laskee askeleet uudelleen (luku [8.1](08-syote.md#81-hiiri)) |
-| seuraaminen | `follow` kohteineen ja jokainen seuraajan vuoro rivinä `follow.step`, jonka toisto laskee uudelleen |
+| seuraaminen | `follow` kohteineen, myös `leader`-kyselyn antama kohde, ja jokainen seuraajan vuoro rivinä `follow.step`, jonka toisto laskee uudelleen; matkan askeleet ovat samoin rivejä |
 | matkan tai seuraamisen katkaisu | `stop`; painallus, joka katkaisee, ja vanhentuneen ennakkokäskyn peruutus kirjataan näin, koska talteen otettu näkökenttä ei kuulu tilaan |
 | ennakkokäsky | käskyn matka tai seuraaminen silloin, kun moottori ajaa sen, ei silloin, kun käsky annettiin |
 | istuimet | `join` ja `leave_seat` (luku [8.2](08-syote.md#82-istuimet-ja-laitteet)) |
@@ -78,9 +79,11 @@ seed 7  seats 2
 0      1 STD.MOVE dir: north
 120    2 STD.MOVE dir: west
 240    1 travel_to pos(14, 6)
-600    1 stop
-600    2 STD.WAIT
+240    1 follow.step
+360    1 stop
+360    2 STD.WAIT
 840    3 join
+960    end
 ```
 
 ---

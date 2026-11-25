@@ -8,6 +8,7 @@
 
 use std::collections::BTreeSet;
 
+use super::input::Act;
 use super::run::Runner;
 use super::state::SeatId;
 use super::value::{CommandValue, Dir, EntityId, MapId, Pos, Value};
@@ -162,7 +163,11 @@ impl<'m> Runner<'m> {
 
     /// Ends seat `n`'s travel and order: any press does (M 8.1).
     pub fn stop_travel(&mut self, n: SeatId) {
-        self.travels.remove(&n);
+        // a travel under way stops by a press, which the log keeps; an
+        // order that has not started leaves nothing to replay (M 4.4)
+        if self.travels.remove(&n).is_some() {
+            self.record(Some(n), Act::Stop);
+        }
         self.orders.remove(&n);
     }
 
@@ -218,6 +223,10 @@ impl<'m> Runner<'m> {
         };
         match self.new_travel(member, goal, order) {
             Some(t) => {
+                match goal {
+                    Goal::Cell(p) => self.record_cell(n, p),
+                    Goal::Follow(e) => self.record(Some(n), Act::Follow(e)),
+                }
                 self.travels.insert(n, t);
                 Ok(true)
             }
@@ -261,7 +270,15 @@ impl<'m> Runner<'m> {
             return Ok(Some(Stop::NoRoute));
         }
         let Some(mut t) = self.travels.remove(&n) else { return Ok(None) };
+        self.record(Some(n), Act::Step);
         let stop = self.step(n, &mut t)?;
+        // a stale order rests on the view when it was given, which is not
+        // state: the replay sees a stop (M 4.4)
+        if stop == Some(Stop::Stale)
+            && let Some(row) = self.inputs.rows.last_mut()
+        {
+            row.act = Act::Stop;
+        }
         if stop.is_none() {
             self.travels.insert(n, t);
         }
@@ -297,7 +314,7 @@ impl<'m> Runner<'m> {
                 if self.bumps(t.member, at, to) {
                     let Some(cmd) = self.walk_step(t.member, at, to)? else { return Ok(Some(Stop::Game)) };
                     t.steps += 1;
-                    return Ok(Some(if self.input(n, &cmd)? { Stop::Arrived } else { Stop::Failed }));
+                    return Ok(Some(if self.run_input(n, &cmd)? { Stop::Arrived } else { Stop::Failed }));
                 }
                 let known = self.route_cells(t.member, to)?;
                 let Some(&next) = self.w.route_within(at, &self.ends(t.member, at, to), Some(t.member), Some(&known)).first() else { return Ok(Some(Stop::NoRoute)) };
@@ -333,7 +350,7 @@ impl<'m> Runner<'m> {
         };
         let Some(cmd) = cmd else { return Ok(Some(Stop::Game)) };
         t.steps += 1;
-        if !self.input(n, &cmd)? {
+        if !self.run_input(n, &cmd)? {
             return Ok(Some(Stop::Failed));
         }
         Ok(None)

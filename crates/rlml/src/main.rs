@@ -43,8 +43,9 @@ impl Files for DiskFiles {
 }
 
 const USAGE: &str = "usage: rlml check GAME [--lib DIR]
-       rlml run GAME [--seed N] [--keys \"KEY KEY …\"] [--lib DIR]
-       rlml play GAME [--seed N] [--lib DIR]
+       rlml run GAME [--seed N] [--keys \"KEY KEY …\"] [--log-out FILE] [--lib DIR]
+       rlml play GAME [--seed N] [--log-out FILE] [--lib DIR]
+       rlml replay GAME LOG [--lib DIR]
 
 check loads the game and reports load errors and warnings (M 2).
 run plays a new game without a screen: each key is one player's turn,
@@ -53,6 +54,10 @@ the game's `keys` contexts, separated by spaces (`l l > j`).
 play plays a new game in the terminal: the game's keys, esc for its
 pause menu where it binds one, ctrl+c to leave at once. A runtime error
 ends the game and is printed after the terminal is restored.
+--log-out writes the session's input log (M 4.4) to FILE; with play it
+is the last game's log, written also when a runtime error ends it.
+replay plays an input log and prints a transcript as run does: the
+frame after each row of the log.
 
 GAME is the game's main file or its folder (then game.rlml, game.md or
 game.rlml.md). The engine library holds lib/std.rlml; it is found with
@@ -64,9 +69,11 @@ fn main() -> ExitCode {
     let mut lib = std::env::var_os("RLML_LIB").map(PathBuf::from);
     let mut seed: u64 = 1;
     let mut keys = String::new();
+    let mut log_out: Option<PathBuf> = None;
+    let mut log_in: Option<PathBuf> = None;
     let mut i = 0;
     let command = args.first().cloned().unwrap_or_default();
-    if !["check", "run", "play"].contains(&command.as_str()) {
+    if !["check", "run", "play", "replay"].contains(&command.as_str()) {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     }
@@ -87,6 +94,10 @@ fn main() -> ExitCode {
                 }
                 i += 1;
             }
+            "--log-out" if (command == "run" || command == "play") && i + 1 < args.len() => {
+                log_out = Some(PathBuf::from(&args[i + 1]));
+                i += 1;
+            }
             "--keys" if command == "run" && i + 1 < args.len() => {
                 keys = args[i + 1].clone();
                 i += 1;
@@ -96,6 +107,7 @@ fn main() -> ExitCode {
                 return ExitCode::SUCCESS;
             }
             a if game.is_none() && !a.starts_with('-') => game = Some(PathBuf::from(a)),
+            a if command == "replay" && log_in.is_none() && !a.starts_with('-') => log_in = Some(PathBuf::from(a)),
             a => {
                 eprintln!("unexpected argument `{a}`\n\n{USAGE}");
                 return ExitCode::from(2);
@@ -131,7 +143,7 @@ fn main() -> ExitCode {
             }
             return ExitCode::FAILURE;
         }
-        return match rlml_tui::term::play(&model, seed) {
+        return match rlml_tui::term::play(&model, seed, log_out.as_deref()) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("{e}");
@@ -147,7 +159,42 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
         let keys: Vec<&str> = keys.split_whitespace().collect();
-        return match rlml_core::rt::play::transcript(&model, seed, &keys) {
+        return match rlml_core::rt::play::transcript_and_log(&model, seed, &keys) {
+            Ok((t, log)) => {
+                print!("{t}");
+                if let Some(path) = &log_out
+                    && let Err(e) = write_log(path, &log)
+                {
+                    eprintln!("{e}");
+                    return ExitCode::FAILURE;
+                }
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    if command == "replay" {
+        if report.has_errors() {
+            for d in report.errors() {
+                eprintln!("{d}");
+            }
+            return ExitCode::FAILURE;
+        }
+        let Some(path) = log_in else {
+            eprintln!("replay needs an input log\n\n{USAGE}");
+            return ExitCode::from(2);
+        };
+        let log = match std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|t| rlml_core::rt::input::InputLog::read(&t)) {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("{}: {e}", path.display());
+                return ExitCode::FAILURE;
+            }
+        };
+        return match rlml_core::rt::play::replay_transcript(&model, &log) {
             Ok(t) => {
                 print!("{t}");
                 ExitCode::SUCCESS
@@ -178,4 +225,9 @@ fn main() -> ExitCode {
     }
     println!("{errors} errors, {warnings} warnings");
     if errors == 0 { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+}
+
+fn write_log(path: &Path, log: &rlml_core::rt::input::InputLog) -> Result<(), String> {
+    let text = log.write()?;
+    std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
 }

@@ -691,6 +691,28 @@ fn golden_of(f: MemFiles, name: &str, keys: &str) {
         let line = got.lines().zip(want.lines()).position(|(a, b)| a != b).unwrap_or(0);
         panic!("{name}: the transcript differs from line {}:\n got:  {:?}\n want: {:?}", line + 1, got.lines().nth(line), want.lines().nth(line));
     }
+    replays_the_same(&m, &keys);
+}
+
+/// The keys' input log, written and read back, replays to the same game:
+/// state, stream, messages and the log itself (M 4.4).
+fn replays_the_same(m: &Model, keys: &[&str]) {
+    use rlml_core::rt::input::{Act, InputLog, Replay};
+    let mut s = rlml_core::rt::play::Session::start(m, 7).unwrap();
+    for k in keys {
+        s.press(k).unwrap();
+    }
+    let log = s.r.input_log();
+    let text = log.write().unwrap();
+    let read = InputLog::read(&text).unwrap();
+    assert_eq!(read, log, "the log reads back as written");
+    let r = Replay::run(m, &read).unwrap_or_else(|e| panic!("{e}\n{text}"));
+    assert_eq!(r.w.s.game.time, s.r.w.s.game.time, "{text}");
+    assert!(r.w.s == s.r.w.s, "the replayed state differs\n{text}");
+    assert_eq!(r.w.rng, s.r.w.rng);
+    assert_eq!(r.w.log, s.r.w.log);
+    let rows: Vec<_> = log.rows.iter().filter(|row| row.act != Act::End).cloned().collect();
+    assert_eq!(r.inputs.rows, rows, "the replay writes the same log");
 }
 
 #[test]
@@ -924,6 +946,8 @@ fn the_shared_view_is_the_union() {
     assert!(!va.contains(&(bx, by)));
     assert!(r.w.in_view(&[Pos { map: 0, x: bx, y: by }]), "`in_view` sees what any member sees");
     assert!(!r.w.sees(a, &[Pos { map: 0, x: bx, y: by }]), "`sees` stays one member's");
+    // the runner keeps the shared view whenever it stops (M 7.2)
+    assert_eq!(r.run(0).unwrap(), Status::Input);
     let env = rlml_core::rt::eval::Env::new(rlml_core::rt::eval::BodyKind::Handler, "test", None, "test");
     r.w.destroy(a, &env).unwrap();
     r.w.destroy(b, &env).unwrap();

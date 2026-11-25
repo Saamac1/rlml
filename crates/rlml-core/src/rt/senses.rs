@@ -220,8 +220,9 @@ impl World<'_> {
         Some(view)
     }
 
-    /// The shared view on the active map, kept as the last shared view for
-    /// when no member is left (M 7.2).
+    /// The shared view on the active map, or the last shared view when no
+    /// member is left (M 7.2). The last view is kept by `see` only, at the
+    /// runner's fixed points, so what is drawn or asked does not change it.
     pub fn current_view(&mut self) -> Option<(MapId, BTreeSet<(i32, i32)>)> {
         if let Some(v) = &self.held_view {
             return Some(v.clone());
@@ -229,7 +230,7 @@ impl World<'_> {
         if let Some(map) = self.s.active_map()
             && let Some(v) = self.shared_view(map)
         {
-            self.last_view = Some((map, v));
+            return Some((map, v));
         }
         self.last_view.clone()
     }
@@ -267,10 +268,6 @@ impl World<'_> {
             };
         }
         let Some(at) = self.s.at(a) else { return false };
-        if member {
-            // keep the last shared view for when the group is gone
-            self.current_view();
-        }
         match self.field_of_view(a) {
             Some(view) => cells.iter().any(|p| p.map == at.map && view.contains(&(p.x, p.y))),
             None => member && cells.iter().any(|p| p.map == at.map),

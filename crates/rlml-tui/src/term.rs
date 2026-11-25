@@ -15,21 +15,29 @@ use termplate_term::{Screen, TtyGuard, map_event, no_color_from_env, terminal_si
 
 /// Plays a new game in the terminal until the player quits. A runtime
 /// error ends the game and is returned after the terminal is restored.
-pub fn play(m: &Model, seed: u64) -> Result<(), String> {
+/// `log_out` gets the last game's input log (M 4.4), also when a runtime
+/// error ends it.
+pub fn play(m: &Model, seed: u64, log_out: Option<&std::path::Path>) -> Result<(), String> {
     // the mouse is on unless the player's settings turn it off (D 3.2)
     let mouse = m.settings().get("mouse").and_then(|i| i.word(1)) != Some("off");
     let (guard, tty) = TtyGuard::new(mouse).map_err(|e| format!("cannot open the terminal: {e}"))?;
     let no_color = no_color_from_env(std::env::var("NO_COLOR").ok().as_deref());
     let mut screen = Screen::new(tty, StyleSheet::default(), no_color);
-    let result = run(m, seed, &mut screen);
+    let mut app = App::new(m, seed, terminal_size())?;
+    let result = run(&mut app, &mut screen);
     drop(guard);
+    if let Some(path) = log_out {
+        let written = app.r.input_log().write().and_then(|t| std::fs::write(path, t).map_err(|e| format!("{}: {e}", path.display())));
+        if let Err(e) = written {
+            eprintln!("the input log was not written: {e}");
+        }
+    }
     result
 }
 
-fn run(m: &Model, seed: u64, screen: &mut Screen<std::fs::File>) -> Result<(), String> {
+fn run(app: &mut App, screen: &mut Screen<std::fs::File>) -> Result<(), String> {
     let io = |e: io::Error| e.to_string();
     let start = Instant::now();
-    let mut app = App::new(m, seed, terminal_size())?;
     app.view.truecolor = std::env::var("COLORTERM").is_ok_and(|v| v == "truecolor" || v == "24bit");
     // pads come from their own thread, as raw events (M 8.2)
     let pads = crate::pad::spawn();
@@ -55,7 +63,7 @@ fn run(m: &Model, seed: u64, screen: &mut Screen<std::fs::File>) -> Result<(), S
             }
         }
         events.extend(pads.try_iter().map(|(id, raw)| Event::Pad(id, raw)));
-        if feed.apply(&mut app, events, start.elapsed())? {
+        if feed.apply(app, events, start.elapsed())? {
             screen.invalidate();
         }
         app.tick(start.elapsed())?;

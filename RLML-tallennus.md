@@ -62,6 +62,14 @@ Alla on alkuperäinen tehtävälista.
 
 ### 1. Syöteloki ja toisto
 
+Tehty 25.11.2026:
+- **Syöteloki.** `rt::input` sisältää lokin (`InputLog`, rivit ja tekstimuoto) sekä toiston: `Replay::run` alkaa uudesta pelistä ja `Replay::from_runner` käynnissä olevasta pelistä. Toistoa käyttävät `rlml run --log-out`, `rlml play --log-out` ja `rlml replay`.
+- **Muisti tilaan.** Toteutus löysi toistettavuusvirheen: karttamuisti ja viimeinen näkökenttä päivittyivät vain piirrettäessä. Klikkausmatkan reitti kulkee muistettujen ruutujen kautta, joten piirto vaikutti pelin kulkuun. Nyt `World::see` päivittää ne, kun ajo pysähtyy (M 7.2).
+- **Testit.** Golden-transkriptit, ytimen matkatestit ja 20 sovellustestiä toistavat lokinsa, ja tilan, virran ja viestien on oltava samat.
+- **Nopeus.** Kapteeni Aaltolan testit vievät debug-käännöksellä 12,8 s, ennen 9,5 s. Näkökenttä lasketaan nyt myös jokaisen pysähdyksen kohdalla, eikä vain piirrettäessä.
+
+Alla on alkuperäinen tehtävälista.
+
 - `rlml-core`: `rt::log::InputLog`, jonka `Runner` täyttää jokaisesta ajetusta toiminnosta (`input`, istuinten liittyminen ja poistuminen, matka ja seuraaminen). Pelkkä painallus ei ole lokirivi: rivi kirjataan vasta, kun moottori ajaa toiminnon (M 8.1).
 - Lokin tekstimuoto, yksi rivi kerrallaan: `1 move dir:north`, `2 travel_to 14,6`, `1 follow.step`. Otsikkorivillä ovat siemen ja istuimet.
 - `rlml run --log-out FILE` kirjoittaa lokin, ja `rlml replay PELI FILE` ajaa sen ja tulostaa saman transkriptin kuin `run`.

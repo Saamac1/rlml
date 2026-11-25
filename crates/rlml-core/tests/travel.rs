@@ -146,17 +146,33 @@ fn drive(r: &mut Runner, turns: usize) -> Vec<(u8, Stop)> {
     stops
 }
 
+/// Replays `r`'s input since `start` from `start` (M 4.4): travel_to,
+/// follow, step and stop rows give the same game.
+fn replays_the_same(start: Runner, r: &Runner) {
+    use rlml_core::rt::input::{InputLog, Replay};
+    // the replay, as a front end, runs to the next turn after each input
+    let mut r = r.clone();
+    r.run(0).unwrap();
+    let text = r.input_log().write().unwrap();
+    let log = InputLog::read(&text).unwrap();
+    let got = Replay::from_runner(start, &log).and_then(Replay::finish).unwrap_or_else(|e| panic!("{e}\n{text}"));
+    assert!(got.w.s == r.w.s, "the replayed state differs\n{text}");
+    assert_eq!(got.w.rng, r.w.rng);
+}
+
 #[test]
 fn travel_walks_until_an_actor_comes_into_view() {
     let m = model(&game(""));
     let mut r = start(&m);
     explored(&mut r);
+    let start_r = r.clone();
     assert!(r.travel_to(1, cell(18, 1)).unwrap());
     let stops = drive(&mut r, 40);
     assert_eq!(stops.first().map(|s| s.1), Some(Stop::NewActor), "{stops:?}");
     let (x, _) = at(&r, 1);
     assert!((10..17).contains(&x), "seat 1 walked east until the rat came into view: x {x}");
     assert!(!r.travelling(1));
+    replays_the_same(start_r, &r);
 }
 
 #[test]
@@ -164,10 +180,12 @@ fn travel_arrives() {
     let m = model(&game(""));
     let mut r = start(&m);
     explored(&mut r);
+    let start_r = r.clone();
     assert!(r.travel_to(1, cell(5, 1)).unwrap());
     let stops = drive(&mut r, 20);
     assert_eq!(stops, [(1, Stop::Arrived)]);
     assert_eq!(at(&r, 1), (5, 1));
+    replays_the_same(start_r, &r);
 }
 
 #[test]
@@ -188,16 +206,19 @@ fn walk_stop_stops_before_the_step() {
     let m = model(&game("- walk_stop NEVER_PAST_6"));
     let mut r = start(&m);
     explored(&mut r);
+    let start_r = r.clone();
     assert!(r.travel_to(1, cell(9, 1)).unwrap());
     let stops = drive(&mut r, 30);
     assert_eq!(stops, [(1, Stop::Game)]);
     assert_eq!(at(&r, 1), (6, 1));
+    replays_the_same(start_r, &r);
 }
 
 #[test]
 fn a_follower_keeps_next_to_its_leader() {
     let m = model(&game(""));
     let mut r = start(&m);
+    let start_r = r.clone();
     // seat 1 waits its first turn; seat 2 starts following
     r.input(1, &wait()).unwrap();
     assert_eq!(r.run(0).unwrap(), Status::Input);
@@ -217,8 +238,10 @@ fn a_follower_keeps_next_to_its_leader() {
     assert!((a.0 - b.0).abs() <= 1 && (a.1 - b.1).abs() <= 1, "next to the leader: {a:?} {b:?}");
     assert!(a.0 >= 3, "the leader went east: {a:?}");
     assert!(r.travelling(2));
+    assert_eq!(r.run(0).unwrap(), Status::Input);
     r.stop_travel(2);
     assert!(!r.travelling(2), "a press stops it");
+    replays_the_same(start_r, &r);
 }
 
 #[test]
@@ -264,6 +287,7 @@ fn a_stale_order_ends_before_its_second_step() {
     // then the rat comes next to seat 2, before seat 2's turn
     let rat = r.w.s.entities_on(0).into_iter().find(|&e| !r.w.s.is_member(e) && r.w.s.is_actor(e)).unwrap();
     r.w.s.get_mut(rat).place = Place::Map(cell(3, 1));
+    let start_r = r.clone();
     r.input(1, &wait()).unwrap();
     assert_eq!(r.run(0).unwrap(), Status::Input);
     assert_eq!(r.awaiting(), Some(2));
@@ -272,6 +296,7 @@ fn a_stale_order_ends_before_its_second_step() {
     let stops = drive(&mut r, 2);
     assert_eq!(stops, [(2, Stop::Stale)], "cancelled before the second step");
     assert_eq!(at(&r, 2), (2, 2));
+    replays_the_same(start_r, &r);
 }
 
 #[test]
@@ -279,16 +304,19 @@ fn an_order_without_a_new_actor_runs_to_the_end() {
     let m = model(&game(""));
     let mut r = start(&m);
     explored(&mut r);
+    let start_r = r.clone();
     r.give_order(2, OrderGoal::Cell(cell(4, 2)));
     let stops = drive(&mut r, 20);
     assert_eq!(stops, [(2, Stop::Arrived)]);
     assert_eq!(at(&r, 2), (4, 2));
+    replays_the_same(start_r, &r);
 }
 
 #[test]
 fn follow_ai_lets_the_ai_choose_the_steps() {
     let m = model(&game("- follow_ai STD.FOLLOWER"));
     let mut r = start(&m);
+    let start_r = r.clone();
     r.input(1, &wait()).unwrap();
     assert_eq!(r.run(0).unwrap(), Status::Input);
     assert!(r.follow(2, None).unwrap());
@@ -304,6 +332,7 @@ fn follow_ai_lets_the_ai_choose_the_steps() {
     let (a, b) = (at(&r, 1), at(&r, 2));
     assert!((a.0 - b.0).abs() <= 2, "FOLLOWER keeps up, a step behind after the leader's move: {a:?} {b:?}");
     assert!(b.0 > 2, "the follower went east: {b:?}");
+    replays_the_same(start_r, &r);
 }
 
 /// The corridor with a crate in seat 1's row at x 6.
