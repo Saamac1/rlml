@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (ryhmä uloskäynnillä):** kunnes kohtaukset toimivat, `USE_EXIT` kirjoittaa viestin `MESSAGE.EXIT.OTHERS_AWAY` ja epäonnistuu, kun muut jäsenet ovat kaukana, sen sijaan että käynnistäisi dialogin `EXIT.LEAVE_OTHERS`. Aiemmin peli kaatui siihen (luvut [5](05-komennot.md), [9](09-aanet-viestit-ja-tekstit.md) ja [14](14-avoimet-kysymykset.md)).
+
 **Muutokset 25.11.2026 (portaat askeleella):**
 - `EXIT`-komponentilla on kenttä `step`. Istuimen jäsen, joka astuu tällaisen uloskäynnin ruutuun, käyttää sitä (`EXIT_STEP`).
 - `TAKE_EXIT`-komennon runko on ydin `USE_EXIT`.

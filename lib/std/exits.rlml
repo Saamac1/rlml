@@ -8,6 +8,9 @@ namespace STD
 include core.rlml
 include ai.rlml
 
+messages
+- MESSAGE.EXIT.OTHERS_AWAY
+
 component EXIT
 - to name
 - at label default START
@@ -36,7 +39,9 @@ fn USE_EXIT(who: entity, exit: entity) -> bool:
         return true
     away = players where it.map == who.map and distance(it, exit) > 1
     if away.count > 0:
-        start(EXIT.LEAVE_OTHERS(who, exit))
+        // until scenes run, the group gathers at the exit first
+        // (EXIT.LEAVE_OTHERS, STD 14)
+        log(MESSAGE.EXIT.OTHERS_AWAY)
         return false
     TRAVEL_GROUP(who, exit)
     return true

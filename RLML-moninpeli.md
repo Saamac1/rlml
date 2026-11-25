@@ -514,6 +514,17 @@ Tehty 25.11.2026 haarassa `claude/moninpeli-esitys`:
 
 ### Vaihe 5: vakiokirjasto
 
+Tehty 25.11.2026 haarassa `claude/moninpeli-std`:
+- **Testit.** `crates/rlml-core/tests/std_seats.rs` ajaa vakiokirjaston säännöt yhdellä ja kolmella istuimella:
+  - `SPAWN_PLAYER`: jokaiselle istuimelle hahmo omaan ruutuunsa,
+  - `TAKE_EXIT` koko ryhmälle ja `GROUP_ARRIVAL` saapumisruudun ympärille,
+  - osuman viesti yksin (`HURT`) ja ryhmässä (`HIT`, `SOLO`),
+  - `PART_PLAYER` ja `LEADER_OF`,
+  - kolmen istuimen vuorojärjestys.
+- **Hihna, paikanvaihto ja `SWITCH`** oli testattu jo aiemmin kahdella istuimella.
+- **Löytynyt virhe.** Kun yksikin jäsen oli kaukana, `TAKE_EXIT` kaatoi pelin, koska dialogi `EXIT.LEAVE_OTHERS` tarvitsee kohtauksia. Väliaikainen sääntö (STD 5 ja 14): komento kirjoittaa viestin `MESSAGE.EXIT.OTHERS_AWAY` ja epäonnistuu ilman ajan kulumista, joten ryhmä kokoontuu ensin. Dialogi palaa, kun kohtaukset toimivat.
+- **Ei testattu:** `PROVOKE` ystävällisessä tulessa (STD 7).
+
 - `SPAWN_PLAYER`, `JOIN_PLAYER`, `PART_PLAYER`, `LEADER_OF`, hihna, `TAKE_EXIT`, `GROUP_ARRIVAL`, viestit, `PROVOKE` ja `SWITCH`. Etualan dialogi `EXIT.LEAVE_OTHERS` odottaa kohtausten toteutusta.
 - **Valmis, kun** STD:n omat testit läpäisevät yhden ja kolmen istuimen ajon.
 
