@@ -6,9 +6,6 @@
 > ääni (`play`), koska pelissä ei ole äänitiedostoja. Aikajanan rivi on
 > aina kutsu, joten tila asetetaan funktioilla (`UNMASK`).
 
-messages
-- SOLDIER.ALL_CLEAR
-
 ```roguescript
 // ---- käynnistys ----
 
@@ -99,9 +96,11 @@ scene HEAD_GLOWS() timeline:
     track TORCHES loop 2s:
         0000ms 1000ms fade(light(label(TORCH)), to: 60%)
         1000ms 1000ms fade(light(label(TORCH)), to: 100%)
+    // repliikki tulee viimeisenä, joten sen kuittaus päättää kohtauksen
+    // eikä pelaajan painalluksia mene hukkaan kameran kääntyessä
     track ACTION:
-        0000ms        say(OZ.SPEAKS)
-        1000ms 2000ms pan(camera, to: label(COURTYARD_DOOR))
+        0000ms 2000ms pan(camera, to: label(COURTYARD_DOOR))
+        2000ms        say(OZ.SPEAKS)
 
 // ---- sotilas (RS 9.9: taustakohtaus pelin ajassa) ----
 
@@ -111,7 +110,7 @@ scene PATROL(soldier: entity) timeline background:
     track ROUTE loop 30:
         00 12 move(soldier, to: label(POST_A))
         15 12 move(soldier, to: label(POST_B))
-        28    log(SOLDIER.ALL_CLEAR, speaker: soldier)
+        28    say(SOLDIER.ALL_CLEAR, speaker: soldier)
 
 // ---- ilmapallo (RS 9: korutiini, joka päättyy valikkoon) ----
 

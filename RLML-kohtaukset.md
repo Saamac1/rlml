@@ -214,11 +214,11 @@ Tehty 25.11.2026 haarassa `claude/kohtaukset-5`:
   - Kohtaus kulkee käyttöliittymän kellolla (`Runner::realtime_tick`), myös syötettä odotettaessa.
   - Sen kello ei ole tilaa, joten toisto on sama ilman käyttöliittymää.
   - Lataus hylkää tilan muutokset, `say`- ja `log`-kutsut sekä väärät aikayksiköt. Pelin ajan kohtaus kirjoittaa paljaat luvut ja `realtime`-kohtaus ajat (`ms`, `s`).
-- **Väliaikaiset säännöt.**
-  - Taustakohtauksen `say` kirjoittaa repliikkinsä lokiin mutta ei vielä näytä ikkunaa.
-  - `wait scene` jätetään taustakohtauksessa väliin varoituksella.
+- **Taustakohtauksen `say`** näyttää ikkunan heti kierroksen rajalla, ja peli odottaa kuittausta. Sen jälkeen saman hetken loput rivit ja kierroksen muut taustakohtaukset jatkuvat. Tehty 26.11.2026 haarassa `claude/oz-ikkunat`.
+- **Väliaikainen sääntö.** `wait scene` jätetään taustakohtauksessa väliin varoituksella.
 - **Oz-esimerkki.**
-  - `PATROL` kulkee.
+  - `PATROL` kulkee, ja sotilaan ilmoitus on `say`-ikkuna.
+  - Pääruudussa on vain kartta. Loki luetaan näppäimellä `o` tai taukovalikosta (`read LOG`).
   - Se alkaa `after begin` -käsittelijässä, koska uuden pelin pelaaja ei saavu kartalle (`arrive`).
 - **Testit:** `crates/rlml-core/tests/background.rs`: partio kierroksittain ja toistona, tallennus ja lataus kesken kävelyn, `stop`, `bind` ja `scope: map`, `realtime`-kohtaus sekä lataustarkistukset.
 

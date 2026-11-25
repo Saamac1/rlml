@@ -34,15 +34,19 @@ SCARECROW.THE_SCREEN Sermin takana kuului köhäisy. Päät eivät köhi.
 
 TOTO.JUMPS Toto haukahtaa ja hyppää sermiä vasten.
 
-SOLDIER.ALL_CLEAR Sotilas: salissa on kaikki hyvin.
+SOLDIER.ALL_CLEAR Salissa on kaikki hyvin.
 
 BALLOON.READY Ilmapallo nykii köysissään. Kansas odottaa.
 
 PAUSE.TITLE Tauko
 PAUSE.RESUME Jatka
+PAUSE.READ_LOG Loki
 PAUSE.SAVE Tallenna
 PAUSE.QUIT Lopeta
 
 HOME.TITLE Kotiin
 HOME.NEW_GAME Uusi peli
 HOME.EXIT Poistu
+
+LOG.TITLE Loki
+LOG.READ ↑↓ selaa  esc sulje

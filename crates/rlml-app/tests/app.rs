@@ -2657,17 +2657,20 @@ fn the_oz_example_plays_its_dialogues() {
     press(&mut app, "enter");
     assert!(screen(&mut app).contains("Lännen noita"));
     press(&mut app, "enter");
-    // HEAD_GLOWS, a timeline: its line stops the clock, and the app's
-    // ticks run it to its end (RS 9.3, RS 9.5)
+    // HEAD_GLOWS, a timeline: the app's ticks run the pan, its line
+    // stops the clock, and confirming the line ends it (RS 9.3, RS 9.5)
+    assert!(app.r.in_scene() && app.r.scene_clock_runs());
+    app.tick(ms(1000)).unwrap();
+    assert!(
+        !screen(&mut app).contains("Pää hehkuu"),
+        "the pan runs from 0ms to 2000ms"
+    );
+    app.tick(ms(2500)).unwrap();
     assert!(screen(&mut app).contains("Pää hehkuu"));
     press(&mut app, "enter");
-    assert!(app.r.in_scene() && app.r.scene_clock_runs());
-    app.tick(ms(1500)).unwrap();
-    assert!(app.r.in_scene(), "the pan runs from 1000ms to 3000ms");
-    app.tick(ms(3500)).unwrap();
     assert!(
         app.players_turn(),
-        "HEAD_GLOWS is done; its loop ended with it"
+        "HEAD_GLOWS ended with its line; its loop ended with it"
     );
     // the Scarecrow, along row 3 out of the patrol's way: THINK opens
     // WHAT in the next choice
@@ -2745,5 +2748,27 @@ fn the_oz_example_plays_its_dialogues() {
         }
     }
     assert!(moved, "the soldier walks");
+    // the soldier's report is a window on the map, and the main screen
+    // has no log; `o` reads it
+    let mut waited = 0;
+    while !screen(&mut app).contains("Salissa on kaikki hyvin.") {
+        assert!(waited < 40, "the patrol reports at round 28 of its loop");
+        press(&mut app, "s");
+        waited += 1;
+    }
+    assert!(app.r.in_scene(), "the game waits for the report (RS 9.9)");
+    press(&mut app, "enter");
+    assert!(app.players_turn());
+    assert!(
+        !screen(&mut app).contains("Salissa on kaikki hyvin."),
+        "no log on the main screen"
+    );
+    press(&mut app, "o");
+    let s = screen(&mut app);
+    assert!(
+        s.contains("Loki") && s.contains("Salissa on kaikki hyvin."),
+        "the log's history:\n{s}"
+    );
+    press(&mut app, "esc");
     replays_the_same(&m, &app);
 }

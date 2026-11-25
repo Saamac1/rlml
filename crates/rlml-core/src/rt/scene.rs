@@ -65,12 +65,16 @@ pub struct ActiveScene {
 impl<'m> Runner<'m> {
     /// A foreground scene runs.
     pub fn in_scene(&self) -> bool {
-        self.scene.is_some()
+        self.scene.is_some() || self.background_waits()
     }
 
     /// What the scene waits for: a line to confirm or a confirmation.
     pub fn scene_pause(&self) -> Option<&Pause> {
-        self.scene.as_ref().and(self.w.pause.as_ref())
+        if self.in_scene() {
+            self.w.pause.as_ref()
+        } else {
+            None
+        }
     }
 
     /// The level that runs `call`: its body as frames, its parameters bound,
@@ -130,6 +134,10 @@ impl<'m> Runner<'m> {
     /// the player or the queue is empty, and then what a held command waits
     /// for (M 6.1.6, M 6.1.7 step 6).
     pub(crate) fn start_scenes(&mut self) -> RtResult<()> {
+        // a background scene's line comes first
+        if self.background_waits() {
+            return Ok(());
+        }
         loop {
             if self.scene.is_some() {
                 break;
@@ -410,6 +418,9 @@ impl<'m> Runner<'m> {
     }
 
     fn scene_seat(&self) -> Option<SeatId> {
+        if self.background_waits() {
+            return self.background_seat().or(Some(1));
+        }
         self.scene.as_ref().and_then(|s| s.seat).or(Some(1))
     }
 
@@ -420,6 +431,10 @@ impl<'m> Runner<'m> {
             return Ok(());
         }
         let seat = self.scene_seat();
+        if self.background_waits() {
+            self.record(seat, Act::SceneConfirm);
+            return self.background_confirm();
+        }
         self.scene_answered(seat, Act::SceneConfirm);
         self.w.pause = None;
         self.run_scene()
@@ -429,6 +444,12 @@ impl<'m> Runner<'m> {
     pub fn scene_skip(&mut self) -> RtResult<()> {
         if !self.in_scene() {
             return Ok(());
+        }
+        // a background scene's line has nothing to skip but itself
+        if self.background_waits() {
+            let seat = self.scene_seat();
+            self.record(seat, Act::SceneSkip);
+            return self.background_confirm();
         }
         let seat = self.scene_seat();
         self.record(seat, Act::SceneSkip);

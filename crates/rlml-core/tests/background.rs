@@ -349,3 +349,64 @@ scene SLOW() timeline background:
         );
     }
 }
+
+#[test]
+fn a_background_line_waits_for_its_confirmation() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut f = MemFiles::default();
+    read_tree(&repo, &repo.join("lib"), &mut f.engine);
+    let game = GAME.replace(
+        "        10    log(GUARD.ALL_CLEAR, speaker: guard)",
+        "        03    say(GUARD.ALL_CLEAR, speaker: guard)\n        03    log(GUARD.ALL_CLEAR)",
+    );
+    f.game.insert("game.rlml".into(), game);
+    f.game.insert(
+        "text/fi.rlml".into(),
+        "language fi\nGUARD.ALL_CLEAR Kaikki hyvin.\n".into(),
+    );
+    let (m, rep) = rlml_core::check_game(&f, "game.rlml");
+    assert!(
+        !rep.has_errors(),
+        "{:#?}",
+        rep.errors().map(|d| d.to_string()).collect::<Vec<_>>()
+    );
+    let mut r = start(&m);
+    wait(&mut r, 3);
+    assert!(r.scene_pause().is_none());
+    let n = r.awaiting().unwrap();
+    r.input(
+        n,
+        &CommandValue {
+            name: "STD.WAIT".into(),
+            args: vec![],
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        r.run(0).unwrap(),
+        Status::Scene,
+        "round 3 of its clock: the line shows (RS 9.9)"
+    );
+    assert!(
+        matches!(r.scene_pause(), Some(rlml_core::rt::world::Pause::Say { key, speaker: Some(_), .. }) if key == "GUARD.ALL_CLEAR")
+    );
+    assert!(r.w.save_blocked(), "no saving while it shows");
+    let time = r.w.s.game.time;
+    assert_eq!(r.run(0).unwrap(), Status::Scene, "the game waits");
+    assert_eq!(r.w.s.game.time, time);
+    assert_eq!(cleared(&r), 1, "the line, and not yet the row after it");
+    r.scene_confirm().unwrap();
+    assert_eq!(
+        cleared(&r),
+        2,
+        "the same moment goes on after the confirmation"
+    );
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    wait(&mut r, 2);
+    let text = r.input_log().write().unwrap();
+    assert!(text.contains(" scene.confirm\n"), "{text}");
+    let got =
+        Replay::run(&m, &InputLog::read(&text).unwrap()).unwrap_or_else(|e| panic!("{e}\n{text}"));
+    assert!(got.w.s == r.w.s, "{text}");
+    assert_eq!(got.w.log, r.w.log);
+}

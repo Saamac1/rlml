@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 26.11.2026 (taustakohtauksen repliikki):** taustakohtauksen `say` odottaa kuittausta, ja saman hetken loput rivit ja kierroksen muut taustakohtaukset jatkuvat sen jälkeen (luku [9.9](09-kohtaukset-ja-aikajanat.md#99-taustakohtaukset)).
+
 **Muutokset 25.11.2026 (taustakohtaukset):** pelin ajan taustakohtauksen kello alkaa ensimmäiseltä kierroksen rajalta, `realtime`-kohtauksen kello ei kuulu tilaan eikä `realtime`-kohtauksessa saa olla `log`-kutsua, ja kokoelmaan sidottu kohtaus päättyy, kun yksikin jäsen tuhoutuu (luku [9.9](09-kohtaukset-ja-aikajanat.md#99-taustakohtaukset)).
 
 **Muutokset 25.11.2026 (aikajanat):** ohitettu `say` kirjataan lokiin ilman ikkunaa ja `log` kirjoitetaan, joten loki on sama, missä kohdassa pelaaja ohitti. Vain esitys jätetään väliin, ja `always`-rivi näyttää esityksensä myös ohitettaessa (luku [9.8](09-kohtaukset-ja-aikajanat.md#98-luonnos-ohitus-ja-alusta-aloitus)). Tweenin askeleen hetki (luku [9.1](09-kohtaukset-ja-aikajanat.md#91-rivi)).

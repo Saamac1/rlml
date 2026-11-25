@@ -89,6 +89,10 @@ pub struct Runner<'m> {
     pub(crate) bg_plans: super::background::BgPlans,
     /// `background realtime` scenes' clocks; not state (RS 9.9).
     pub(crate) realtime: super::background::Realtime,
+    /// The background scene whose `say` waits for confirmation, and the
+    /// round's background scenes left to run after it.
+    pub(crate) bg_pause: Option<u64>,
+    pub(crate) bg_pending: Vec<u64>,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -128,6 +132,8 @@ impl<'m> Runner<'m> {
             scene_silent: false,
             bg_plans: Default::default(),
             realtime: Default::default(),
+            bg_pause: None,
+            bg_pending: vec![],
         };
         // calls in `begin` are its own: checkpoint 0 is taken here anyway
         r.w.saves = Default::default();
@@ -205,6 +211,11 @@ impl<'m> Runner<'m> {
         // scenes queued before the runner, as `begin`'s, start first
         self.start_scenes()?;
         loop {
+            // a background scene's line stops the game until it is
+            // confirmed (RS 9.9)
+            if self.background_waits() {
+                return Ok(Status::Scene);
+            }
             // a scene stops the game's time until it ends (RS 9)
             if !self.scene_clock {
                 self.scene_play_out()?;

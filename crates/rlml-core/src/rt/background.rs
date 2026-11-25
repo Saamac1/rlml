@@ -8,6 +8,10 @@
 //! timeline has run go into a save, and its rows follow again from the
 //! call (RS 11.1).
 //!
+//! A game-time scene's `say` shows its window at once and the game waits
+//! for its confirmation, as in a foreground scene; the scene and then the
+//! round's other background scenes go on from the same moment.
+//!
 //! A `background realtime` scene runs on the front end's clock and only
 //! presents: its clock is not state, so a replay without a front end is
 //! the same.
@@ -115,10 +119,41 @@ impl<'m> Runner<'m> {
             .filter(|b| !b.realtime)
             .map(|b| b.handle)
             .collect();
-        for h in handles {
+        self.bg_pending = handles;
+        self.background_rest(now)
+    }
+
+    /// The round's background scenes not run yet, until one shows a line.
+    fn background_rest(&mut self, now: i64) -> RtResult<()> {
+        while self.bg_pause.is_none() && !self.bg_pending.is_empty() {
+            let h = self.bg_pending.remove(0);
             self.run_background(h, now)?;
         }
         Ok(())
+    }
+
+    /// A background scene's line waits for the player (RS 9.9).
+    pub(crate) fn background_waits(&self) -> bool {
+        self.bg_pause.is_some()
+    }
+
+    /// The line is confirmed: its scene goes on from the same moment, and
+    /// then the round's other background scenes.
+    pub(crate) fn background_confirm(&mut self) -> RtResult<()> {
+        let Some(h) = self.bg_pause.take() else {
+            return Ok(());
+        };
+        self.w.pause = None;
+        let now = self.w.s.game.time;
+        self.run_background(h, now)?;
+        self.background_rest(now)
+    }
+
+    /// The seat that confirms a background scene's line: its starter's.
+    pub(crate) fn background_seat(&self) -> Option<super::state::SeatId> {
+        let h = self.bg_pause?;
+        let b = self.w.s.backgrounds.iter().find(|b| b.handle == h)?;
+        b.opener.and_then(|o| self.w.s.seat_of(o))
     }
 
     /// The next game-time tween step of a background scene: its moment and
@@ -148,23 +183,19 @@ impl<'m> Runner<'m> {
         }
         let base = b.base.unwrap_or(now);
         let mut st = std::mem::take(&mut b.st);
-        let flow = loop {
-            match self
-                .w
-                .timeline_run(&plan, &mut st, &mut env, Some(now - base))
-            {
-                // a background scene takes no input: until it shows its
-                // window, a `say` is its line in the log
-                Ok(TlFlow::Pause) => {
-                    self.w.pause = None;
-                }
-                other => break other,
-            }
-        };
+        let flow = self
+            .w
+            .timeline_run(&plan, &mut st, &mut env, Some(now - base));
         if let Some(b) = self.w.s.backgrounds.iter_mut().find(|b| b.handle == h) {
             b.st = st;
         }
         match flow? {
+            // a `say` shows its window at once, and the game waits for its
+            // confirmation; the moment goes on after it (RS 9.9)
+            TlFlow::Pause => {
+                self.bg_pause = Some(h);
+                return Ok(());
+            }
             TlFlow::Done => self.w.s.backgrounds.retain(|b| b.handle != h),
             TlFlow::Sub(call) => self.w.warnings.push(format!(
                 "a background scene does not wait for `{}`: it is left out",

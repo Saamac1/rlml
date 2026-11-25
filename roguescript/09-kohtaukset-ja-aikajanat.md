@@ -248,6 +248,7 @@ scene CANDLES() timeline background realtime:
 | Etualan kohtauksen aikana | pysähtyy | jatkaa |
 
 - Rivit suoritetaan kierroksen rajalla, kierroksen tapahtumien ja ajastimien jälkeen ja ennen toimijoiden vuoroja (moottoridokumentti, luku [6.1.4](../moottori/06-ajo.md#614-mikroaskeleen-vaiheet)). Pelin aikaa käyttävän tweenin askeleet jaetaan keston mikroaskelille, ja moottori ajaa ne kohtauksen herätyksinä toimijoiden välissä. Graafisessa esitystavassa `move` liukuu sujuvasti.
+- **`say` taustakohtauksessa** näyttää ikkunan heti kierroksen rajalla, ja peli odottaa kuittausta. Kuittauksen jälkeen saman hetken loput rivit ja kierroksen muut taustakohtaukset jatkuvat aloitusjärjestyksessä.
 - **Käynnistys:** `start(SCENE(…), scope: map, bind: guard)` palauttaa kahvan, ja `stop(kahva)` pysäyttää kohtauksen. Kohtauksia voi olla käynnissä useita yhtä aikaa.
 - **Kello.** Pelin ajan kohtauksen kello alkaa ensimmäiseltä kierroksen rajalta `start`-kutsun jälkeen, joten rivi `00` ajetaan sillä rajalla. `realtime`-kohtauksen kello on esitysaikaa eikä kuulu pelin tilaan: tallennus säilyttää kohtauksen, ja ladattaessa sen kello alkaa alusta (moottoridokumentti, luku [5.2](../moottori/05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)). Siksi `realtime`-kohtauksessa ei saa olla myöskään `log`-kutsua, koska loki tallentuu.
 - `scope: map` päättää kohtauksen, kun pelaaja poistuu kartalta. Ilman sitä kohtaus on yleinen.

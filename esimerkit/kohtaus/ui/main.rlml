@@ -1,27 +1,26 @@
 # Käyttöliittymä
 
-> Kartta ja sen alla loki, johon tulevat myös `say`-repliikit (`SPEECH`)
-> ja sotilaan ilmoitukset. Dialogit ja valinnat näkyvät moottorin
-> ikkunoina kartan päällä (M 7.4 ja 7.5).
+> Ruudulla on vain kartta. Repliikit, sotilaan ilmoitukset ja valinnat
+> näkyvät moottorin ikkunoina kartan päällä (M 7.4 ja 7.5), joten lokia
+> ei tarvita pääruudussa. Loki kerää silti kaiken, ja sen voi lukea
+> näppäimellä `o` tai taukovalikosta (`read LOG`, D 11.4).
 
 layout MAIN
 
 ```
 m
-l
 ```
 
 legend:
 - m map
-- l LOG size.height 4 read
 
 log LOG history 50
 - STD.MESSAGE.COMBAT
 - SPEECH
-- SOLDIER
 
 menu PAUSE
 - RESUME
+- READ_LOG read LOG
 - SAVE save
 - QUIT
 
@@ -41,3 +40,4 @@ keys GAME
 - MOVE.EAST l right
 - WAIT s
 - pass z
+- read LOG o
