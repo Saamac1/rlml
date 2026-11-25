@@ -15,12 +15,18 @@ pub struct DiskStore {
 impl DiskStore {
     /// Saves in `dir`, `NAME.save` each.
     pub fn new(dir: &Path) -> DiskStore {
-        DiskStore { dir: dir.to_path_buf(), ext: ".save" }
+        DiskStore {
+            dir: dir.to_path_buf(),
+            ext: ".save",
+        }
     }
 
     /// Files in `dir` by their names as they are: the profile (D 3.2).
     pub fn plain(dir: &Path) -> DiskStore {
-        DiskStore { dir: dir.to_path_buf(), ext: "" }
+        DiskStore {
+            dir: dir.to_path_buf(),
+            ext: "",
+        }
     }
 
     fn file(&self, name: &str) -> PathBuf {
@@ -46,7 +52,9 @@ impl Store for DiskStore {
     }
 
     fn list(&self) -> Vec<String> {
-        let Ok(entries) = std::fs::read_dir(&self.dir) else { return vec![] };
+        let Ok(entries) = std::fs::read_dir(&self.dir) else {
+            return vec![];
+        };
         let ext = self.ext;
         let mut out: Vec<String> = entries
             .flatten()
@@ -56,7 +64,11 @@ impl Store for DiskStore {
                 if name.ends_with(".tmp") {
                     return None;
                 }
-                if ext.is_empty() { Some(name) } else { name.strip_suffix(ext).map(String::from) }
+                if ext.is_empty() {
+                    Some(name)
+                } else {
+                    name.strip_suffix(ext).map(String::from)
+                }
             })
             .collect();
         out.sort();
@@ -67,7 +79,11 @@ impl Store for DiskStore {
 /// The player's data folder for a game (D 3.2): the system's user data
 /// folder, then `rlml/GAME`.
 pub fn user_data(game: &str) -> Option<PathBuf> {
-    let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    let env = |k: &str| {
+        std::env::var_os(k)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    };
     let base = if cfg!(target_os = "windows") {
         env("APPDATA")
     } else if cfg!(target_os = "macos") {
@@ -92,8 +108,15 @@ mod tests {
         s.write("manual-1", "two").unwrap();
         s.write("auto-1", "three").unwrap();
         assert_eq!(s.list(), ["auto-1", "manual-1"]);
-        assert_eq!(s.read("auto-1").as_deref(), Some("three"), "the write replaced the save");
-        assert!(!dir.join("auto-1.save.tmp").exists(), "the temporary file was renamed");
+        assert_eq!(
+            s.read("auto-1").as_deref(),
+            Some("three"),
+            "the write replaced the save"
+        );
+        assert!(
+            !dir.join("auto-1.save.tmp").exists(),
+            "the temporary file was renamed"
+        );
         // a write that broke off leaves its temporary file, which is no save
         std::fs::write(dir.join("quit.save.tmp"), "half").unwrap();
         assert_eq!(s.list(), ["auto-1", "manual-1"]);

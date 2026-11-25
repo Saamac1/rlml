@@ -37,12 +37,25 @@ impl Game {
     pub fn new(m: &'static Model, seed: u64, size: (usize, usize)) -> RtResult<Game> {
         let mut app = App::new(m, seed, size)?;
         app.view.truecolor = true;
-        Ok(Game { m, seed, app, feed: Feed::default(), events: vec![], frames: VecDeque::new(), shown: None, sheet: StyleSheet::default(), journal: None })
+        Ok(Game {
+            m,
+            seed,
+            app,
+            feed: Feed::default(),
+            events: vec![],
+            frames: VecDeque::new(),
+            shown: None,
+            sheet: StyleSheet::default(),
+            journal: None,
+        })
     }
 
     /// The game's name, which names its data folder (D 3.2).
     pub fn name(&self) -> String {
-        self.m.named_game().map(|g| g.name.clone()).unwrap_or_default()
+        self.m
+            .named_game()
+            .map(|g| g.name.clone())
+            .unwrap_or_default()
     }
 
     /// The data folder's files as the worker read them: saves in `saves/`
@@ -65,7 +78,10 @@ impl Game {
     /// worker to write to OPFS: `(path, Some(text))` or `(path, None)` to
     /// remove.
     pub fn store_changes(&mut self) -> Vec<(String, Option<String>)> {
-        self.journal.as_ref().map(|j| j.take_changes()).unwrap_or_default()
+        self.journal
+            .as_ref()
+            .map(|j| j.take_changes())
+            .unwrap_or_default()
     }
 
     /// A game over: the browser cannot close its tab, so a new game
@@ -157,6 +173,9 @@ impl Game {
     /// The log's lines as the player reads them, oldest first.
     pub fn log_lines(&self) -> Vec<String> {
         let w = &self.app.r.w;
-        w.log.iter().map(|l| w.text(&self.app.lang, &l.key, &l.args)).collect()
+        w.log
+            .iter()
+            .map(|l| w.text(&self.app.lang, &l.key, &l.args))
+            .collect()
     }
 }

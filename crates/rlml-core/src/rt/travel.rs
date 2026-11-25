@@ -91,10 +91,20 @@ impl TravelFields {
         let game = m.named_game();
         let ns = game.and_then(|g| g.namespace.as_deref());
         let field = |key: &str, kinds: &[Kind]| -> Option<String> {
-            let name = game?.items.iter().find(|i| i.key() == key)?.word(1)?.to_string();
-            m.resolve_kind(ns, &name, kinds).ok().map(|d| d.full.clone())
+            let name = game?
+                .items
+                .iter()
+                .find(|i| i.key() == key)?
+                .word(1)?
+                .to_string();
+            m.resolve_kind(ns, &name, kinds)
+                .ok()
+                .map(|d| d.full.clone())
         };
-        let distance = game.and_then(|g| g.items.iter().find(|i| i.key() == "follow_distance")).and_then(|i| i.word(1)).and_then(|w| w.parse().ok());
+        let distance = game
+            .and_then(|g| g.items.iter().find(|i| i.key() == "follow_distance"))
+            .and_then(|i| i.word(1))
+            .and_then(|w| w.parse().ok());
         TravelFields {
             walk: field("walk", &[Kind::Command]),
             walk_stop: field("walk_stop", &[Kind::Query]),
@@ -120,13 +130,17 @@ fn dir_to(a: Pos, b: Pos) -> Option<Dir> {
 impl<'m> Runner<'m> {
     /// The member whose input seat `n` is awaited for now.
     fn turn_member(&self, n: SeatId) -> Option<EntityId> {
-        (self.awaiting() == Some(n)).then_some(self.w.s.player?).filter(|&p| self.w.s.seat_of(p) == Some(n))
+        (self.awaiting() == Some(n))
+            .then_some(self.w.s.player?)
+            .filter(|&p| self.w.s.seat_of(p) == Some(n))
     }
 
     /// The actors in the shared view on `map`, members not counted (M 8.1:
     /// an actor coming into view stops a travel).
     pub fn actors_in_view(&self, map: MapId) -> BTreeSet<EntityId> {
-        let Some(view) = self.w.shared_view(map) else { return BTreeSet::new() };
+        let Some(view) = self.w.shared_view(map) else {
+            return BTreeSet::new();
+        };
         self.w
             .s
             .entities_on(map)
@@ -139,16 +153,28 @@ impl<'m> Runner<'m> {
     /// The cells the players see or remember on `map`: a route passes only
     /// these (M 8.1).
     fn known_cells(&self, map: MapId) -> BTreeSet<(i32, i32)> {
-        let mut known: BTreeSet<(i32, i32)> = self.w.s.maps[map].remembered.iter().copied().collect();
+        let mut known: BTreeSet<(i32, i32)> =
+            self.w.s.maps[map].remembered.iter().copied().collect();
         if let Some(view) = self.w.shared_view(map) {
             known.extend(view);
         }
         known
     }
 
-    fn new_travel(&self, member: EntityId, goal: Goal, order: Option<BTreeSet<EntityId>>) -> Option<Travel> {
+    fn new_travel(
+        &self,
+        member: EntityId,
+        goal: Goal,
+        order: Option<BTreeSet<EntityId>>,
+    ) -> Option<Travel> {
         let map = self.w.s.at(member)?.map;
-        Some(Travel { member, goal, seen: self.actors_in_view(map), order, steps: 0 })
+        Some(Travel {
+            member,
+            goal,
+            seen: self.actors_in_view(map),
+            order,
+            steps: 0,
+        })
     }
 
     /// Does seat `n` travel now, or has it an order for its turn?
@@ -186,21 +212,42 @@ impl<'m> Runner<'m> {
     /// An order from seat `n` on another seat's turn (M 8.1). A new order
     /// replaces the old one.
     pub fn give_order(&mut self, n: SeatId, goal: OrderGoal) {
-        let map = self.w.s.active(n).into_iter().chain(self.w.s.seat_members(n)).find_map(|e| self.w.s.at(e)).map(|p| p.map);
+        let map = self
+            .w
+            .s
+            .active(n)
+            .into_iter()
+            .chain(self.w.s.seat_members(n))
+            .find_map(|e| self.w.s.at(e))
+            .map(|p| p.map);
         let seen = map.map(|m| self.actors_in_view(m)).unwrap_or_default();
         self.orders.insert(n, Order { goal, seen });
     }
 
-    fn start(&mut self, n: SeatId, goal: OrderGoal, order: Option<BTreeSet<EntityId>>) -> RtResult<bool> {
-        let Some(member) = self.turn_member(n) else { return Err(format!("seat {n} has no turn now")) };
-        let Some(at) = self.w.s.at(member) else { return Ok(false) };
+    fn start(
+        &mut self,
+        n: SeatId,
+        goal: OrderGoal,
+        order: Option<BTreeSet<EntityId>>,
+    ) -> RtResult<bool> {
+        let Some(member) = self.turn_member(n) else {
+            return Err(format!("seat {n} has no turn now"));
+        };
+        let Some(at) = self.w.s.at(member) else {
+            return Ok(false);
+        };
         let goal = match goal {
             OrderGoal::Cell(to) => {
                 if self.fields.walk.is_none() || to == at {
                     return Ok(false);
                 }
                 let known = self.route_cells(member, to)?;
-                if self.w.route_within(at, &self.ends(member, at, to), Some(member), Some(&known)).is_empty() && !self.bumps(member, at, to) {
+                if self
+                    .w
+                    .route_within(at, &self.ends(member, at, to), Some(member), Some(&known))
+                    .is_empty()
+                    && !self.bumps(member, at, to)
+                {
                     return Ok(false);
                 }
                 Goal::Cell(to)
@@ -215,7 +262,11 @@ impl<'m> Runner<'m> {
                 };
                 let Some(t) = target else { return Ok(false) };
                 let same_map = self.w.s.at(t).is_some_and(|p| p.map == at.map);
-                if t == member || !self.w.s.get(t).alive || !same_map || self.would_circle(member, t) {
+                if t == member
+                    || !self.w.s.get(t).alive
+                    || !same_map
+                    || self.would_circle(member, t)
+                {
                     return Ok(false);
                 }
                 Goal::Follow(t)
@@ -236,10 +287,15 @@ impl<'m> Runner<'m> {
 
     /// The `leader` query's entity for `who` (D 3.3).
     fn leader_of(&mut self, who: EntityId) -> RtResult<Option<EntityId>> {
-        let Some(q) = self.fields.leader.clone() else { return Ok(None) };
-        let mut env = super::eval::Env::new(super::eval::BodyKind::Handler, "follow", None, "<engine>");
+        let Some(q) = self.fields.leader.clone() else {
+            return Ok(None);
+        };
+        let mut env =
+            super::eval::Env::new(super::eval::BodyKind::Handler, "follow", None, "<engine>");
         env.map = self.w.s.at(who).map(|p| p.map);
-        let v = self.w.call_function(&q, vec![(None, Value::Entity(who))], &mut env)?;
+        let v = self
+            .w
+            .call_function(&q, vec![(None, Value::Entity(who))], &mut env)?;
         Ok(v.as_entity())
     }
 
@@ -250,7 +306,12 @@ impl<'m> Runner<'m> {
             if t == member {
                 return true;
             }
-            match self.travels.values().find(|tr| tr.member == t).map(|tr| tr.goal) {
+            match self
+                .travels
+                .values()
+                .find(|tr| tr.member == t)
+                .map(|tr| tr.goal)
+            {
                 Some(Goal::Follow(next)) => t = next,
                 _ => return false,
             }
@@ -262,14 +323,18 @@ impl<'m> Runner<'m> {
     /// step ran and the travel goes on; `Some(stop)`: it ended, and the
     /// seat's input is awaited. An order starts here on its seat's turn.
     pub fn step_travel(&mut self) -> RtResult<Option<Stop>> {
-        let Some(n) = self.awaiting() else { return Ok(None) };
+        let Some(n) = self.awaiting() else {
+            return Ok(None);
+        };
         if !self.travels.contains_key(&n)
             && let Some(o) = self.orders.remove(&n)
             && !self.start(n, o.goal, Some(o.seen))?
         {
             return Ok(Some(Stop::NoRoute));
         }
-        let Some(mut t) = self.travels.remove(&n) else { return Ok(None) };
+        let Some(mut t) = self.travels.remove(&n) else {
+            return Ok(None);
+        };
         self.record(Some(n), Act::Step);
         let stop = self.step(n, &mut t)?;
         // a stale order rests on the view when it was given, which is not
@@ -289,7 +354,9 @@ impl<'m> Runner<'m> {
         if self.turn_member(n) != Some(t.member) {
             return Ok(Some(Stop::TurnLost));
         }
-        let Some(at) = self.w.s.at(t.member) else { return Ok(Some(Stop::TurnLost)) };
+        let Some(at) = self.w.s.at(t.member) else {
+            return Ok(Some(Stop::TurnLost));
+        };
         let ai = matches!(t.goal, Goal::Follow(_)) && self.fields.follow_ai.is_some();
         // an actor not seen at the last step, or for an order's second step
         // one not seen when the order was given (M 8.1)
@@ -312,12 +379,29 @@ impl<'m> Runner<'m> {
                 // a cell an entity blocks: the last step walks into it,
                 // so the game's walk uses the thing as a press would
                 if self.bumps(t.member, at, to) {
-                    let Some(cmd) = self.walk_step(t.member, at, to)? else { return Ok(Some(Stop::Game)) };
+                    let Some(cmd) = self.walk_step(t.member, at, to)? else {
+                        return Ok(Some(Stop::Game));
+                    };
                     t.steps += 1;
-                    return Ok(Some(if self.run_input(n, &cmd)? { Stop::Arrived } else { Stop::Failed }));
+                    return Ok(Some(if self.run_input(n, &cmd)? {
+                        Stop::Arrived
+                    } else {
+                        Stop::Failed
+                    }));
                 }
                 let known = self.route_cells(t.member, to)?;
-                let Some(&next) = self.w.route_within(at, &self.ends(t.member, at, to), Some(t.member), Some(&known)).first() else { return Ok(Some(Stop::NoRoute)) };
+                let Some(&next) = self
+                    .w
+                    .route_within(
+                        at,
+                        &self.ends(t.member, at, to),
+                        Some(t.member),
+                        Some(&known),
+                    )
+                    .first()
+                else {
+                    return Ok(Some(Stop::NoRoute));
+                };
                 // a route passes a blocking actor that may move away, but
                 // the step does not walk into it: walking into a thing
                 // uses it (M 8.1)
@@ -327,28 +411,48 @@ impl<'m> Runner<'m> {
                 self.walk_step(t.member, at, next)?
             }
             Goal::Follow(leader) => {
-                let Some(lat) = self.w.s.at(leader).filter(|p| p.map == at.map && self.w.s.get(leader).alive) else { return Ok(Some(Stop::LeaderGone)) };
+                let Some(lat) = self
+                    .w
+                    .s
+                    .at(leader)
+                    .filter(|p| p.map == at.map && self.w.s.get(leader).alive)
+                else {
+                    return Ok(Some(Stop::LeaderGone));
+                };
                 if let Some(behavior) = self.fields.follow_ai.clone() {
                     if self.walk_stops(t.member, at)? {
                         return Ok(Some(Stop::Game));
                     }
-                    match self.w.run_ai_with(&behavior, t.member, vec![Value::Entity(leader)])? {
+                    match self
+                        .w
+                        .run_ai_with(&behavior, t.member, vec![Value::Entity(leader)])?
+                    {
                         Value::Command(c) => Some(c),
                         _ => self.rest(),
                     }
                 } else if at.distance(lat) <= self.fields.follow_distance {
                     self.rest()
                 } else {
-                    let near: Vec<Pos> = Dir::ALL.into_iter().map(|d| lat.step(d)).filter(|&p| p != at).collect();
+                    let near: Vec<Pos> = Dir::ALL
+                        .into_iter()
+                        .map(|d| lat.step(d))
+                        .filter(|&p| p != at)
+                        .collect();
                     let known = self.known_cells(at.map);
-                    match self.w.route_within(at, &near, Some(t.member), Some(&known)).first() {
+                    match self
+                        .w
+                        .route_within(at, &near, Some(t.member), Some(&known))
+                        .first()
+                    {
                         Some(&next) => self.walk_step(t.member, at, next)?,
                         None => self.rest(),
                     }
                 }
             }
         };
-        let Some(cmd) = cmd else { return Ok(Some(Stop::Game)) };
+        let Some(cmd) = cmd else {
+            return Ok(Some(Stop::Game));
+        };
         t.steps += 1;
         if !self.run_input(n, &cmd)? {
             return Ok(Some(Stop::Failed));
@@ -361,13 +465,27 @@ impl<'m> Runner<'m> {
     /// (D 3.3, M 8.1).
     fn route_cells(&mut self, who: EntityId, to: Pos) -> RtResult<BTreeSet<(i32, i32)>> {
         let mut known = self.known_cells(to.map);
-        let Some(q) = self.fields.walk_avoid.clone() else { return Ok(known) };
-        let mut env = super::eval::Env::new(super::eval::BodyKind::Handler, "walk_avoid", None, "<engine>");
+        let Some(q) = self.fields.walk_avoid.clone() else {
+            return Ok(known);
+        };
+        let mut env = super::eval::Env::new(
+            super::eval::BodyKind::Handler,
+            "walk_avoid",
+            None,
+            "<engine>",
+        );
         env.map = Some(to.map);
         let mut avoided = Vec::new();
         for &(x, y) in known.iter().filter(|&&c| c != (to.x, to.y)) {
             let cell = Pos { map: to.map, x, y };
-            if matches!(self.w.call_function(&q, vec![(None, Value::Entity(who)), (None, Value::Pos(cell))], &mut env.clone())?, Value::Bool(true)) {
+            if matches!(
+                self.w.call_function(
+                    &q,
+                    vec![(None, Value::Entity(who)), (None, Value::Pos(cell))],
+                    &mut env.clone()
+                )?,
+                Value::Bool(true)
+            ) {
                 avoided.push((x, y));
             }
         }
@@ -389,7 +507,11 @@ impl<'m> Runner<'m> {
         if !self.blocked_by_entity(who, to) {
             return vec![to];
         }
-        Dir::ALL.into_iter().map(|d| to.step(d)).filter(|&p| p != at && !self.w.blocks(p, "move", Some(who), true)).collect()
+        Dir::ALL
+            .into_iter()
+            .map(|d| to.step(d))
+            .filter(|&p| p != at && !self.w.blocks(p, "move", Some(who), true))
+            .collect()
     }
 
     /// Is `who` next to `to`, in which an entity blocks it: the travel's
@@ -399,7 +521,10 @@ impl<'m> Runner<'m> {
     }
 
     fn rest(&self) -> Option<CommandValue> {
-        self.fields.rest.clone().map(|name| CommandValue { name, args: vec![] })
+        self.fields
+            .rest
+            .clone()
+            .map(|name| CommandValue { name, args: vec![] })
     }
 
     /// The `walk` command towards `next`, or `None` when `walk_stop` stops
@@ -408,16 +533,32 @@ impl<'m> Runner<'m> {
         if self.walk_stops(who, next)? {
             return Ok(None);
         }
-        let (Some(walk), Some(d)) = (self.fields.walk.clone(), dir_to(at, next)) else { return Ok(None) };
-        Ok(Some(CommandValue { name: walk, args: vec![(None, Value::Dir(d))] }))
+        let (Some(walk), Some(d)) = (self.fields.walk.clone(), dir_to(at, next)) else {
+            return Ok(None);
+        };
+        Ok(Some(CommandValue {
+            name: walk,
+            args: vec![(None, Value::Dir(d))],
+        }))
     }
 
     /// The game's `walk_stop(who, next)` before a step (D 3.3).
     fn walk_stops(&mut self, who: EntityId, next: Pos) -> RtResult<bool> {
-        let Some(q) = self.fields.walk_stop.clone() else { return Ok(false) };
-        let mut env = super::eval::Env::new(super::eval::BodyKind::Handler, "walk_stop", None, "<engine>");
+        let Some(q) = self.fields.walk_stop.clone() else {
+            return Ok(false);
+        };
+        let mut env = super::eval::Env::new(
+            super::eval::BodyKind::Handler,
+            "walk_stop",
+            None,
+            "<engine>",
+        );
         env.map = Some(next.map);
-        let v = self.w.call_function(&q, vec![(None, Value::Entity(who)), (None, Value::Pos(next))], &mut env)?;
+        let v = self.w.call_function(
+            &q,
+            vec![(None, Value::Entity(who)), (None, Value::Pos(next))],
+            &mut env,
+        )?;
         Ok(matches!(v, Value::Bool(true)))
     }
 }

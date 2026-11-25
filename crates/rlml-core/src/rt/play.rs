@@ -32,10 +32,18 @@ pub struct Session<'m> {
 pub fn keymap(m: &Model) -> Vec<(String, Action)> {
     let game = m.named_game();
     let ns = game.and_then(|g| g.namespace.as_deref());
-    let base = game.and_then(|g| g.items.iter().find(|i| i.key() == "keys")).and_then(|i| i.word(1)).map(String::from);
+    let base = game
+        .and_then(|g| g.items.iter().find(|i| i.key() == "keys"))
+        .and_then(|i| i.word(1))
+        .map(String::from);
     let mut out = Vec::new();
     for ctx in ["ALWAYS".to_string()].into_iter().chain(base) {
-        let Some(full) = names::candidates(ns, &ctx).into_iter().find(|c| m.contexts.contains_key(c)) else { continue };
+        let Some(full) = names::candidates(ns, &ctx)
+            .into_iter()
+            .find(|c| m.contexts.contains_key(c))
+        else {
+            continue;
+        };
         for b in &m.contexts[&full] {
             if b.kind != "keys" {
                 continue;
@@ -65,8 +73,17 @@ impl<'m> Session<'m> {
     pub fn start(m: &'m Model, seed: u64) -> RtResult<Session<'m>> {
         let mut w = World::new_game(m, seed)?;
         w.begin()?;
-        let lang = m.settings().get("language").map(|i| i.rest(1).to_string()).unwrap_or_default();
-        let mut s = Session { r: Runner::new(w), lang, keys: keymap(m), log_seen: 0 };
+        let lang = m
+            .settings()
+            .get("language")
+            .map(|i| i.rest(1).to_string())
+            .unwrap_or_default();
+        let mut s = Session {
+            r: Runner::new(w),
+            lang,
+            keys: keymap(m),
+            log_seen: 0,
+        };
         s.r.run(0)?;
         Ok(s)
     }
@@ -87,7 +104,11 @@ impl<'m> Session<'m> {
 pub fn frame(w: &mut World, lang: &str, log_seen: &mut usize) -> String {
     let mut out = format!("turn {}  time {}", w.s.game.turn(), w.s.game.time);
     if let Some(p) = w.s.player {
-        let hp = w.m.resolve(None, "HP").ok().map(|d| d.full.clone()).and_then(|hp| w.s.get(p).get(&hp).cloned());
+        let hp =
+            w.m.resolve(None, "HP")
+                .ok()
+                .map(|d| d.full.clone())
+                .and_then(|hp| w.s.get(p).get(&hp).cloned());
         if let Some(hp) = hp {
             let now = hp.get("now").and_then(Value::as_number).unwrap_or(0);
             let max = hp.get("max").and_then(Value::as_number).unwrap_or(0);
@@ -105,7 +126,10 @@ pub fn frame(w: &mut World, lang: &str, log_seen: &mut usize) -> String {
             out.push('\n');
         }
     }
-    let lines: Vec<String> = w.log[*log_seen..].iter().map(|l| w.text(lang, &l.key, &l.args)).collect();
+    let lines: Vec<String> = w.log[*log_seen..]
+        .iter()
+        .map(|l| w.text(lang, &l.key, &l.args))
+        .collect();
     *log_seen = w.log.len();
     for l in lines {
         out.push_str(&format!("  · {l}\n"));
@@ -128,7 +152,11 @@ impl<'m> Session<'m> {
             {
                 let ok = self.r.scene_choose(&item.name)?;
                 self.r.run(0)?;
-                return Ok(if ok { format!("scene.choose {}", item.name) } else { format!("({} cannot be chosen)", item.name) });
+                return Ok(if ok {
+                    format!("scene.choose {}", item.name)
+                } else {
+                    format!("({} cannot be chosen)", item.name)
+                });
             }
             // `enter` cancels a field and closes what `open` waits for
             if matches!(self.r.scene_pause(), Some(Pause::Ask { .. })) && key == "enter" {
@@ -162,7 +190,9 @@ impl<'m> Session<'m> {
         let player_alive = self.r.w.s.player.is_some_and(|p| self.r.w.s.get(p).alive);
         let note = match self.action(key).cloned() {
             None => return Ok(format!("(key `{key}` is not bound)")),
-            Some(Action::Open(menu)) => return Ok(format!("(menu {menu}: menus are not supported yet)")),
+            Some(Action::Open(menu)) => {
+                return Ok(format!("(menu {menu}: menus are not supported yet)"));
+            }
             Some(Action::Engine(a)) if a == "pass" => {
                 // without a player's turn, `pass` runs the next round (M 6.1.2)
                 if !player_alive {
@@ -177,7 +207,10 @@ impl<'m> Session<'m> {
                     self.r.run(1)?;
                     return Ok("(no player: a round goes by)".into());
                 }
-                let ok = self.r.player(&CommandValue { name: c.clone(), args: vec![] })?;
+                let ok = self.r.player(&CommandValue {
+                    name: c.clone(),
+                    args: vec![],
+                })?;
                 if ok { c } else { format!("{c} failed") }
             }
         };
@@ -213,7 +246,11 @@ pub fn transcript_and_log(m: &Model, seed: u64, keys: &[&str]) -> RtResult<(Stri
 /// Replays an input log and gives a transcript: the first frame, then each
 /// row and the frame after it (M 4.4).
 pub fn replay_transcript(m: &Model, log: &InputLog) -> RtResult<String> {
-    let lang = m.settings().get("language").map(|i| i.rest(1).to_string()).unwrap_or_default();
+    let lang = m
+        .settings()
+        .get("language")
+        .map(|i| i.rest(1).to_string())
+        .unwrap_or_default();
     let mut rp = Replay::start(m, log)?;
     let mut seen = 0;
     let mut out = format!("seed {}\n", log.seed);

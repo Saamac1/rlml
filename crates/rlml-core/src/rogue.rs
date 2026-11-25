@@ -46,7 +46,13 @@ pub struct Decl {
 }
 
 fn params(ps: &[Param]) -> Vec<RsParam> {
-    ps.iter().map(|p| RsParam { name: p.name.clone(), ty: p.ty.to_string(), default: p.default.as_ref().map(|d| d.to_string()) }).collect()
+    ps.iter()
+        .map(|p| RsParam {
+            name: p.name.clone(),
+            ty: p.ty.to_string(),
+            default: p.default.as_ref().map(|d| d.to_string()),
+        })
+        .collect()
 }
 
 /// Parses a code block and lists its top-level declarations.
@@ -60,17 +66,30 @@ pub fn declarations(code: &RawCode) -> (Vec<Decl>, Vec<Diagnostic>) {
                 ItemKind::Event { params: p } => (DeclKind::Event, params(p), None),
                 ItemKind::Handler(h) => (
                     DeclKind::Handler,
-                    h.names.iter().map(|n| RsParam { name: n.clone(), ty: String::new(), default: None }).collect(),
+                    h.names
+                        .iter()
+                        .map(|n| RsParam {
+                            name: n.clone(),
+                            ty: String::new(),
+                            default: None,
+                        })
+                        .collect(),
                     Some(h.event.clone()),
                 ),
-                ItemKind::Function { query: true, params: p, .. } => (DeclKind::Query, params(p), None),
+                ItemKind::Function {
+                    query: true,
+                    params: p,
+                    ..
+                } => (DeclKind::Query, params(p), None),
                 ItemKind::Function { params: p, .. } => (DeclKind::Function, params(p), None),
                 ItemKind::Command { params: p, .. } => (DeclKind::Command, params(p), None),
                 ItemKind::CommandAlias(_) => (DeclKind::Command, vec![], None),
                 ItemKind::Ai { .. } => (DeclKind::Ai, vec![], None),
                 ItemKind::Generator { params: p, .. } => (DeclKind::Generator, params(p), None),
                 ItemKind::Map { .. } => (DeclKind::Map, vec![], None),
-                ItemKind::Scene { params: p, .. } | ItemKind::Timeline { params: p, .. } => (DeclKind::Scene, params(p), None),
+                ItemKind::Scene { params: p, .. } | ItemKind::Timeline { params: p, .. } => {
+                    (DeclKind::Scene, params(p), None)
+                }
             };
             Decl {
                 kind,
@@ -93,7 +112,12 @@ mod tests {
     use super::*;
 
     fn code(src: &str) -> RawCode {
-        RawCode { file: "t".into(), line: 10, namespace: Some("STD".into()), lines: src.lines().map(String::from).collect() }
+        RawCode {
+            file: "t".into(),
+            line: 10,
+            namespace: Some("STD".into()),
+            lines: src.lines().map(String::from).collect(),
+        }
     }
 
     fn decls(src: &str) -> Vec<Decl> {
@@ -107,13 +131,25 @@ mod tests {
         let d = decls(
             "event HIT(target: entity, attacker: entity, amount: number, cause: name = none)\n\n// c\nfn HURT(target: entity, amount: number):\n    emit HIT(target, none, amount)\n\ncommand MOVE.NORTH = MOVE(north)\nai HUNTER:\n    return WAIT()\n",
         );
-        assert_eq!(d.iter().map(|d| (d.kind, d.name.as_str())).collect::<Vec<_>>(), [
-            (DeclKind::Event, "HIT"),
-            (DeclKind::Function, "HURT"),
-            (DeclKind::Command, "MOVE.NORTH"),
-            (DeclKind::Ai, "HUNTER")
-        ]);
-        assert_eq!(d[0].params[3], RsParam { name: "cause".into(), ty: "name".into(), default: Some("none".into()) });
+        assert_eq!(
+            d.iter()
+                .map(|d| (d.kind, d.name.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                (DeclKind::Event, "HIT"),
+                (DeclKind::Function, "HURT"),
+                (DeclKind::Command, "MOVE.NORTH"),
+                (DeclKind::Ai, "HUNTER")
+            ]
+        );
+        assert_eq!(
+            d[0].params[3],
+            RsParam {
+                name: "cause".into(),
+                ty: "name".into(),
+                default: Some("none".into())
+            }
+        );
         assert_eq!(d[1].line, 13);
         assert_eq!(d[1].namespace.as_deref(), Some("STD"));
     }
@@ -123,7 +159,10 @@ mod tests {
         let d = decls(
             "after HIT(target, attacker, amount) as HIT_MESSAGE priority -10 when WITNESSED(target):\n    log(X)\non begin() as SPAWN_PLAYER:\n    x = 1\non turn():\n    x = 2\ncomponent FOLLOW(target: entity = none, distance: number = 1)\n",
         );
-        assert_eq!((d[0].event.as_deref(), d[0].name.as_str()), (Some("HIT"), "HIT_MESSAGE"));
+        assert_eq!(
+            (d[0].event.as_deref(), d[0].name.as_str()),
+            (Some("HIT"), "HIT_MESSAGE")
+        );
         assert_eq!(d[1].name, "SPAWN_PLAYER");
         assert_eq!(d[2].name, "", "unnamed handler");
         assert_eq!(d[3].params[1].default.as_deref(), Some("1"));
@@ -134,7 +173,10 @@ mod tests {
         let d = decls(
             "command FEED(item: entity from actor.PACK.items where it has FOOD, n: number count) cost 120:\n    return\ncomponent PACK(items: collection 26 merge STACKABLE)\n",
         );
-        assert_eq!((d[0].params[0].ty.as_str(), d[0].params[1].ty.as_str()), ("entity", "number"));
+        assert_eq!(
+            (d[0].params[0].ty.as_str(), d[0].params[1].ty.as_str()),
+            ("entity", "number")
+        );
         assert_eq!(d[1].params[0].ty, "collection 26 merge STACKABLE");
     }
 

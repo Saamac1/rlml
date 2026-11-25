@@ -64,12 +64,19 @@ fn content_size(world: &World, tab: &str) -> Option<(usize, usize)> {
 /// The buttons' look and the pressed one's: the `panels` rows `button`
 /// and `button.pressed` (D 9.3).
 pub fn button_look(world: &World, tc: bool) -> ((Border, Style), Style) {
-    (panel_style(world, "button", tc), panel_style(world, "button.pressed", tc).1)
+    (
+        panel_style(world, "button", tc),
+        panel_style(world, "button.pressed", tc).1,
+    )
 }
 
 /// The tab row's height: three rows for buttons with a border, else one.
 fn tab_row_height(world: &World, tc: bool) -> usize {
-    if panel_style(world, "button", tc).0 != Border::None { 3 } else { 1 }
+    if panel_style(world, "button", tc).0 != Border::None {
+        3
+    } else {
+        1
+    }
 }
 
 /// A tabs area's key: its contents as written, so the same tabs keep
@@ -160,7 +167,11 @@ pub struct View {
 /// color of the 256-color palette, which every common terminal shows.
 /// macOS Terminal before version 26, for one, shows no 24-bit colors.
 pub fn rgb(c: Rgb, truecolor: bool) -> Color {
-    if truecolor { Color::Rgb(c[0], c[1], c[2]) } else { Color::Ansi(ansi256(c)) }
+    if truecolor {
+        Color::Rgb(c[0], c[1], c[2])
+    } else {
+        Color::Ansi(ansi256(c))
+    }
 }
 
 /// The nearest color of the 256-color palette: the 6×6×6 cube or, for a
@@ -174,16 +185,29 @@ pub fn ansi256(c: Rgb) -> u8 {
     let grey = ((avg - 8).max(0) / 10).min(23);
     let grey_v = 8 + 10 * grey;
     let dist = |t: [i32; 3]| (0..3).map(|i| (t[i] - c[i] as i32).pow(2)).sum::<i32>();
-    if dist([grey_v; 3]) < dist(cube) { 232 + grey as u8 } else { (16 + 36 * r + 6 * g + b) as u8 }
+    if dist([grey_v; 3]) < dist(cube) {
+        232 + grey as u8
+    } else {
+        (16 + 36 * r + 6 * g + b) as u8
+    }
 }
 
 fn style_of(look: &Look, tc: bool) -> Style {
-    Style { fg: look.fg.map(|c| rgb(c, tc)), bg: look.bg.map(|c| rgb(c, tc)), ..Style::default() }
+    Style {
+        fg: look.fg.map(|c| rgb(c, tc)),
+        bg: look.bg.map(|c| rgb(c, tc)),
+        ..Style::default()
+    }
 }
 
 /// The layout for the window: the first `layout` row whose `when` holds,
 /// else the default (D 11.1).
-fn layout_block(w: &World, cols: usize, rows: usize, portrait: bool) -> Option<rlml_core::syntax::RawBlock> {
+fn layout_block(
+    w: &World,
+    cols: usize,
+    rows: usize,
+    portrait: bool,
+) -> Option<rlml_core::syntax::RawBlock> {
     w.m.layout_for(cols, rows, portrait).cloned()
 }
 
@@ -192,7 +216,9 @@ fn areas(rows: &[RawItem]) -> (Vec<Area>, Dims) {
     let mut out = Vec::new();
     let mut dims = Dims::new();
     for item in rows {
-        let Ok((ch, rest)) = glyph_char(item) else { continue };
+        let Ok((ch, rest)) = glyph_char(item) else {
+            continue;
+        };
         let words: Vec<&str> = rest.tokens.iter().map(|t| t.text.as_str()).collect();
         let (sw, sh) = rlml_core::model::legend_size(&words);
         let dim = |v: Option<&str>| v.and_then(|s| Dim::parse(s).ok()).flatten();
@@ -203,28 +229,72 @@ fn areas(rows: &[RawItem]) -> (Vec<Area>, Dims) {
         while i < words.len() {
             match words[i] {
                 "cursor" => {
-                    let n = if words.get(i + 1) == Some(&"bg") { 2 } else { 1 };
-                    cursor = words.iter().skip(i + 1).take(n).map(|w| w.to_string()).collect();
+                    let n = if words.get(i + 1) == Some(&"bg") {
+                        2
+                    } else {
+                        1
+                    };
+                    cursor = words
+                        .iter()
+                        .skip(i + 1)
+                        .take(n)
+                        .map(|w| w.to_string())
+                        .collect();
                     i += 1 + n;
                 }
                 "follow" => {
-                    follow = match (words.get(i + 1), words.get(i + 2).and_then(|n| n.parse().ok())) {
+                    follow = match (
+                        words.get(i + 1),
+                        words.get(i + 2).and_then(|n| n.parse().ok()),
+                    ) {
                         (Some(&"margin"), Some(n)) => Follow::Margin(n),
                         _ => Follow::Center,
                     };
-                    i += if words.get(i + 1) == Some(&"margin") { 3 } else { 2 };
+                    i += if words.get(i + 1) == Some(&"margin") {
+                        3
+                    } else {
+                        2
+                    };
                 }
                 _ => i += 1,
             }
         }
         dims.insert(ch, size);
         let source = words.first().copied().unwrap_or("").to_string();
-        let menu = (source == "menu").then(|| words.get(1).map(|w| w.to_string())).flatten();
-        let tabs = if source == "tabs" { words.iter().skip(1).take_while(|w| !w.starts_with("size")).map(|w| w.to_string()).collect() } else { vec![] };
+        let menu = (source == "menu")
+            .then(|| words.get(1).map(|w| w.to_string()))
+            .flatten();
+        let tabs = if source == "tabs" {
+            words
+                .iter()
+                .skip(1)
+                .take_while(|w| !w.starts_with("size"))
+                .map(|w| w.to_string())
+                .collect()
+        } else {
+            vec![]
+        };
         let (read, center) = (words.contains(&"read"), words.contains(&"center"));
-        let read_below = words.iter().position(|w| *w == "read").and_then(|i| words.get(i + 1)).filter(|w| w.chars().next().is_some_and(|c| c.is_ascii_uppercase())).map(|w| w.to_string());
+        let read_below = words
+            .iter()
+            .position(|w| *w == "read")
+            .and_then(|i| words.get(i + 1))
+            .filter(|w| w.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
+            .map(|w| w.to_string());
         let (right, bottom) = (words.contains(&"right"), words.contains(&"bottom"));
-        out.push(Area { ch, source, follow, menu, cursor, tabs, read, read_below, center, right, bottom });
+        out.push(Area {
+            ch,
+            source,
+            follow,
+            menu,
+            cursor,
+            tabs,
+            read,
+            read_below,
+            center,
+            right,
+            bottom,
+        });
     }
     (out, dims)
 }
@@ -240,9 +310,20 @@ pub(crate) fn panel_style(w: &World, name: &str, tc: bool) -> (Border, Style) {
             continue;
         }
         let words: Vec<&str> = row.tokens.iter().map(|t| t.text.as_str()).collect();
-        let after = |k: &str| words.iter().position(|x| *x == k).and_then(|i| words.get(i + 1));
-        style.fg = after("fg").and_then(|c| w.color(c, ns)).map(|c| rgb(c, tc)).or(style.fg);
-        style.bg = after("bg").and_then(|c| w.color(c, ns)).map(|c| rgb(c, tc)).or(style.bg);
+        let after = |k: &str| {
+            words
+                .iter()
+                .position(|x| *x == k)
+                .and_then(|i| words.get(i + 1))
+        };
+        style.fg = after("fg")
+            .and_then(|c| w.color(c, ns))
+            .map(|c| rgb(c, tc))
+            .or(style.fg);
+        style.bg = after("bg")
+            .and_then(|c| w.color(c, ns))
+            .map(|c| rgb(c, tc))
+            .or(style.bg);
     }
     if let Some(b) = w.m.panel_border(name).and_then(Border::parse) {
         border = b;
@@ -262,8 +343,15 @@ fn panel_fade(w: &World, name: &str) -> Option<(f32, Rgb)> {
             continue;
         }
         let words: Vec<&str> = row.tokens.iter().map(|t| t.text.as_str()).collect();
-        let after = |k: &str| words.iter().position(|x| *x == k).and_then(|i| words.get(i + 1).copied());
-        fade = after("fade").and_then(rlml_core::rt::view::percent).or(fade);
+        let after = |k: &str| {
+            words
+                .iter()
+                .position(|x| *x == k)
+                .and_then(|i| words.get(i + 1).copied())
+        };
+        fade = after("fade")
+            .and_then(rlml_core::rt::view::percent)
+            .or(fade);
         bg = after("bg").and_then(|c| w.color(c, ns)).or(bg);
     }
     fade.map(|f| (f, bg.unwrap_or([0, 0, 0])))
@@ -276,11 +364,19 @@ fn log_color(w: &World, key: &str) -> Option<Rgb> {
         let (_, row) = item.marker();
         let ns = row.namespace.as_deref();
         let name = names::qualify(ns, row.key());
-        let matches = key == name || key.starts_with(&format!("{name}.")) || key == row.key() || key.starts_with(&format!("{}.", row.key()));
+        let matches = key == name
+            || key.starts_with(&format!("{name}."))
+            || key == row.key()
+            || key.starts_with(&format!("{}.", row.key()));
         if !matches {
             continue;
         }
-        let fg = row.tokens.iter().position(|t| t.is("fg")).and_then(|i| row.word(i + 1)).and_then(|c| w.color(c, ns));
+        let fg = row
+            .tokens
+            .iter()
+            .position(|t| t.is("fg"))
+            .and_then(|i| row.word(i + 1))
+            .and_then(|c| w.color(c, ns));
         if let Some(c) = fg
             && best.is_none_or(|(len, _)| row.key().len() > len)
         {
@@ -319,22 +415,44 @@ impl View {
     /// smaller than the area centred, the last place kept without a player.
     fn camera(&mut self, world: &World, map: MapId, w: i32, h: i32, follow: Follow) -> (i32, i32) {
         let (mw, mh) = (world.s.maps[map].width, world.s.maps[map].height);
-        let player = world.s.player.filter(|p| world.s.get(*p).alive).and_then(|p| world.s.at(p)).filter(|p| p.map == map);
+        let player = world
+            .s
+            .player
+            .filter(|p| world.s.get(*p).alive)
+            .and_then(|p| world.s.at(p))
+            .filter(|p| p.map == map);
         let margin = |size: i32| match follow {
             Follow::Margin(n) => n.min((size - 1) / 2),
             Follow::Center => 0,
         };
         // the group's box on this map (M 7.1); with one member it is the
         // player's cell, as before
-        let cells: Vec<(i32, i32)> = world.s.players().into_iter().filter_map(|e| world.s.at(e)).filter(|p| p.map == map).map(|p| (p.x, p.y)).collect();
-        let span = |pick: fn(&(i32, i32)) -> i32| cells.iter().map(pick).min().zip(cells.iter().map(pick).max());
+        let cells: Vec<(i32, i32)> = world
+            .s
+            .players()
+            .into_iter()
+            .filter_map(|e| world.s.at(e))
+            .filter(|p| p.map == map)
+            .map(|p| (p.x, p.y))
+            .collect();
+        let span = |pick: fn(&(i32, i32)) -> i32| {
+            cells
+                .iter()
+                .map(pick)
+                .min()
+                .zip(cells.iter().map(pick).max())
+        };
         let group = span(|c| c.0).zip(span(|c| c.1));
         // a group that does not fit the area falls back to the player
         let fits = |(lo, hi): (i32, i32), size: i32| hi - lo + 1 <= size - 2 * margin(size);
         let target = match world.s.camera {
             // `follow(camera, e)`: its cell or its top holder's; a destroyed
             // target leaves the camera where it was (M 7.1)
-            Some(e) => world.s.outer_at(e).filter(|p| p.map == map && world.s.get(e).alive).map(|p| ((p.x, p.x), (p.y, p.y))),
+            Some(e) => world
+                .s
+                .outer_at(e)
+                .filter(|p| p.map == map && world.s.get(e).alive)
+                .map(|p| ((p.x, p.x), (p.y, p.y))),
             None => match group {
                 Some((x, y)) if fits(x, w) && fits(y, h) => Some((x, y)),
                 _ => player.map(|p| ((p.x, p.x), (p.y, p.y))),
@@ -346,7 +464,9 @@ impl View {
                 // a smaller map is centred
                 return -((size - len) / 2);
             }
-            let Some((lo, hi)) = at else { return old.unwrap_or(0) };
+            let Some((lo, hi)) = at else {
+                return old.unwrap_or(0);
+            };
             let wanted = match (follow, old) {
                 (Follow::Margin(_), Some(o)) => {
                     let n = margin(size);
@@ -362,7 +482,10 @@ impl View {
             };
             wanted.clamp(0, len - size)
         };
-        let cam = (axis(mw, w, target.map(|t| t.0), old.map(|o| o.0)), axis(mh, h, target.map(|t| t.1), old.map(|o| o.1)));
+        let cam = (
+            axis(mw, w, target.map(|t| t.0), old.map(|o| o.0)),
+            axis(mh, h, target.map(|t| t.1), old.map(|o| o.1)),
+        );
         self.camera.insert(map, cam);
         cam
     }
@@ -370,13 +493,39 @@ impl View {
     /// The layout chosen for a window of `width`×`height` cells in
     /// portrait or landscape, its areas and their rectangles; `too_small`
     /// when the window cannot hold it (D 11.1).
-    pub fn solve(&self, world: &World, width: usize, height: usize, portrait: bool) -> Result<(Vec<Area>, layout::Solved), String> {
+    pub fn solve(
+        &self,
+        world: &World,
+        width: usize,
+        height: usize,
+        portrait: bool,
+    ) -> Result<(Vec<Area>, layout::Solved), String> {
         let Some(b) = layout_block(world, width, height, portrait) else {
             // without a layout the map fills the window
             let mut rects = BTreeMap::new();
             rects.insert('m', Rect::new(0, 0, width, height));
-            let area = Area { ch: 'm', source: "map".into(), follow: Follow::Center, menu: None, cursor: vec![], tabs: vec![], read: false, read_below: None, center: false, right: false, bottom: false };
-            return Ok((vec![area], layout::Solved { rects, too_small: false, min_width: 0, min_height: 0 }));
+            let area = Area {
+                ch: 'm',
+                source: "map".into(),
+                follow: Follow::Center,
+                menu: None,
+                cursor: vec![],
+                tabs: vec![],
+                read: false,
+                read_below: None,
+                center: false,
+                right: false,
+                bottom: false,
+            };
+            return Ok((
+                vec![area],
+                layout::Solved {
+                    rects,
+                    too_small: false,
+                    min_width: 0,
+                    min_height: 0,
+                },
+            ));
         };
         let rows: Vec<RawItem> = b.sub("legend").cloned().collect();
         let (areas, dims) = areas(&rows);
@@ -389,13 +538,33 @@ impl View {
             let name = a.source.split('(').next().unwrap_or("");
             if let Some(pb) = crate::panel::block(world, name) {
                 let (pw, ph) = crate::panel::size(pb);
-                let edge = if panel_style(world, name, self.truecolor).0 != Border::None { 2 } else { 0 };
-                content.insert(a.ch, AreaSize { min_width: pw + edge, min_height: ph + edge });
+                let edge = if panel_style(world, name, self.truecolor).0 != Border::None {
+                    2
+                } else {
+                    0
+                };
+                content.insert(
+                    a.ch,
+                    AreaSize {
+                        min_width: pw + edge,
+                        min_height: ph + edge,
+                    },
+                );
             }
             // a tabs area holds its largest content and the tab row
             if !a.tabs.is_empty() {
-                let (pw, ph) = a.tabs.iter().filter_map(|t| content_size(world, t)).fold((0, 0), |(w, h), (pw, ph)| (w.max(pw), h.max(ph)));
-                content.insert(a.ch, AreaSize { min_width: pw, min_height: ph + tab_row_height(world, self.truecolor) });
+                let (pw, ph) = a
+                    .tabs
+                    .iter()
+                    .filter_map(|t| content_size(world, t))
+                    .fold((0, 0), |(w, h), (pw, ph)| (w.max(pw), h.max(ph)));
+                content.insert(
+                    a.ch,
+                    AreaSize {
+                        min_width: pw,
+                        min_height: ph + tab_row_height(world, self.truecolor),
+                    },
+                );
             }
         }
         let solved = grid.solve(&content, width, height);
@@ -421,13 +590,28 @@ impl View {
             }
         };
         if solved.too_small {
-            frame.text(0, 0, width, &format!("The window is too small: {}x{} is needed.", solved.min_width, solved.min_height), Role::Normal);
+            frame.text(
+                0,
+                0,
+                width,
+                &format!(
+                    "The window is too small: {}x{} is needed.",
+                    solved.min_width, solved.min_height
+                ),
+                Role::Normal,
+            );
             return frame;
         }
         for area in &areas {
-            let Some(&rect) = solved.rects.get(&area.ch) else { continue };
+            let Some(&rect) = solved.rects.get(&area.ch) else {
+                continue;
+            };
             let name = match (area.source.as_str(), &area.menu) {
-                ("menu", Some(m)) => world.m.resolve(None, m).map(|d| d.full.clone()).unwrap_or_else(|_| m.clone()),
+                ("menu", Some(m)) => world
+                    .m
+                    .resolve(None, m)
+                    .map(|d| d.full.clone())
+                    .unwrap_or_else(|_| m.clone()),
                 ("map" | "hover" | "sentence", _) => area.source.clone(),
                 _ => area.source.split('(').next().unwrap_or("").to_string(),
             };
@@ -439,7 +623,10 @@ impl View {
             // and the leash and the screen measure the same cells; the
             // model decides whether its border is drawn
             let rect = if area.source == "map" {
-                let a = block.as_ref().map(|b| world.m.map_area_in(b)).unwrap_or_default();
+                let a = block
+                    .as_ref()
+                    .map(|b| world.m.map_area_in(b))
+                    .unwrap_or_default();
                 if !a.border {
                     border = Border::None;
                 }
@@ -479,14 +666,31 @@ impl View {
                     let at = match content_size(world, &area.source) {
                         Some((w, h)) if area.center || area.right || area.bottom => {
                             let (sx, sy) = (inner.w.saturating_sub(w), inner.h.saturating_sub(h));
-                            let x = if area.right { sx } else if area.center { sx / 2 } else { 0 };
-                            let y = if area.bottom { sy } else if area.center { sy / 2 } else { 0 };
+                            let x = if area.right {
+                                sx
+                            } else if area.center {
+                                sx / 2
+                            } else {
+                                0
+                            };
+                            let y = if area.bottom {
+                                sy
+                            } else if area.center {
+                                sy / 2
+                            } else {
+                                0
+                            };
                             Rect::new(inner.x + x, inner.y + y, w.min(inner.w), h.min(inner.h))
                         }
                         _ => inner,
                     };
                     if area.read {
-                        let below = area.read_below.as_ref().map(|p| world.m.resolve(None, p).map_or(p.clone(), |d| d.full.clone()));
+                        let below = area.read_below.as_ref().map(|p| {
+                            world
+                                .m
+                                .resolve(None, p)
+                                .map_or(p.clone(), |d| d.full.clone())
+                        });
                         self.read_rects.push((inner, name.clone(), below));
                     }
                     self.draw_content(&mut frame, world, lang, &area.source, at)
@@ -500,14 +704,36 @@ impl View {
     }
 
     /// An area's log, panel or docked menu, by its source as written.
-    fn draw_content(&mut self, frame: &mut Frame, world: &mut World, lang: &str, source: &str, r: Rect) {
+    fn draw_content(
+        &mut self,
+        frame: &mut Frame,
+        world: &mut World,
+        lang: &str,
+        source: &str,
+        r: Rect,
+    ) {
         let tc = self.truecolor;
         let written = source.split('(').next().unwrap_or("");
-        let full = world.m.resolve(None, written).map(|d| (d.full.clone(), d.kind)).ok();
+        let full = world
+            .m
+            .resolve(None, written)
+            .map(|d| (d.full.clone(), d.kind))
+            .ok();
         match full {
             Some((name, Kind::Log)) => {
                 let typing = self.typing.filter(|_| log_baud(world, &name).is_some());
-                draw_log_back(frame, world, lang, &name, r, tc, LogDraw { typing, ..LogDraw::default() });
+                draw_log_back(
+                    frame,
+                    world,
+                    lang,
+                    &name,
+                    r,
+                    tc,
+                    LogDraw {
+                        typing,
+                        ..LogDraw::default()
+                    },
+                );
             }
             Some((name, Kind::Menu)) => {
                 self.docked_rects.insert(name.clone(), r);
@@ -516,7 +742,9 @@ impl View {
                 }
             }
             Some((name, Kind::Panel)) => {
-                let Some(pb) = crate::panel::block(world, &name) else { return };
+                let Some(pb) = crate::panel::block(world, &name) else {
+                    return;
+                };
                 let mut ui = crate::panel::PanelUi {
                     truecolor: tc,
                     button: panel_style(world, "button", tc),
@@ -539,34 +767,70 @@ impl View {
     /// border, evenly wide) or on one row, the chosen one filled and the
     /// pointed one bold; the chosen content under them. The titles and the
     /// content are centred in the area when it is larger.
-    fn draw_tabs(&mut self, frame: &mut Frame, world: &mut World, lang: &str, tabs: &[String], r: Rect) {
+    fn draw_tabs(
+        &mut self,
+        frame: &mut Frame,
+        world: &mut World,
+        lang: &str,
+        tabs: &[String],
+        r: Rect,
+    ) {
         if tabs.is_empty() || r.h == 0 || r.w == 0 {
             return;
         }
         let key = tabs_key(tabs);
-        let chosen = self.tabs.get(&key).copied().unwrap_or(0).min(tabs.len() - 1);
-        let fulls: Vec<String> = tabs.iter().map(|t| world.m.resolve(None, t.split('(').next().unwrap_or("")).map_or(t.clone(), |d| d.full.clone())).collect();
+        let chosen = self
+            .tabs
+            .get(&key)
+            .copied()
+            .unwrap_or(0)
+            .min(tabs.len() - 1);
+        let fulls: Vec<String> = tabs
+            .iter()
+            .map(|t| {
+                world
+                    .m
+                    .resolve(None, t.split('(').next().unwrap_or(""))
+                    .map_or(t.clone(), |d| d.full.clone())
+            })
+            .collect();
         self.tab_areas.push((key.clone(), fulls.clone()));
         let titles: Vec<String> = fulls
             .iter()
             .map(|full| {
                 let k = format!("{full}.TAB");
-                if world.m.has_text(lang, &k) { world.text(lang, &k, &[]) } else { full.rsplit('.').next().unwrap_or(full).to_string() }
+                if world.m.has_text(lang, &k) {
+                    world.text(lang, &k, &[])
+                } else {
+                    full.rsplit('.').next().unwrap_or(full).to_string()
+                }
             })
             .collect();
         let look = panel_style(world, "button", self.truecolor);
         let row_h = tab_row_height(world, self.truecolor).min(r.h);
         // the block of titles and content, centred down the area when every
         // content has a size of its own
-        let heights: Option<Vec<usize>> = tabs.iter().map(|t| content_size(world, t).map(|s| s.1)).collect();
+        let heights: Option<Vec<usize>> = tabs
+            .iter()
+            .map(|t| content_size(world, t).map(|s| s.1))
+            .collect();
         let top = match heights {
-            Some(hs) => r.y + r.h.saturating_sub(row_h + hs.into_iter().max().unwrap_or(0)) / 2,
+            Some(hs) => {
+                r.y + r
+                    .h
+                    .saturating_sub(row_h + hs.into_iter().max().unwrap_or(0))
+                    / 2
+            }
             None => r.y,
         };
         let even = (r.w / tabs.len()).max(1);
         for (i, t) in titles.iter().enumerate() {
             let x = r.x + i * even;
-            let w = if i + 1 == tabs.len() { r.x + r.w - x } else { even };
+            let w = if i + 1 == tabs.len() {
+                r.x + r.w - x
+            } else {
+                even
+            };
             if x >= r.x + r.w {
                 break;
             }
@@ -579,21 +843,35 @@ impl View {
         let content = Rect::new(r.x, y, r.w, (r.y + r.h).saturating_sub(y));
         // a narrower panel is centred across
         let content = match content_size(world, &tabs[chosen]) {
-            Some((w, _)) if w > 0 && w < content.w => Rect::new(content.x + (content.w - w) / 2, content.y, w, content.h),
+            Some((w, _)) if w > 0 && w < content.w => {
+                Rect::new(content.x + (content.w - w) / 2, content.y, w, content.h)
+            }
             _ => content,
         };
         self.draw_content(frame, world, lang, &tabs[chosen], content);
     }
 
-    fn draw_map(&mut self, frame: &mut Frame, world: &mut World, r: Rect, follow: Follow, cursor: &[String]) {
+    fn draw_map(
+        &mut self,
+        frame: &mut Frame,
+        world: &mut World,
+        r: Rect,
+        follow: Follow,
+        cursor: &[String],
+    ) {
         self.map_rect = Some(r);
-        let Some(map) = world.s.active_map() else { return };
+        let Some(map) = world.s.active_map() else {
+            return;
+        };
         let cells = world.render_cells(map);
         let (x0, y0) = self.camera(world, map, r.w as i32, r.h as i32, follow);
         for sy in 0..r.h {
             for sx in 0..r.w {
                 let (mx, my) = (x0 + sx as i32, y0 + sy as i32);
-                if let Some(look) = (my >= 0 && mx >= 0).then(|| cells.get(my as usize).and_then(|row| row.get(mx as usize))).flatten() {
+                if let Some(look) = (my >= 0 && mx >= 0)
+                    .then(|| cells.get(my as usize).and_then(|row| row.get(mx as usize)))
+                    .flatten()
+                {
                     put_look(frame, r.x + sx, r.y + sy, look, self.truecolor);
                 }
             }
@@ -609,7 +887,13 @@ impl View {
                     match cursor.first().map(String::as_str) {
                         Some("reverse") => style.attrs.reverse = true,
                         Some("bold") => style.attrs.bold = true,
-                        Some("bg") => style.bg = cursor.get(1).and_then(|c| world.color(c, None)).map(|c| rgb(c, self.truecolor)).or(style.bg),
+                        Some("bg") => {
+                            style.bg = cursor
+                                .get(1)
+                                .and_then(|c| world.color(c, None))
+                                .map(|c| rgb(c, self.truecolor))
+                                .or(style.bg)
+                        }
                         _ => style.attrs.underline = true,
                     }
                     cell.style = Some(style);
@@ -618,7 +902,11 @@ impl View {
         }
         // the turn marker: the member's cell in reverse video, which every
         // terminal shows whatever its colors (M 7.1)
-        if let Some(p) = self.marked.and_then(|e| world.s.at(e)).filter(|p| p.map == map) {
+        if let Some(p) = self
+            .marked
+            .and_then(|e| world.s.at(e))
+            .filter(|p| p.map == map)
+        {
             let (sx, sy) = (p.x - x0, p.y - y0);
             if sx >= 0 && sy >= 0 && (sx as usize) < r.w && (sy as usize) < r.h {
                 let i = (r.y + sy as usize) * frame.width + r.x + sx as usize;
@@ -656,7 +944,11 @@ fn draw_docked(frame: &mut Frame, d: &Docked, r: Rect) {
 
 /// The docked menu row under screen cell (x, y), from the last frame.
 pub fn docked_at(view: &View, x: usize, y: usize) -> Option<(String, usize)> {
-    view.docked_rects.iter().find(|(_, r)| r.contains(x, y)).map(|(m, r)| (m.clone(), y - r.y)).filter(|(m, i)| view.docked.get(m).is_some_and(|d| *i < d.rows.len()))
+    view.docked_rects
+        .iter()
+        .find(|(_, r)| r.contains(x, y))
+        .map(|(m, r)| (m.clone(), y - r.y))
+        .filter(|(m, i)| view.docked.get(m).is_some_and(|d| *i < d.rows.len()))
 }
 
 /// How the log is drawn (D 11.4, M 7.4): `back` lines up from its
@@ -686,10 +978,37 @@ pub enum Gap {
 /// `back` is cut to the oldest line. Gives the lines it holds and the
 /// `back` it drew.
 #[allow(clippy::too_many_arguments)]
-pub fn draw_log_back(frame: &mut Frame, world: &World, lang: &str, name: &str, r: Rect, tc: bool, how: LogDraw) -> (usize, usize) {
-    let history = world.m.defs.get(name).and_then(|d| d.block()).and_then(|b| b.arg_after("history")).and_then(|n| n.parse::<usize>().ok()).unwrap_or(usize::MAX);
+pub fn draw_log_back(
+    frame: &mut Frame,
+    world: &World,
+    lang: &str,
+    name: &str,
+    r: Rect,
+    tc: bool,
+    how: LogDraw,
+) -> (usize, usize) {
+    let history = world
+        .m
+        .defs
+        .get(name)
+        .and_then(|d| d.block())
+        .and_then(|b| b.arg_after("history"))
+        .and_then(|n| n.parse::<usize>().ok())
+        .unwrap_or(usize::MAX);
     let selects = log_rows(world, name);
-    let entries: Vec<(usize, &rlml_core::rt::world::LogEntry)> = world.log.iter().enumerate().filter(|(_, l)| selects.is_empty() || selects.iter().any(|s| (s == "SPEECH" && l.speech) || l.key == *s || l.key.starts_with(&format!("{s}.")))).collect();
+    let entries: Vec<(usize, &rlml_core::rt::world::LogEntry)> = world
+        .log
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| {
+            selects.is_empty()
+                || selects.iter().any(|s| {
+                    (s == "SPEECH" && l.speech)
+                        || l.key == *s
+                        || l.key.starts_with(&format!("{s}."))
+                })
+        })
+        .collect();
     let from = entries.len().saturating_sub(history);
     // each message's lines and color; the teletype shows the typed part
     // of its messages and none of those it has not reached (D 9.3)
@@ -756,7 +1075,10 @@ pub fn draw_log_back(frame: &mut Frame, world: &World, lang: &str, name: &str, r
     // `fade`: the newest message is the brightest, the oldest shown the
     // dimmest (D 9.3)
     let fade = panel_fade(world, name);
-    let (oldest, newest) = (shown.first().map_or(0, |l| l.2), shown.last().map_or(0, |l| l.2));
+    let (oldest, newest) = (
+        shown.first().map_or(0, |l| l.2),
+        shown.last().map_or(0, |l| l.2),
+    );
     for (i, (line, color, n)) in shown.iter().enumerate() {
         frame.text(r.x, y0 + i, r.w, line, Role::Normal);
         let share = match fade {
@@ -765,7 +1087,9 @@ pub fn draw_log_back(frame: &mut Frame, world: &World, lang: &str, name: &str, r
         };
         let mut style = Style::default();
         match (color, fade) {
-            (Some(c), Some((_, to))) => style.fg = Some(rgb(rlml_core::rt::view::blend(*c, to, share), tc)),
+            (Some(c), Some((_, to))) => {
+                style.fg = Some(rgb(rlml_core::rt::view::blend(*c, to, share), tc))
+            }
             (Some(c), None) => style.fg = Some(rgb(*c, tc)),
             // without a color of its own, an old line is drawn dim
             (None, _) => style.attrs.dim = share >= 0.5,
@@ -788,14 +1112,31 @@ pub fn log_baud(w: &World, name: &str) -> Option<f64> {
             continue;
         }
         let words: Vec<&str> = row.tokens.iter().map(|t| t.text.as_str()).collect();
-        baud = words.iter().position(|x| *x == "baud").and_then(|i| words.get(i + 1)).and_then(|n| n.parse::<f64>().ok()).filter(|n| *n > 0.0).or(baud);
+        baud = words
+            .iter()
+            .position(|x| *x == "baud")
+            .and_then(|i| words.get(i + 1))
+            .and_then(|n| n.parse::<f64>().ok())
+            .filter(|n| *n > 0.0)
+            .or(baud);
     }
     baud.map(|b| b / 10.0)
 }
 
 /// The message keys or groups a `log` block selects (D 11.4).
 fn log_rows(world: &World, name: &str) -> Vec<String> {
-    world.m.defs.get(name).and_then(|d| d.block()).map(|b| b.items.iter().map(|i| names::qualify(i.namespace.as_deref(), i.key())).collect()).unwrap_or_default()
+    world
+        .m
+        .defs
+        .get(name)
+        .and_then(|d| d.block())
+        .map(|b| {
+            b.items
+                .iter()
+                .map(|i| names::qualify(i.namespace.as_deref(), i.key()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// The map cell at a screen position of a map area, for tests and the
@@ -807,8 +1148,20 @@ fn written_map_rect(a: rlml_core::model::MapArea, rect: Rect, area: &Area) -> Re
     let cut = |len: usize, cells: Option<i32>| cells.map_or(len, |c| len.min(c.max(0) as usize));
     let (w, h) = (cut(rect.w, a.width), cut(rect.h, a.height));
     let (sx, sy) = (rect.w - w, rect.h - h);
-    let x = if area.right { sx } else if area.center { sx / 2 } else { 0 };
-    let y = if area.bottom { sy } else if area.center { sy / 2 } else { 0 };
+    let x = if area.right {
+        sx
+    } else if area.center {
+        sx / 2
+    } else {
+        0
+    };
+    let y = if area.bottom {
+        sy
+    } else if area.center {
+        sy / 2
+    } else {
+        0
+    };
     Rect::new(rect.x + x, rect.y + y, w, h)
 }
 
@@ -817,5 +1170,9 @@ fn written_map_rect(a: rlml_core::model::MapArea, rect: Rect, area: &Area) -> Re
 pub fn cell_at(view: &View, map: MapId, x: usize, y: usize) -> Option<Pos> {
     let r = view.map_rect?;
     let (x0, y0) = *view.camera.get(&map)?;
-    r.contains(x, y).then(|| Pos { map, x: x0 + (x - r.x) as i32, y: y0 + (y - r.y) as i32 })
+    r.contains(x, y).then(|| Pos {
+        map,
+        x: x0 + (x - r.x) as i32,
+        y: y0 + (y - r.y) as i32,
+    })
 }

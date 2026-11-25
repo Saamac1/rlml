@@ -143,7 +143,11 @@ pub struct Model {
 pub enum LayoutCond {
     /// `width < N` and the like: the axis (true for width), the
     /// comparison and N.
-    Size { width: bool, op: CmpOp, n: usize },
+    Size {
+        width: bool,
+        op: CmpOp,
+        n: usize,
+    },
     Portrait,
     Landscape,
 }
@@ -187,13 +191,26 @@ pub fn layout_cond(words: &[&str]) -> Result<Vec<LayoutCond>, String> {
                     "<=" => CmpOp::Le,
                     ">" => CmpOp::Gt,
                     ">=" => CmpOp::Ge,
-                    other => return Err(format!("`{other}` is no comparison (`<`, `<=`, `>`, `>=`)")),
+                    other => {
+                        return Err(format!("`{other}` is no comparison (`<`, `<=`, `>`, `>=`)"));
+                    }
                 };
-                let n = n.parse().map_err(|_| format!("`{n}` is no number of cells"))?;
-                LayoutCond::Size { width: *axis == "width", op, n }
+                let n = n
+                    .parse()
+                    .map_err(|_| format!("`{n}` is no number of cells"))?;
+                LayoutCond::Size {
+                    width: *axis == "width",
+                    op,
+                    n,
+                }
             }
             [] => return Err("an empty part of `when`".into()),
-            other => return Err(format!("`{}` is not `width`/`height` COMPARISON N, `portrait` or `landscape`", other.join(" "))),
+            other => {
+                return Err(format!(
+                    "`{}` is not `width`/`height` COMPARISON N, `portrait` or `landscape`",
+                    other.join(" ")
+                ));
+            }
         });
     }
     Ok(out)
@@ -210,18 +227,30 @@ impl Model {
     /// Resolves a reference from namespace `ns` (D 4.4). The error lists
     /// every name tried.
     pub fn resolve(&self, ns: Option<&str>, name: &str) -> Result<&Def, String> {
-        let full = names::resolve(ns, name, |c| self.defs.contains_key(c)).map_err(|tried| format!("`{name}` is not defined (tried {tried})"))?;
+        let full = names::resolve(ns, name, |c| self.defs.contains_key(c))
+            .map_err(|tried| format!("`{name}` is not defined (tried {tried})"))?;
         Ok(&self.defs[&full])
     }
 
     /// Resolves a reference and checks its kind after the lookup.
-    pub fn resolve_kind(&self, ns: Option<&str>, name: &str, kinds: &[Kind]) -> Result<&Def, String> {
+    pub fn resolve_kind(
+        &self,
+        ns: Option<&str>,
+        name: &str,
+        kinds: &[Kind],
+    ) -> Result<&Def, String> {
         let def = self.resolve(ns, name)?;
         if kinds.contains(&def.kind) {
             Ok(def)
         } else {
             let want: Vec<String> = kinds.iter().map(|k| k.to_string()).collect();
-            Err(format!("`{}` is a {} ({}), not a {}", def.full, def.kind, def.place(), want.join(" or ")))
+            Err(format!(
+                "`{}` is a {} ({}), not a {}",
+                def.full,
+                def.kind,
+                def.place(),
+                want.join(" or ")
+            ))
         }
     }
 
@@ -233,8 +262,14 @@ impl Model {
     }
 
     /// Rows of every unnamed section of `kind` in load order.
-    pub fn section_rows<'a>(&'a self, kind: &'a str) -> impl Iterator<Item = (&'a RawBlock, &'a RawItem)> {
-        self.sections.iter().filter(move |b| b.kind == kind).flat_map(|b| b.items.iter().map(move |i| (b, i)))
+    pub fn section_rows<'a>(
+        &'a self,
+        kind: &'a str,
+    ) -> impl Iterator<Item = (&'a RawBlock, &'a RawItem)> {
+        self.sections
+            .iter()
+            .filter(move |b| b.kind == kind)
+            .flat_map(|b| b.items.iter().map(move |i| (b, i)))
     }
 
     /// Merged `settings` rows: the last row of each key wins (D 4.8).
@@ -257,29 +292,47 @@ impl Model {
     /// The default layout: the `layout` row without a `when`, or the only
     /// layout (D 11.1). `view_width()` reads it, whatever the window.
     pub fn layout(&self) -> Option<&RawBlock> {
-        self.layout_full(None).and_then(|n| self.defs.get(&n)).and_then(|d| d.block())
+        self.layout_full(None)
+            .and_then(|n| self.defs.get(&n))
+            .and_then(|d| d.block())
     }
 
     /// The layout for a window of `cols`×`rows` cells, `portrait` when it
     /// is taller than wide in pixels: the first `layout` row whose `when`
     /// holds, else the default (D 11.1).
     pub fn layout_for(&self, cols: usize, rows: usize, portrait: bool) -> Option<&RawBlock> {
-        self.layout_full(Some((cols, rows, portrait))).and_then(|n| self.defs.get(&n)).and_then(|d| d.block())
+        self.layout_full(Some((cols, rows, portrait)))
+            .and_then(|n| self.defs.get(&n))
+            .and_then(|d| d.block())
     }
 
     /// The `game` block's `layout` rows: each layout's full name and its
     /// condition, `None` without `when`; a row that does not read is left
     /// out (the check reports it).
     pub fn layout_rows(&self) -> Vec<(String, Option<Vec<LayoutCond>>)> {
-        let Some(g) = self.named_game() else { return vec![] };
+        let Some(g) = self.named_game() else {
+            return vec![];
+        };
         let ns = g.namespace.as_deref();
         g.items
             .iter()
             .filter(|i| i.key() == "layout")
             .filter_map(|i| {
-                let full = self.resolve_kind(ns, i.word(1)?, &[Kind::Layout]).ok()?.full.clone();
+                let full = self
+                    .resolve_kind(ns, i.word(1)?, &[Kind::Layout])
+                    .ok()?
+                    .full
+                    .clone();
                 let cond = match i.tokens.iter().position(|t| t.is("when")) {
-                    Some(at) => Some(layout_cond(&i.tokens[at + 1..].iter().map(|t| t.text.as_str()).collect::<Vec<_>>()).ok()?),
+                    Some(at) => Some(
+                        layout_cond(
+                            &i.tokens[at + 1..]
+                                .iter()
+                                .map(|t| t.text.as_str())
+                                .collect::<Vec<_>>(),
+                        )
+                        .ok()?,
+                    ),
                     None => None,
                 };
                 Some((full, cond))
@@ -290,14 +343,24 @@ impl Model {
     fn layout_full(&self, window: Option<(usize, usize, bool)>) -> Option<String> {
         let rows = self.layout_rows();
         if rows.is_empty() {
-            return self.defs.values().find(|d| d.kind == Kind::Layout).map(|d| d.full.clone());
+            return self
+                .defs
+                .values()
+                .find(|d| d.kind == Kind::Layout)
+                .map(|d| d.full.clone());
         }
         if let Some((c, r, p)) = window
-            && let Some((full, _)) = rows.iter().find(|(_, cond)| cond.as_ref().is_some_and(|cs| cs.iter().all(|x| x.holds(c, r, p))))
+            && let Some((full, _)) = rows.iter().find(|(_, cond)| {
+                cond.as_ref()
+                    .is_some_and(|cs| cs.iter().all(|x| x.holds(c, r, p)))
+            })
         {
             return Some(full.clone());
         }
-        rows.iter().find(|(_, cond)| cond.is_none()).or(rows.first()).map(|(f, _)| f.clone())
+        rows.iter()
+            .find(|(_, cond)| cond.is_none())
+            .or(rows.first())
+            .map(|(f, _)| f.clone())
     }
 
     /// The border style `panels` rows give area `name` (D 9.3): the last
@@ -311,7 +374,12 @@ impl Model {
                 continue;
             }
             let words: Vec<&str> = row.tokens.iter().map(|t| t.text.as_str()).collect();
-            if let Some(b) = words.iter().position(|w| *w == "border").and_then(|i| words.get(i + 1)).and_then(|b| BORDER_STYLES.iter().find(|s| *s == b)) {
+            if let Some(b) = words
+                .iter()
+                .position(|w| *w == "border")
+                .and_then(|i| words.get(i + 1))
+                .and_then(|b| BORDER_STYLES.iter().find(|s| *s == b))
+            {
                 border = Some(*b);
             }
         }
@@ -334,18 +402,28 @@ impl Model {
         let cells = |s: Option<&str>| s.and_then(|s| s.parse::<i32>().ok()).filter(|&n| n > 0);
         let styled = self.panel_border("map").is_some_and(|b| b != "none");
         for item in b.sub("legend") {
-            let Ok((_, rest)) = glyph_char(item) else { continue };
+            let Ok((_, rest)) = glyph_char(item) else {
+                continue;
+            };
             let words: Vec<&str> = rest.tokens.iter().map(|t| t.text.as_str()).collect();
             if words.first() == Some(&"map") {
                 let (w, h) = legend_size(&words);
                 let (width, height) = (cells(w), cells(h));
                 // a border needs 2x2 cells; an axis without a written size
                 // takes the window's room, which is at least that
-                let border = styled && width.is_none_or(|n| n >= 2) && height.is_none_or(|n| n >= 2);
-                return MapArea { width, height, border };
+                let border =
+                    styled && width.is_none_or(|n| n >= 2) && height.is_none_or(|n| n >= 2);
+                return MapArea {
+                    width,
+                    height,
+                    border,
+                };
             }
         }
-        MapArea { border: styled, ..MapArea::default() }
+        MapArea {
+            border: styled,
+            ..MapArea::default()
+        }
     }
 
     /// A text key's row in a language, as `texts` merges them (D 10).
@@ -389,8 +467,14 @@ impl Model {
             let mut out: BTreeMap<String, Vec<Vec<String>>> = BTreeMap::new();
             for (_, item) in self.section_rows("tiles") {
                 let (_, row) = item.marker();
-                let key = if row.key() == "default" { "default".to_string() } else { self.full_name(row.key(), row.namespace.as_deref()) };
-                out.entry(key).or_default().push(row.tokens.iter().skip(1).map(|t| t.text.clone()).collect());
+                let key = if row.key() == "default" {
+                    "default".to_string()
+                } else {
+                    self.full_name(row.key(), row.namespace.as_deref())
+                };
+                out.entry(key)
+                    .or_default()
+                    .push(row.tokens.iter().skip(1).map(|t| t.text.clone()).collect());
             }
             out
         })
@@ -442,7 +526,11 @@ fn decl_kind(kind: DeclKind) -> Kind {
 
 /// Builds the model from loaded files. Diagnostics go to `report`.
 pub fn build(loaded: Loaded, report: &mut Report) -> Model {
-    let mut m = Model { languages: loaded.languages, files: loaded.files, ..Default::default() };
+    let mut m = Model {
+        languages: loaded.languages,
+        files: loaded.files,
+        ..Default::default()
+    };
     let mut patches = Vec::new();
     for entry in loaded.entries {
         match entry {
@@ -456,7 +544,17 @@ pub fn build(loaded: Loaded, report: &mut Report) -> Model {
                     if !d.name.is_empty() {
                         let full = qualify(d.namespace.as_deref(), &d.name);
                         let (file, line, ov) = (d.file.clone(), d.line, d.overrides);
-                        m.define(report, Def { kind: decl_kind(d.kind), full, file, line, overrides: ov, source: Source::Decl(d.clone()) });
+                        m.define(
+                            report,
+                            Def {
+                                kind: decl_kind(d.kind),
+                                full,
+                                file,
+                                line,
+                                overrides: ov,
+                                source: Source::Decl(d.clone()),
+                            },
+                        );
                     }
                     m.code.push(d);
                 }
@@ -506,14 +604,21 @@ pub fn build(loaded: Loaded, report: &mut Report) -> Model {
 impl Model {
     fn define(&mut self, report: &mut Report, def: Def) {
         if def.overrides {
-            self.overrides.push((def.full.clone(), def.kind, def.file.clone(), def.line));
+            self.overrides
+                .push((def.full.clone(), def.kind, def.file.clone(), def.line));
         }
         if let Some(old) = self.defs.get(&def.full) {
             if old.kind != def.kind {
                 report.error(
                     &def.file,
                     def.line,
-                    format!("`{}` is defined as a {} here and as a {} at {}", def.full, def.kind, old.kind, old.place()),
+                    format!(
+                        "`{}` is defined as a {} here and as a {} at {}",
+                        def.full,
+                        def.kind,
+                        old.kind,
+                        old.place()
+                    ),
                 );
                 return;
             }
@@ -523,14 +628,27 @@ impl Model {
                 return;
             }
             if old.overrides && def.overrides {
-                report.error(&def.file, def.line, format!("second `override` of `{}` (first at {})", def.full, old.place()));
+                report.error(
+                    &def.file,
+                    def.line,
+                    format!(
+                        "second `override` of `{}` (first at {})",
+                        def.full,
+                        old.place()
+                    ),
+                );
                 return;
             }
             if old.file != def.file && !def.overrides && old.kind != Kind::Tile {
                 report.warning(
                     &def.file,
                     def.line,
-                    format!("`{}` replaces the {} at {}; write `override` if this is intended", def.full, old.kind, old.place()),
+                    format!(
+                        "`{}` replaces the {} at {}; write `override` if this is intended",
+                        def.full,
+                        old.kind,
+                        old.place()
+                    ),
                 );
             }
             self.replaced.push(def.full.clone());
@@ -558,7 +676,14 @@ impl Model {
             let full = qualify(item.namespace.as_deref(), key);
             self.define(
                 report,
-                Def { kind, full, file: item.file.clone(), line: item.line, overrides: marker == Modifier::Override, source: Source::Row(item) },
+                Def {
+                    kind,
+                    full,
+                    file: item.file.clone(),
+                    line: item.line,
+                    overrides: marker == Modifier::Override,
+                    source: Source::Row(item),
+                },
             );
         }
     }
@@ -567,24 +692,42 @@ impl Model {
     /// `tiles.glyphs` rows and map and prefab legends (D 7).
     fn tiles(&mut self, report: &mut Report) {
         let mut seen: Vec<(String, String, usize)> = Vec::new();
-        for (_, item) in self.section_rows("tiles").chain(self.section_rows("tiles.glyphs")) {
+        for (_, item) in self
+            .section_rows("tiles")
+            .chain(self.section_rows("tiles.glyphs"))
+        {
             let (_, item) = item.marker();
             if item.key() == "default" {
                 continue;
             }
             match names::tile_name(item.key()) {
-                Ok(t) => seen.push((qualify(item.namespace.as_deref(), &t.base), item.file.clone(), item.line)),
+                Ok(t) => seen.push((
+                    qualify(item.namespace.as_deref(), &t.base),
+                    item.file.clone(),
+                    item.line,
+                )),
                 Err(e) => report.push(item.err(e)),
             }
         }
-        for def in self.defs.values().filter(|d| matches!(d.kind, Kind::Map | Kind::Prefab)) {
+        for def in self
+            .defs
+            .values()
+            .filter(|d| matches!(d.kind, Kind::Map | Kind::Prefab))
+        {
             let Some(b) = def.block() else { continue };
             // `at:` rows start with a position, legend rows with a character
-            let rows = b.sub("legend").map(|i| glyph_char(i).map(|(_, r)| r).unwrap_or_else(|_| i.shift(1))).chain(b.sub("at").map(|i| i.shift(1)));
+            let rows = b
+                .sub("legend")
+                .map(|i| glyph_char(i).map(|(_, r)| r).unwrap_or_else(|_| i.shift(1)))
+                .chain(b.sub("at").map(|i| i.shift(1)));
             for item in rows {
                 for t in row_tiles(&item) {
                     if let Ok(t) = names::tile_name(&t) {
-                        seen.push((qualify(item.namespace.as_deref(), &t.base), item.file.clone(), item.line));
+                        seen.push((
+                            qualify(item.namespace.as_deref(), &t.base),
+                            item.file.clone(),
+                            item.line,
+                        ));
                     }
                 }
             }
@@ -592,9 +735,23 @@ impl Model {
         for (full, file, line) in seen {
             match self.defs.get(&full) {
                 Some(d) if d.kind == Kind::Tile => {}
-                Some(d) => report.error(&file, line, format!("tile `{full}` is also a {} ({})", d.kind, d.place())),
+                Some(d) => report.error(
+                    &file,
+                    line,
+                    format!("tile `{full}` is also a {} ({})", d.kind, d.place()),
+                ),
                 None => {
-                    self.defs.insert(full.clone(), Def { kind: Kind::Tile, full, file, line, overrides: false, source: Source::Tile });
+                    self.defs.insert(
+                        full.clone(),
+                        Def {
+                            kind: Kind::Tile,
+                            full,
+                            file,
+                            line,
+                            overrides: false,
+                            source: Source::Tile,
+                        },
+                    );
                 }
             }
         }
@@ -607,7 +764,10 @@ impl Model {
             return;
         };
         let Source::Block(target) = &mut def.source else {
-            report.push(p.err(format!("`{full}` is a {} written in RogueScript and cannot be patched", def.kind)));
+            report.push(p.err(format!(
+                "`{full}` is a {} written in RogueScript and cannot be patched",
+                def.kind
+            )));
             return;
         };
         if target.kind != p.kind {
@@ -626,8 +786,12 @@ impl Model {
                 (Modifier::Drop, Some(i)) => {
                     target.items.remove(i);
                 }
-                (Modifier::Drop, None) => report.push(item.err(format!("`drop {key}`: `{full}` has no such row"))),
-                (Modifier::New, Some(_)) => report.push(item.err(format!("`new {key}`: `{full}` already has this row"))),
+                (Modifier::Drop, None) => {
+                    report.push(item.err(format!("`drop {key}`: `{full}` has no such row")))
+                }
+                (Modifier::New, Some(_)) => {
+                    report.push(item.err(format!("`new {key}`: `{full}` already has this row")))
+                }
                 (_, Some(i)) => target.items[i] = row,
                 (_, None) => target.items.push(row),
             }
@@ -640,7 +804,11 @@ impl Model {
     fn check_overrides(&self, report: &mut Report) {
         for (full, kind, file, line) in &self.overrides {
             if !self.replaced.contains(full) {
-                report.error(file, *line, format!("`override` of {kind} `{full}`, but there is nothing to replace"));
+                report.error(
+                    file,
+                    *line,
+                    format!("`override` of {kind} `{full}`, but there is nothing to replace"),
+                );
             }
         }
     }
@@ -650,7 +818,12 @@ impl Model {
 /// character or position: the default layer's tile and every `LAYER TILE`
 /// pair, up to `with`, `as` or `wire` (D 8.2, D 8.3).
 pub fn row_tiles(rest: &RawItem) -> Vec<String> {
-    let words: Vec<String> = rest.tokens.iter().map(|t| t.text.clone()).take_while(|w| !["with", "as", "wire"].contains(&w.as_str())).collect();
+    let words: Vec<String> = rest
+        .tokens
+        .iter()
+        .map(|t| t.text.clone())
+        .take_while(|w| !["with", "as", "wire"].contains(&w.as_str()))
+        .collect();
     let mut out = Vec::new();
     let mut i = 0;
     if words.len() % 2 == 1 {
@@ -678,7 +851,10 @@ impl MapArea {
     /// The map's cells inside the border; a border may leave none.
     pub fn cells(&self) -> (Option<i32>, Option<i32>) {
         let inset = if self.border { 2 } else { 0 };
-        (self.width.map(|n| n - inset), self.height.map(|n| n - inset))
+        (
+            self.width.map(|n| n - inset),
+            self.height.map(|n| n - inset),
+        )
     }
 }
 
@@ -689,10 +865,16 @@ impl MapArea {
 pub fn legend_size<'a>(words: &[&'a str]) -> (Option<&'a str>, Option<&'a str>) {
     let mut size = (None, None);
     for (i, w) in words.iter().enumerate() {
-        let next = words.get(i + 1).copied().filter(|n| size_word(n) || n.contains('x'));
+        let next = words
+            .get(i + 1)
+            .copied()
+            .filter(|n| size_word(n) || n.contains('x'));
         match *w {
             "size" => {
-                if let Some((a, b)) = next.and_then(|n| n.split_once('x')).filter(|(a, b)| size_word(a) && size_word(b)) {
+                if let Some((a, b)) = next
+                    .and_then(|n| n.split_once('x'))
+                    .filter(|(a, b)| size_word(a) && size_word(b))
+                {
                     size = (Some(a), Some(b));
                 }
             }
@@ -720,14 +902,18 @@ pub const BORDER_STYLES: &[&str] = &["none", "single", "double", "rounded", "hea
 pub fn glyph_char(item: &RawItem) -> Result<(char, RawItem), String> {
     if item.text.starts_with("' '") {
         let rest = item.text[3..].trim_start();
-        let shifted = RawItem::new(&item.file, item.line, item.namespace.clone(), rest).map_err(|e| e.message)?;
+        let shifted = RawItem::new(&item.file, item.line, item.namespace.clone(), rest)
+            .map_err(|e| e.message)?;
         return Ok((' ', shifted));
     }
     let first = item.tokens.first().ok_or("missing character")?;
     let mut chars = item.text[first.start..first.end].chars();
     match (chars.next(), chars.next()) {
         (Some(c), None) => Ok((c, item.shift(1))),
-        _ => Err(format!("`{}` is not one character", &item.text[first.start..first.end])),
+        _ => Err(format!(
+            "`{}` is not one character",
+            &item.text[first.start..first.end]
+        )),
     }
 }
 
@@ -742,7 +928,13 @@ mod tests {
     use crate::load::{MemFiles, load};
 
     fn model(files: &[(&str, &str)]) -> (Model, Report) {
-        let f = MemFiles { game: files.iter().map(|(p, s)| (p.to_string(), s.to_string())).collect(), ..Default::default() };
+        let f = MemFiles {
+            game: files
+                .iter()
+                .map(|(p, s)| (p.to_string(), s.to_string()))
+                .collect(),
+            ..Default::default()
+        };
         let (loaded, mut report) = load(&f, files[0].0);
         let m = build(loaded, &mut report);
         (m, report)
@@ -756,30 +948,49 @@ mod tests {
     fn full_names_and_lookup() {
         let (m, r) = model(&[
             ("game.rlml", "include lib.rlml\n\nentity RAT\n- HP now 3\n"),
-            ("lib.rlml", "namespace STD\n\ncomponent HP\n- now number\n\n```roguescript\nai HUNTER:\n    return WAIT()\n```\n"),
+            (
+                "lib.rlml",
+                "namespace STD\n\ncomponent HP\n- now number\n\n```roguescript\nai HUNTER:\n    return WAIT()\n```\n",
+            ),
         ]);
         assert!(r.0.is_empty(), "{r:?}");
         assert_eq!(m.resolve(None, "HP").unwrap().full, "STD.HP");
         assert_eq!(m.resolve(Some("STD"), "HUNTER").unwrap().kind, Kind::Ai);
-        assert!(m.resolve(None, "NOPE").unwrap_err().contains("tried NOPE, STD.NOPE"));
-        assert!(m.resolve_kind(None, "RAT", &[Kind::Map]).unwrap_err().contains("is a entity"));
+        assert!(
+            m.resolve(None, "NOPE")
+                .unwrap_err()
+                .contains("tried NOPE, STD.NOPE")
+        );
+        assert!(
+            m.resolve_kind(None, "RAT", &[Kind::Map])
+                .unwrap_err()
+                .contains("is a entity")
+        );
     }
 
     #[test]
     fn replacement_rules() {
-        let (_, r) = model(&[("a.rlml", "include b.rlml\n\nmenu M\n- A\n\nmenu M\n- B\n"), ("b.rlml", "menu M\n- C\n")]);
+        let (_, r) = model(&[
+            ("a.rlml", "include b.rlml\n\nmenu M\n- A\n\nmenu M\n- B\n"),
+            ("b.rlml", "menu M\n- C\n"),
+        ]);
         let msgs = messages(&r);
         assert_eq!(msgs.len(), 1, "same-file replacement is silent: {msgs:?}");
         assert!(msgs[0].contains("warning: `M` replaces the menu at b.rlml:1"));
 
-        let (_, r) = model(&[("a.rlml", "include b.rlml\n\noverride menu M\n- A\n"), ("b.rlml", "menu M\n- C\n")]);
+        let (_, r) = model(&[
+            ("a.rlml", "include b.rlml\n\noverride menu M\n- A\n"),
+            ("b.rlml", "menu M\n- C\n"),
+        ]);
         assert!(r.0.is_empty(), "{r:?}");
 
         let (_, r) = model(&[("a.rlml", "override menu M\n- A\n")]);
         assert!(messages(&r)[0].contains("nothing to replace"));
 
         let (_, r) = model(&[("a.rlml", "menu M\n- A\n\nentity M\n- X\n")]);
-        assert!(messages(&r)[0].contains("`M` is defined as a entity here and as a menu at a.rlml:1"));
+        assert!(
+            messages(&r)[0].contains("`M` is defined as a entity here and as a menu at a.rlml:1")
+        );
     }
 
     #[test]
@@ -788,7 +999,13 @@ mod tests {
             "a.rlml",
             "entity P\n- HP now 10\n- MELEE 1d4\n- PACK\n\npatch entity P\n- HP now 15\n- drop PACK\n- new SNEAKING\n\npatch entity Q\n- X\n",
         )]);
-        let rows: Vec<&str> = m.defs["P"].block().unwrap().items.iter().map(|i| i.text.as_str()).collect();
+        let rows: Vec<&str> = m.defs["P"]
+            .block()
+            .unwrap()
+            .items
+            .iter()
+            .map(|i| i.text.as_str())
+            .collect();
         assert_eq!(rows, ["HP now 15", "MELEE 1d4", "SNEAKING"]);
         assert!(messages(&r)[0].contains("nothing to patch"));
     }
@@ -808,7 +1025,10 @@ mod tests {
 
     #[test]
     fn sections_define_names_and_merge() {
-        let (m, r) = model(&[("a.rlml", "colors\n- STONE 5a5a6e\n\nsettings\n- style ascii\n- round 500ms\n\nsettings\n- round 250ms\n")]);
+        let (m, r) = model(&[(
+            "a.rlml",
+            "colors\n- STONE 5a5a6e\n\nsettings\n- style ascii\n- round 500ms\n\nsettings\n- round 250ms\n",
+        )]);
         assert!(r.0.is_empty(), "{r:?}");
         assert_eq!(m.kind("STONE"), Some(Kind::Color));
         assert_eq!(m.settings()["round"].rest(1), "250ms");
@@ -821,9 +1041,19 @@ mod size_tests {
 
     #[test]
     fn legend_sizes() {
-        assert_eq!(legend_size(&["map", "size", "20x10"]), (Some("20"), Some("10")));
-        assert_eq!(legend_size(&["map", "size.width", "20", "size", "10xfoo"]), (Some("20"), None), "a broken pair is dropped whole");
-        assert_eq!(legend_size(&["map", "size", "24x*", "size.height", "50%"]), (Some("24"), Some("50%")));
+        assert_eq!(
+            legend_size(&["map", "size", "20x10"]),
+            (Some("20"), Some("10"))
+        );
+        assert_eq!(
+            legend_size(&["map", "size.width", "20", "size", "10xfoo"]),
+            (Some("20"), None),
+            "a broken pair is dropped whole"
+        );
+        assert_eq!(
+            legend_size(&["map", "size", "24x*", "size.height", "50%"]),
+            (Some("24"), Some("50%"))
+        );
         assert_eq!(legend_size(&["map", "size.width", "0"]), (None, None));
         assert!(size_word("100%") && !size_word("101%") && size_word("*") && !size_word("-3"));
     }

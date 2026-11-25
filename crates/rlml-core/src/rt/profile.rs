@@ -29,7 +29,10 @@ fn checksum(game: &str, body: &str) -> u64 {
 /// The file's text for `components`.
 pub fn write(game: &str, components: &[ComponentValue]) -> String {
     let body = write_value(&components.to_vec());
-    format!("rlml-profile 1\nsum {:016x}\n{body}\n", checksum(game, &body))
+    format!(
+        "rlml-profile 1\nsum {:016x}\n{body}\n",
+        checksum(game, &body)
+    )
 }
 
 /// Why a file was not read.
@@ -45,9 +48,15 @@ pub enum Unread {
 pub fn read(game: &str, text: &str) -> Result<Vec<ComponentValue>, Unread> {
     let mut lines = text.lines();
     if lines.next() != Some("rlml-profile 1") {
-        return Err(Unread::Broken("not a profile: the first line is `rlml-profile 1`".into()));
+        return Err(Unread::Broken(
+            "not a profile: the first line is `rlml-profile 1`".into(),
+        ));
     }
-    let sum = lines.next().and_then(|l| l.strip_prefix("sum ")).and_then(|s| u64::from_str_radix(s, 16).ok()).ok_or_else(|| Unread::Broken("the profile has no `sum`".into()))?;
+    let sum = lines
+        .next()
+        .and_then(|l| l.strip_prefix("sum "))
+        .and_then(|s| u64::from_str_radix(s, 16).ok())
+        .ok_or_else(|| Unread::Broken("the profile has no `sum`".into()))?;
     let body = lines.next().unwrap_or("");
     if checksum(game, body) != sum {
         return Err(Unread::Changed);
@@ -67,14 +76,19 @@ fn game_name(m: &Model) -> String {
 
 impl<S: Store> Profile<S> {
     pub fn new(store: S, m: &Model) -> Profile<S> {
-        Profile { store, game: game_name(m) }
+        Profile {
+            store,
+            game: game_name(m),
+        }
     }
 
     /// The file's components, or none without a file. A file whose
     /// checksum does not match is kept as the backup, and the profile
     /// starts from the data's values with the warning given (M 5.6).
     pub fn load(&mut self) -> (Vec<ComponentValue>, Option<String>) {
-        let Some(text) = self.store.read(FILE) else { return (vec![], None) };
+        let Some(text) = self.store.read(FILE) else {
+            return (vec![], None);
+        };
         match read(&self.game, &text) {
             Ok(c) => (c, None),
             Err(why) => {
@@ -86,7 +100,17 @@ impl<S: Store> Profile<S> {
                 if kept {
                     self.store.remove(FILE);
                 }
-                (vec![], Some(format!("the profile was not read ({why}); it starts over{}", if kept { ", the old one kept as profile.bak" } else { "" })))
+                (
+                    vec![],
+                    Some(format!(
+                        "the profile was not read ({why}); it starts over{}",
+                        if kept {
+                            ", the old one kept as profile.bak"
+                        } else {
+                            ""
+                        }
+                    )),
+                )
             }
         }
     }
@@ -103,7 +127,10 @@ impl<S: Store> Profile<S> {
         for (comp, field, v) in writes {
             match file.iter_mut().find(|c| &c.name == comp) {
                 Some(c) => c.set(field, v.clone()),
-                None => file.push(ComponentValue { name: comp.clone(), fields: vec![(field.clone(), v.clone())] }),
+                None => file.push(ComponentValue {
+                    name: comp.clone(),
+                    fields: vec![(field.clone(), v.clone())],
+                }),
             }
         }
         self.store.write(FILE, &write(&self.game, &file))
@@ -120,7 +147,10 @@ mod tests {
     use super::*;
 
     fn comp(name: &str, f: &str, n: i64) -> ComponentValue {
-        ComponentValue { name: name.into(), fields: vec![(f.into(), Value::Number(n))] }
+        ComponentValue {
+            name: name.into(),
+            fields: vec![(f.into(), Value::Number(n))],
+        }
     }
 
     #[test]
@@ -128,7 +158,11 @@ mod tests {
         let c = vec![comp("UNLOCKS", "wizard", 1)];
         let text = write("ROGUE", &c);
         assert_eq!(read("ROGUE", &text), Ok(c));
-        assert_eq!(read("OTHER", &text), Err(Unread::Changed), "the game's name is in the sum");
+        assert_eq!(
+            read("OTHER", &text),
+            Err(Unread::Changed),
+            "the game's name is in the sum"
+        );
         let edited = text.replace("(n 1)", "(n 9)");
         assert_eq!(read("ROGUE", &edited), Err(Unread::Changed));
     }

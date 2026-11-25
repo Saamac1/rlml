@@ -18,11 +18,18 @@ use crate::pad::{PadState, Raw};
 pub enum Event {
     Key(Binding),
     /// A mouse button or wheel at a cell.
-    Press { binding: Binding, x: usize, y: usize },
+    Press {
+        binding: Binding,
+        x: usize,
+        y: usize,
+    },
     /// The mouse button went up: a held panel button stops (M 7.7).
     Release,
     /// The pointer moved to a cell.
-    Move { x: usize, y: usize },
+    Move {
+        x: usize,
+        y: usize,
+    },
     /// The window's new size in cells.
     Resize(usize, usize),
     /// A pad's raw event by pad id.
@@ -41,7 +48,12 @@ impl Feed {
     /// with each run of pointer moves cut to its last cell; the batch ends
     /// early when the app quits. True when the window changed size, so
     /// the front end draws the whole next frame.
-    pub fn apply(&mut self, app: &mut App<'_>, events: impl IntoIterator<Item = Event>, now: Duration) -> RtResult<bool> {
+    pub fn apply(
+        &mut self,
+        app: &mut App<'_>,
+        events: impl IntoIterator<Item = Event>,
+        now: Duration,
+    ) -> RtResult<bool> {
         let mut resized = false;
         let mut moved = None;
         for ev in events {

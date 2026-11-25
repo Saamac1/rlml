@@ -30,11 +30,18 @@ pub enum ExprKind {
     None,
     All,
     /// An upper-case name, dotted parts joined (`LOOT.RARE`); `root` for `.LOOT`.
-    Name { name: String, root: bool },
+    Name {
+        name: String,
+        root: bool,
+    },
     /// A lower-case word: local, context or engine name, direction.
     Word(String),
     /// `ITEM.*` or `ITEM.**`.
-    Wild { name: String, root: bool, deep: bool },
+    Wild {
+        name: String,
+        root: bool,
+        deep: bool,
+    },
     List(Vec<Expr>),
     /// `{}`.
     EmptyDict,
@@ -50,7 +57,11 @@ pub enum ExprKind {
     /// `a..b`, or `a..` when open.
     Range(Box<Expr>, Option<Box<Expr>>),
     /// `e has [no] COMPONENT`.
-    Has { subject: Box<Expr>, no: bool, component: String },
+    Has {
+        subject: Box<Expr>,
+        no: bool,
+        component: String,
+    },
     Is(Box<Expr>, Box<Expr>),
     In(Box<Expr>, Box<Expr>),
     Where(Box<Expr>, Box<Expr>),
@@ -115,18 +126,45 @@ pub enum AssignOp {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StmtKind {
-    Assign { target: Expr, op: AssignOp, value: Expr },
+    Assign {
+        target: Expr,
+        op: AssignOp,
+        value: Expr,
+    },
     /// `name = wait number(…)` or `name = wait text(…)`.
-    WaitInput { name: String, kind: String, arg: Expr },
+    WaitInput {
+        name: String,
+        kind: String,
+        arg: Expr,
+    },
     /// `name = open MENU(…)`.
-    OpenValue { name: String, call: Expr },
-    If { arms: Vec<(Expr, Vec<Stmt>)>, otherwise: Option<Vec<Stmt>> },
-    For { var: String, iter: Expr, body: Vec<Stmt> },
-    Repeat { count: Expr, body: Vec<Stmt> },
-    While { cond: Expr, body: Vec<Stmt> },
+    OpenValue {
+        name: String,
+        call: Expr,
+    },
+    If {
+        arms: Vec<(Expr, Vec<Stmt>)>,
+        otherwise: Option<Vec<Stmt>>,
+    },
+    For {
+        var: String,
+        iter: Expr,
+        body: Vec<Stmt>,
+    },
+    Repeat {
+        count: Expr,
+        body: Vec<Stmt>,
+    },
+    While {
+        cond: Expr,
+        body: Vec<Stmt>,
+    },
     Break,
     /// Cases; `None` is `else`.
-    Match { subject: Expr, cases: Vec<(Option<Expr>, Vec<Stmt>)> },
+    Match {
+        subject: Expr,
+        cases: Vec<(Option<Expr>, Vec<Stmt>)>,
+    },
     Choice(Vec<ChoiceOption>),
     Emit(Expr),
     Wait(WaitArg),
@@ -157,7 +195,11 @@ pub struct ChoiceOption {
 #[derive(Debug, Clone, PartialEq)]
 pub enum OptionBody {
     Block(Vec<Stmt>),
-    Adjust { target: Expr, range: Expr, pool: Option<Expr> },
+    Adjust {
+        target: Expr,
+        range: Expr,
+        pool: Option<Expr>,
+    },
 }
 
 /// A type as written (RS 12.1).
@@ -221,14 +263,34 @@ pub enum ReturnType {
 pub enum Time {
     At(Expr),
     After(Expr),
-    Mark { name: String, offset: Option<(bool, Expr)> },
+    Mark {
+        name: String,
+        offset: Option<(bool, Expr)>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Row {
-    Action { time: Option<Time>, span: Option<Expr>, always: bool, when: Option<Expr>, action: Action, pos: Pos },
-    When { time: Option<Time>, cond: Expr, rows: Vec<Row>, otherwise: Vec<Row>, pos: Pos },
-    Mark { time: Time, name: String, pos: Pos },
+    Action {
+        time: Option<Time>,
+        span: Option<Expr>,
+        always: bool,
+        when: Option<Expr>,
+        action: Action,
+        pos: Pos,
+    },
+    When {
+        time: Option<Time>,
+        cond: Expr,
+        rows: Vec<Row>,
+        otherwise: Vec<Row>,
+        pos: Pos,
+    },
+    Mark {
+        time: Time,
+        name: String,
+        pos: Pos,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -256,19 +318,52 @@ pub struct Timeline {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ItemKind {
-    Component { fields: Vec<Param>, handlers: Vec<Handler> },
-    Event { params: Vec<Param> },
+    Component {
+        fields: Vec<Param>,
+        handlers: Vec<Handler>,
+    },
+    Event {
+        params: Vec<Param>,
+    },
     Handler(Handler),
-    Function { present: bool, query: bool, params: Vec<Param>, ret: Option<ReturnType>, body: Vec<Stmt> },
+    Function {
+        present: bool,
+        query: bool,
+        params: Vec<Param>,
+        ret: Option<ReturnType>,
+        body: Vec<Stmt>,
+    },
     /// `noverb` hides the command from the verb coin (RS 7.1).
-    Command { params: Vec<Param>, cost: Option<i64>, noverb: bool, body: Vec<Stmt> },
+    Command {
+        params: Vec<Param>,
+        cost: Option<i64>,
+        noverb: bool,
+        body: Vec<Stmt>,
+    },
     /// `command NAME = CALL`.
     CommandAlias(Expr),
-    Ai { body: Vec<Stmt> },
-    Generator { params: Vec<Param>, size: Option<(u32, u32)>, body: Vec<Stmt> },
-    Map { transient: bool, wrap: bool, nosave: bool, generate: Expr },
-    Scene { params: Vec<Param>, body: Vec<Stmt> },
-    Timeline { params: Vec<Param>, timeline: Timeline },
+    Ai {
+        body: Vec<Stmt>,
+    },
+    Generator {
+        params: Vec<Param>,
+        size: Option<(u32, u32)>,
+        body: Vec<Stmt>,
+    },
+    Map {
+        transient: bool,
+        wrap: bool,
+        nosave: bool,
+        generate: Expr,
+    },
+    Scene {
+        params: Vec<Param>,
+        body: Vec<Stmt>,
+    },
+    Timeline {
+        params: Vec<Param>,
+        timeline: Timeline,
+    },
 }
 
 /// A top-level declaration.
@@ -307,7 +402,9 @@ impl fmt::Display for Expr {
             All => f.write_str("all"),
             Name { name, root } => write!(f, "{}{name}", dot(*root)),
             Word(w) => f.write_str(w),
-            Wild { name, root, deep } => write!(f, "{}{name}.{}", dot(*root), if *deep { "**" } else { "*" }),
+            Wild { name, root, deep } => {
+                write!(f, "{}{name}.{}", dot(*root), if *deep { "**" } else { "*" })
+            }
             List(items) => {
                 f.write_str("[")?;
                 list(f, items)?;
@@ -327,7 +424,15 @@ impl fmt::Display for Expr {
             Binary(op, a, b) => write!(f, "({a} {} {b})", op.text()),
             Range(a, Some(b)) => write!(f, "({a}..{b})"),
             Range(a, Option::None) => write!(f, "({a}..)"),
-            Has { subject, no, component } => write!(f, "({subject} has {}{component})", if *no { "no " } else { "" }),
+            Has {
+                subject,
+                no,
+                component,
+            } => write!(
+                f,
+                "({subject} has {}{component})",
+                if *no { "no " } else { "" }
+            ),
             Is(a, b) => write!(f, "({a} is {b})"),
             In(a, b) => write!(f, "({a} in {b})"),
             Where(a, b) => write!(f, "({a} where {b})"),

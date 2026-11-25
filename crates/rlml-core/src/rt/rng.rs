@@ -34,7 +34,14 @@ impl Rng {
     /// The state from four SplitMix64 outputs of the seed.
     pub fn from_seed(seed: u64) -> Rng {
         let mut sm = seed;
-        Rng { s: [splitmix64(&mut sm), splitmix64(&mut sm), splitmix64(&mut sm), splitmix64(&mut sm)] }
+        Rng {
+            s: [
+                splitmix64(&mut sm),
+                splitmix64(&mut sm),
+                splitmix64(&mut sm),
+                splitmix64(&mut sm),
+            ],
+        }
     }
 
     pub fn from_state(s: [u64; 4]) -> Rng {
@@ -143,7 +150,16 @@ mod tests {
     fn splitmix64_reference() {
         let mut s = 1234567;
         let out: Vec<u64> = (0..5).map(|_| splitmix64(&mut s)).collect();
-        assert_eq!(out, [6457827717110365317, 3203168211198807973, 9817491932198370423, 4593380528125082431, 16408922859458223821]);
+        assert_eq!(
+            out,
+            [
+                6457827717110365317,
+                3203168211198807973,
+                9817491932198370423,
+                4593380528125082431,
+                16408922859458223821
+            ]
+        );
     }
 
     /// The reference output of xoshiro256starstar.c from state {1, 2, 3, 4}.
@@ -151,7 +167,16 @@ mod tests {
     fn xoshiro256starstar_reference() {
         let mut r = Rng::from_state([1, 2, 3, 4]);
         let out: Vec<u64> = (0..5).map(|_| r.next_u64()).collect();
-        assert_eq!(out, [11520, 0, 1509978240, 1215971899390074240, 1216172134540287360]);
+        assert_eq!(
+            out,
+            [
+                11520,
+                0,
+                1509978240,
+                1215971899390074240,
+                1216172134540287360
+            ]
+        );
     }
 
     #[test]
@@ -193,16 +218,31 @@ mod tests {
         let mut all = items.clone();
         Rng::from_seed(3).shuffle(&mut all);
         assert_eq!(&all[..4], &p[..], "pick is the start of the same shuffle");
-        assert_eq!(r.pick(&items[..2], 5).len(), 2, "a small set gives all members");
+        assert_eq!(
+            r.pick(&items[..2], 5).len(),
+            2,
+            "a small set gives all members"
+        );
     }
 
     #[test]
     fn derived_streams() {
         let g = Rng::from_seed(42);
         let a = g.query_copy("STD.HUNTER", "STD.HOSTILES");
-        assert_eq!(a, g.query_copy("STD.HUNTER", "STD.HOSTILES"), "a query's copy is fixed by state and names");
+        assert_eq!(
+            a,
+            g.query_copy("STD.HUNTER", "STD.HOSTILES"),
+            "a query's copy is fixed by state and names"
+        );
         assert_ne!(a, g.query_copy("STD.FOLLOWER", "STD.HOSTILES"));
-        assert_ne!(a, g.query_copy("STD.HUNTERSTD", ".HOSTILES"), "the 0 byte separates the names");
-        assert_ne!(Rng::presentation(42, "INTRO", 0), Rng::presentation(42, "INTRO", 1));
+        assert_ne!(
+            a,
+            g.query_copy("STD.HUNTERSTD", ".HOSTILES"),
+            "the 0 byte separates the names"
+        );
+        assert_ne!(
+            Rng::presentation(42, "INTRO", 0),
+            Rng::presentation(42, "INTRO", 1)
+        );
     }
 }

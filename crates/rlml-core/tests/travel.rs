@@ -20,7 +20,13 @@ fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<Strin
         if p.is_dir() {
             read_tree(root, &p, out);
         } else {
-            out.insert(p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"), std::fs::read_to_string(&p).unwrap());
+            out.insert(
+                p.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+                std::fs::read_to_string(&p).unwrap(),
+            );
         }
     }
 }
@@ -35,7 +41,11 @@ fn files(game: &str) -> MemFiles {
 
 fn model(f: &MemFiles) -> Model {
     let (m, r) = rlml_core::check_game(f, "game.rlml");
-    assert!(!r.has_errors(), "{:#?}", r.errors().map(|d| d.to_string()).collect::<Vec<_>>());
+    assert!(
+        !r.has_errors(),
+        "{:#?}",
+        r.errors().map(|d| d.to_string()).collect::<Vec<_>>()
+    );
     m
 }
 
@@ -116,7 +126,10 @@ fn explored(r: &mut Runner) {
 }
 
 fn wait() -> CommandValue {
-    CommandValue { name: "STD.WAIT".into(), args: vec![] }
+    CommandValue {
+        name: "STD.WAIT".into(),
+        args: vec![],
+    }
 }
 
 fn cell(x: i32, y: i32) -> Pos {
@@ -155,7 +168,9 @@ fn replays_the_same(start: Runner, r: &Runner) {
     r.run(0).unwrap();
     let text = r.input_log().write().unwrap();
     let log = InputLog::read(&text).unwrap();
-    let got = Replay::from_runner(start, &log).and_then(Replay::finish).unwrap_or_else(|e| panic!("{e}\n{text}"));
+    let got = Replay::from_runner(start, &log)
+        .and_then(Replay::finish)
+        .unwrap_or_else(|e| panic!("{e}\n{text}"));
     assert!(got.w.s == r.w.s, "the replayed state differs\n{text}");
     assert_eq!(got.w.rng, r.w.rng);
 }
@@ -168,9 +183,16 @@ fn travel_walks_until_an_actor_comes_into_view() {
     let start_r = r.clone();
     assert!(r.travel_to(1, cell(18, 1)).unwrap());
     let stops = drive(&mut r, 40);
-    assert_eq!(stops.first().map(|s| s.1), Some(Stop::NewActor), "{stops:?}");
+    assert_eq!(
+        stops.first().map(|s| s.1),
+        Some(Stop::NewActor),
+        "{stops:?}"
+    );
     let (x, _) = at(&r, 1);
-    assert!((10..17).contains(&x), "seat 1 walked east until the rat came into view: x {x}");
+    assert!(
+        (10..17).contains(&x),
+        "seat 1 walked east until the rat came into view: x {x}"
+    );
     assert!(!r.travelling(1));
     replays_the_same(start_r, &r);
 }
@@ -190,14 +212,22 @@ fn travel_arrives() {
 
 #[test]
 fn travel_needs_walk_and_a_route_through_known_cells() {
-    let src = CORRIDOR.replace("- walk STD.MOVE\n", "").replace("FIELDS", "");
+    let src = CORRIDOR
+        .replace("- walk STD.MOVE\n", "")
+        .replace("FIELDS", "");
     let m = model(&files(&src));
     let mut r = start(&m);
-    assert!(!r.travel_to(1, cell(3, 1)).unwrap(), "no `walk`: no travel (M 8.1)");
+    assert!(
+        !r.travel_to(1, cell(3, 1)).unwrap(),
+        "no `walk`: no travel (M 8.1)"
+    );
     let m = model(&game(""));
     let mut r = start(&m);
     assert!(!r.travel_to(1, cell(1, 1)).unwrap(), "the own cell");
-    assert!(!r.travel_to(1, cell(17, 1)).unwrap(), "never seen: no route");
+    assert!(
+        !r.travel_to(1, cell(17, 1)).unwrap(),
+        "never seen: no route"
+    );
     assert!(r.travel_to(2, cell(3, 2)).is_err(), "seat 2 has no turn");
 }
 
@@ -229,13 +259,23 @@ fn a_follower_keeps_next_to_its_leader() {
         assert_eq!(r.run(0).unwrap(), Status::Input);
         match r.awaiting().unwrap() {
             1 => {
-                r.input(1, &CommandValue { name: "STD.MOVE.EAST".into(), args: vec![] }).unwrap();
+                r.input(
+                    1,
+                    &CommandValue {
+                        name: "STD.MOVE.EAST".into(),
+                        args: vec![],
+                    },
+                )
+                .unwrap();
             }
             _ => assert_eq!(r.step_travel().unwrap(), None),
         }
     }
     let (a, b) = (at(&r, 1), at(&r, 2));
-    assert!((a.0 - b.0).abs() <= 1 && (a.1 - b.1).abs() <= 1, "next to the leader: {a:?} {b:?}");
+    assert!(
+        (a.0 - b.0).abs() <= 1 && (a.1 - b.1).abs() <= 1,
+        "next to the leader: {a:?} {b:?}"
+    );
     assert!(a.0 >= 3, "the leader went east: {a:?}");
     assert!(r.travelling(2));
     assert_eq!(r.run(0).unwrap(), Status::Input);
@@ -251,7 +291,10 @@ fn the_leader_is_a_member_a_person_drives() {
         .replace("FIELDS", "- party switch")
         .replace("#B...............R.#", "#BP..............R.#")
         .replace("- B FLOOR as P2", "- B FLOOR as P2\n- P FLOOR with PAL")
-        .replace("entity RAT", "entity PAL extends HERO\n- seat 1\n- ai behavior STILL\n\nentity RAT");
+        .replace(
+            "entity RAT",
+            "entity PAL extends HERO\n- seat 1\n- ai behavior STILL\n\nentity RAT",
+        );
     let m = model(&files(&src));
     let mut r = start(&m);
     r.input(1, &wait()).unwrap();
@@ -259,7 +302,11 @@ fn the_leader_is_a_member_a_person_drives() {
     assert_eq!(r.awaiting(), Some(2));
     assert!(r.follow(2, None).unwrap());
     let hero = r.w.s.active(1).unwrap();
-    assert_eq!(r.travels[&2].goal, Goal::Follow(hero), "seat 1's hero, not its companion (STD 6.1)");
+    assert_eq!(
+        r.travels[&2].goal,
+        Goal::Follow(hero),
+        "seat 1's hero, not its companion (STD 6.1)"
+    );
 }
 
 #[test]
@@ -272,7 +319,10 @@ fn following_in_a_ring_is_refused() {
     assert_eq!(r.step_travel().unwrap(), None);
     assert_eq!(r.run(0).unwrap(), Status::Input);
     assert_eq!(r.awaiting(), Some(2));
-    assert!(!r.follow(2, Some(a)).unwrap(), "a ring: nobody would lead (M 8.1)");
+    assert!(
+        !r.follow(2, Some(a)).unwrap(),
+        "a ring: nobody would lead (M 8.1)"
+    );
     assert!(!r.follow(2, Some(b)).unwrap(), "not oneself");
 }
 
@@ -285,16 +335,29 @@ fn a_stale_order_ends_before_its_second_step() {
     r.give_order(2, OrderGoal::Cell(cell(5, 2)));
     assert!(r.travelling(2));
     // then the rat comes next to seat 2, before seat 2's turn
-    let rat = r.w.s.entities_on(0).into_iter().find(|&e| !r.w.s.is_member(e) && r.w.s.is_actor(e)).unwrap();
+    let rat =
+        r.w.s
+            .entities_on(0)
+            .into_iter()
+            .find(|&e| !r.w.s.is_member(e) && r.w.s.is_actor(e))
+            .unwrap();
     r.w.s.get_mut(rat).place = Place::Map(cell(3, 1));
     let start_r = r.clone();
     r.input(1, &wait()).unwrap();
     assert_eq!(r.run(0).unwrap(), Status::Input);
     assert_eq!(r.awaiting(), Some(2));
-    assert_eq!(r.step_travel().unwrap(), None, "the first step always goes (M 8.1)");
+    assert_eq!(
+        r.step_travel().unwrap(),
+        None,
+        "the first step always goes (M 8.1)"
+    );
     assert_eq!(at(&r, 2), (2, 2));
     let stops = drive(&mut r, 2);
-    assert_eq!(stops, [(2, Stop::Stale)], "cancelled before the second step");
+    assert_eq!(
+        stops,
+        [(2, Stop::Stale)],
+        "cancelled before the second step"
+    );
     assert_eq!(at(&r, 2), (2, 2));
     replays_the_same(start_r, &r);
 }
@@ -324,13 +387,23 @@ fn follow_ai_lets_the_ai_choose_the_steps() {
         assert_eq!(r.run(0).unwrap(), Status::Input);
         match r.awaiting().unwrap() {
             1 => {
-                r.input(1, &CommandValue { name: "STD.MOVE.EAST".into(), args: vec![] }).unwrap();
+                r.input(
+                    1,
+                    &CommandValue {
+                        name: "STD.MOVE.EAST".into(),
+                        args: vec![],
+                    },
+                )
+                .unwrap();
             }
             _ => assert_eq!(r.step_travel().unwrap(), None),
         }
     }
     let (a, b) = (at(&r, 1), at(&r, 2));
-    assert!((a.0 - b.0).abs() <= 2, "FOLLOWER keeps up, a step behind after the leader's move: {a:?} {b:?}");
+    assert!(
+        (a.0 - b.0).abs() <= 2,
+        "FOLLOWER keeps up, a step behind after the leader's move: {a:?} {b:?}"
+    );
     assert!(b.0 > 2, "the follower went east: {b:?}");
     replays_the_same(start_r, &r);
 }
@@ -341,8 +414,14 @@ fn with_crate(fields: &str) -> MemFiles {
         .replace("FIELDS", fields)
         .replace("#A.................#", "#A....C............#")
         .replace("- . FLOOR\n", "- . FLOOR\n- C FLOOR with CRATE\n")
-        .replace("entity RAT\n", "entity CRATE\n- blocks move\n\nentity RAT\n")
-        .replace("ai STILL:", "query AT_X3(who: entity, p: pos) -> bool:\n    return p.x == 3\n\nai STILL:");
+        .replace(
+            "entity RAT\n",
+            "entity CRATE\n- blocks move\n\nentity RAT\n",
+        )
+        .replace(
+            "ai STILL:",
+            "query AT_X3(who: entity, p: pos) -> bool:\n    return p.x == 3\n\nai STILL:",
+        );
     files(&src)
 }
 
@@ -351,7 +430,10 @@ fn travel_to_a_blocking_thing_ends_with_a_step_into_it() {
     let m = model(&with_crate(""));
     let mut r = start(&m);
     explored(&mut r);
-    assert!(r.travel_to(1, cell(6, 1)).unwrap(), "a thing's cell is a goal (M 8.1)");
+    assert!(
+        r.travel_to(1, cell(6, 1)).unwrap(),
+        "a thing's cell is a goal (M 8.1)"
+    );
     let stops = drive(&mut r, 20);
     // the step into the crate is the walk's bump; STD.MOVE fails on it
     assert_eq!(stops, [(1, Stop::Failed)]);
@@ -363,7 +445,13 @@ fn walk_avoid_keeps_the_route_off_cells() {
     let m = model(&with_crate("- walk_avoid AT_X3"));
     let mut r = start(&m);
     explored(&mut r);
-    assert!(!r.travel_to(1, cell(5, 1)).unwrap(), "both cells at x 3 are avoided: no route");
-    assert!(r.travel_to(1, cell(3, 1)).unwrap(), "the goal itself may be avoided");
+    assert!(
+        !r.travel_to(1, cell(5, 1)).unwrap(),
+        "both cells at x 3 are avoided: no route"
+    );
+    assert!(
+        r.travel_to(1, cell(3, 1)).unwrap(),
+        "the goal itself may be avoided"
+    );
     assert_eq!(drive(&mut r, 10), [(1, Stop::Arrived)]);
 }

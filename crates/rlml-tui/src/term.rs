@@ -18,10 +18,16 @@ use termplate_term::{Screen, TtyGuard, map_event, no_color_from_env, terminal_si
 /// `log_out` gets the last game's input log (M 4.4), also when a runtime
 /// error ends it. The game's data folder `data` keeps its saves in
 /// `saves/` and its profile (D 3.2).
-pub fn play(m: &Model, seed: u64, log_out: Option<&std::path::Path>, data: Option<&std::path::Path>) -> Result<(), String> {
+pub fn play(
+    m: &Model,
+    seed: u64,
+    log_out: Option<&std::path::Path>,
+    data: Option<&std::path::Path>,
+) -> Result<(), String> {
     // the mouse is on unless the player's settings turn it off (D 3.2)
     let mouse = m.settings().get("mouse").and_then(|i| i.word(1)) != Some("off");
-    let (guard, tty) = TtyGuard::new(mouse).map_err(|e| format!("cannot open the terminal: {e}"))?;
+    let (guard, tty) =
+        TtyGuard::new(mouse).map_err(|e| format!("cannot open the terminal: {e}"))?;
     let no_color = no_color_from_env(std::env::var("NO_COLOR").ok().as_deref());
     let mut screen = Screen::new(tty, StyleSheet::default(), no_color);
     let mut app = App::new(m, seed, terminal_size())?;
@@ -33,7 +39,10 @@ pub fn play(m: &Model, seed: u64, log_out: Option<&std::path::Path>, data: Optio
     let result = run(&mut app, &mut screen);
     drop(guard);
     if let Some(path) = log_out {
-        let written = app.r.input_log().write().and_then(|t| std::fs::write(path, t).map_err(|e| format!("{}: {e}", path.display())));
+        let written =
+            app.r.input_log().write().and_then(|t| {
+                std::fs::write(path, t).map_err(|e| format!("{}: {e}", path.display()))
+            });
         if let Err(e) = written {
             eprintln!("the input log was not written: {e}");
         }

@@ -2,10 +2,10 @@
 
 use std::path::Path;
 
+use rlml_app::input::{Action, Effect, Input, Keys};
 use rlml_core::load::MemFiles;
 use rlml_core::model::Model;
 use rlml_core::rt::value::{CommandValue, Value};
-use rlml_app::input::{Action, Effect, Input, Keys};
 use termplate_core::keys::{Binding, KeyCode, Mods, parse_binding};
 
 fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<String, String>) {
@@ -18,7 +18,13 @@ fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<Strin
         if p.is_dir() {
             read_tree(root, &p, out);
         } else {
-            out.insert(p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"), std::fs::read_to_string(&p).unwrap());
+            out.insert(
+                p.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+                std::fs::read_to_string(&p).unwrap(),
+            );
         }
     }
 }
@@ -45,7 +51,11 @@ fn mini() -> MemFiles {
 
 fn model(f: &MemFiles) -> Model {
     let (m, r) = rlml_core::check_game(f, "game.rlml");
-    assert!(!r.has_errors(), "{:?}", r.errors().map(|d| d.to_string()).collect::<Vec<_>>());
+    assert!(
+        !r.has_errors(),
+        "{:?}",
+        r.errors().map(|d| d.to_string()).collect::<Vec<_>>()
+    );
     m
 }
 
@@ -84,7 +94,9 @@ fn spec_key_names_read() {
                     words.remove(0);
                 }
                 let skip = match words.first() {
-                    Some(&"open") | Some(&"toggle") | Some(&"focus") => 2 + usize::from(words.get(2) == Some(&"stack")),
+                    Some(&"open") | Some(&"toggle") | Some(&"focus") => {
+                        2 + usize::from(words.get(2) == Some(&"stack"))
+                    }
                     _ => 1,
                 };
                 for k in &words[skip.min(words.len())..] {
@@ -105,15 +117,35 @@ fn the_minigames_keys() {
     let f = mini();
     let m = model(&f);
     let keys = Keys::from_model(&m);
-    assert_eq!(keys.base.as_deref(), Some("GAME"), "`keys GAME` in the game block");
+    assert_eq!(
+        keys.base.as_deref(),
+        Some("GAME"),
+        "`keys GAME` in the game block"
+    );
     let game = stack(&["GAME"]);
     let cmd = |s: &str| Some(Action::Command(s.into()));
-    assert_eq!(keys.lookup(&game, &key("k")).cloned(), cmd("STD.MOVE.NORTH"));
-    assert_eq!(keys.lookup(&game, &key("up")).cloned(), cmd("STD.MOVE.NORTH"));
+    assert_eq!(
+        keys.lookup(&game, &key("k")).cloned(),
+        cmd("STD.MOVE.NORTH")
+    );
+    assert_eq!(
+        keys.lookup(&game, &key("up")).cloned(),
+        cmd("STD.MOVE.NORTH")
+    );
     assert_eq!(keys.lookup(&game, &key(">")).cloned(), cmd("STD.TAKE_EXIT"));
     assert_eq!(keys.lookup(&game, &key("<")).cloned(), cmd("STD.TAKE_EXIT"));
-    assert_eq!(keys.lookup(&game, &key("z")).cloned(), Some(Action::Engine("pass".into())));
-    assert_eq!(keys.lookup(&game, &key("esc")).cloned(), Some(Action::Open { menu: "PAUSE".into(), stack: false }), "ALWAYS");
+    assert_eq!(
+        keys.lookup(&game, &key("z")).cloned(),
+        Some(Action::Engine("pass".into()))
+    );
+    assert_eq!(
+        keys.lookup(&game, &key("esc")).cloned(),
+        Some(Action::Open {
+            menu: "PAUSE".into(),
+            stack: false
+        }),
+        "ALWAYS"
+    );
     assert_eq!(keys.lookup(&game, &key("q")), None);
     assert!(keys.warnings.is_empty(), "{:?}", keys.warnings);
 }
@@ -125,11 +157,27 @@ fn contexts_stack_and_engine_defaults() {
     let keys = Keys::from_model(&m);
     let menu = stack(&["GAME", "MENU"]);
     // MENU is modal: its `k` is the cursor, not the game's move (D 11.3)
-    assert_eq!(keys.lookup(&menu, &key("k")).cloned(), Some(Action::Engine("cursor.north".into())));
-    assert_eq!(keys.lookup(&menu, &key("enter")).cloned(), Some(Action::Engine("confirm".into())));
-    assert_eq!(keys.lookup(&menu, &key("l")), None, "a modal context stops keys it does not bind");
+    assert_eq!(
+        keys.lookup(&menu, &key("k")).cloned(),
+        Some(Action::Engine("cursor.north".into()))
+    );
+    assert_eq!(
+        keys.lookup(&menu, &key("enter")).cloned(),
+        Some(Action::Engine("confirm".into()))
+    );
+    assert_eq!(
+        keys.lookup(&menu, &key("l")),
+        None,
+        "a modal context stops keys it does not bind"
+    );
     // ALWAYS is heard above everything: `esc` opens (or closes) the pause menu
-    assert_eq!(keys.lookup(&menu, &key("esc")).cloned(), Some(Action::Open { menu: "PAUSE".into(), stack: false }));
+    assert_eq!(
+        keys.lookup(&menu, &key("esc")).cloned(),
+        Some(Action::Open {
+            menu: "PAUSE".into(),
+            stack: false
+        })
+    );
 }
 
 const PASS: &str = r#"game T
@@ -176,12 +224,34 @@ fn passthrough_and_game_rows_over_defaults() {
     let m = model(&f);
     let keys = Keys::from_model(&m);
     let popup = stack(&["GAME", "POPUP"]);
-    assert_eq!(keys.lookup(&popup, &key("backspace")).cloned(), Some(Action::Engine("close".into())));
-    assert_eq!(keys.lookup(&popup, &key("k")).cloned(), Some(Action::Command("STD.MOVE.NORTH".into())), "passthrough lets the game's keys down");
+    assert_eq!(
+        keys.lookup(&popup, &key("backspace")).cloned(),
+        Some(Action::Engine("close".into()))
+    );
+    assert_eq!(
+        keys.lookup(&popup, &key("k")).cloned(),
+        Some(Action::Command("STD.MOVE.NORTH".into())),
+        "passthrough lets the game's keys down"
+    );
     let menu = stack(&["GAME", "MENU"]);
-    assert_eq!(keys.lookup(&menu, &key("o")).cloned(), Some(Action::Engine("confirm".into())));
-    assert_eq!(keys.lookup(&menu, &key("enter")), None, "the game's row for `confirm` replaces the default keys");
-    assert_eq!(keys.lookup(&stack(&["GAME"]), &Binding::key(KeyCode::Char('Q'), Mods::default())).cloned(), Some(Action::Engine("quit".into())), "shift+q is the key Q");
+    assert_eq!(
+        keys.lookup(&menu, &key("o")).cloned(),
+        Some(Action::Engine("confirm".into()))
+    );
+    assert_eq!(
+        keys.lookup(&menu, &key("enter")),
+        None,
+        "the game's row for `confirm` replaces the default keys"
+    );
+    assert_eq!(
+        keys.lookup(
+            &stack(&["GAME"]),
+            &Binding::key(KeyCode::Char('Q'), Mods::default())
+        )
+        .cloned(),
+        Some(Action::Engine("quit".into())),
+        "shift+q is the key Q"
+    );
 }
 
 #[test]
@@ -190,11 +260,31 @@ fn the_repeat_count_goes_to_the_count_parameter() {
     let m = model(&f);
     let mut input = Input::new(&m);
     let st = input.base_stack();
-    assert_eq!(input.press(&m, &st, key("#")), Effect::Counting(String::new()));
+    assert_eq!(
+        input.press(&m, &st, key("#")),
+        Effect::Counting(String::new())
+    );
     assert_eq!(input.press(&m, &st, key("2")), Effect::Counting("2".into()));
-    assert_eq!(input.press(&m, &st, key("0")), Effect::Counting("20".into()));
-    assert_eq!(input.press(&m, &st, key("s")), Effect::Command(CommandValue { name: "SEARCH".into(), args: vec![(Some("n".into()), Value::Number(20))] }), "`#20s` (D 11.3)");
-    assert_eq!(input.press(&m, &st, key("s")), Effect::Command(CommandValue { name: "SEARCH".into(), args: vec![] }), "the count is used once");
+    assert_eq!(
+        input.press(&m, &st, key("0")),
+        Effect::Counting("20".into())
+    );
+    assert_eq!(
+        input.press(&m, &st, key("s")),
+        Effect::Command(CommandValue {
+            name: "SEARCH".into(),
+            args: vec![(Some("n".into()), Value::Number(20))]
+        }),
+        "`#20s` (D 11.3)"
+    );
+    assert_eq!(
+        input.press(&m, &st, key("s")),
+        Effect::Command(CommandValue {
+            name: "SEARCH".into(),
+            args: vec![]
+        }),
+        "the count is used once"
+    );
 }
 
 #[test]
@@ -203,13 +293,30 @@ fn numpad_keys_are_digits_in_a_terminal() {
     let m = model(&f);
     let mut input = Input::new(&m);
     let st = input.base_stack();
-    assert_eq!(key("num8"), key("8"), "`numN` is the key `N` in a terminal (D 11.3)");
-    let north = Effect::Command(CommandValue { name: "STD.MOVE.NORTH".into(), args: vec![] });
-    assert_eq!(input.press(&m, &st, key("8")), north, "`num8` is bound, so `8` moves");
+    assert_eq!(
+        key("num8"),
+        key("8"),
+        "`numN` is the key `N` in a terminal (D 11.3)"
+    );
+    let north = Effect::Command(CommandValue {
+        name: "STD.MOVE.NORTH".into(),
+        args: vec![],
+    });
+    assert_eq!(
+        input.press(&m, &st, key("8")),
+        north,
+        "`num8` is bound, so `8` moves"
+    );
     // while the count is typed, digits write it whatever they are bound to
     input.press(&m, &st, key("#"));
     assert_eq!(input.press(&m, &st, key("8")), Effect::Counting("8".into()));
-    assert_eq!(input.press(&m, &st, key("s")), Effect::Command(CommandValue { name: "SEARCH".into(), args: vec![(Some("n".into()), Value::Number(8))] }));
+    assert_eq!(
+        input.press(&m, &st, key("s")),
+        Effect::Command(CommandValue {
+            name: "SEARCH".into(),
+            args: vec![(Some("n".into()), Value::Number(8))]
+        })
+    );
 }
 
 fn ryhma() -> MemFiles {
@@ -231,22 +338,69 @@ fn keyboard_parts_and_pads() {
     let game = stack(&["GAME"]);
     let cmd = |s: &str| Some(Action::Command(s.into()));
     assert_eq!(keys.keyboard_parts(), [1, 2]);
-    assert_eq!((keys.part_of(&key("w")), keys.part_of(&key("k")), keys.part_of(&key("esc"))), (2, 1, 1), "a key is its section's (D 11.3)");
+    assert_eq!(
+        (
+            keys.part_of(&key("w")),
+            keys.part_of(&key("k")),
+            keys.part_of(&key("esc"))
+        ),
+        (2, 1, 1),
+        "a key is its section's (D 11.3)"
+    );
     let on = |d: Device, p: Press| keys.lookup_on(&game, d, &p).cloned();
-    assert_eq!(on(Device::Keyboard(2), Press::Key(key("w"))), cmd("WALK.NORTH"));
-    assert_eq!(on(Device::Keyboard(2), Press::Key(key("k"))), None, "part 2 has its own section in GAME");
+    assert_eq!(
+        on(Device::Keyboard(2), Press::Key(key("w"))),
+        cmd("WALK.NORTH")
+    );
+    assert_eq!(
+        on(Device::Keyboard(2), Press::Key(key("k"))),
+        None,
+        "part 2 has its own section in GAME"
+    );
     assert_eq!(on(Device::Keyboard(1), Press::Key(key("w"))), None);
     // a context without part sections uses part 1's keys on every part
     let menu = stack(&["GAME", "MENU"]);
-    assert_eq!(keys.lookup_on(&menu, Device::Keyboard(2), &Press::Key(key("up"))).cloned(), Some(Action::Engine("cursor.north".into())));
-    assert_eq!(keys.lookup_on(&menu, Device::Keyboard(2), &Press::Key(key("esc"))).cloned(), Some(Action::Open { menu: "PAUSE".into(), stack: false }), "`ALWAYS` from part 2 too");
+    assert_eq!(
+        keys.lookup_on(&menu, Device::Keyboard(2), &Press::Key(key("up")))
+            .cloned(),
+        Some(Action::Engine("cursor.north".into()))
+    );
+    assert_eq!(
+        keys.lookup_on(&menu, Device::Keyboard(2), &Press::Key(key("esc")))
+            .cloned(),
+        Some(Action::Open {
+            menu: "PAUSE".into(),
+            stack: false
+        }),
+        "`ALWAYS` from part 2 too"
+    );
     // pads: the game's rows, the engine's defaults and chords
-    assert_eq!(on(Device::Pad(0), Press::Pad(pad("lstick.up"))), cmd("WALK.NORTH"));
+    assert_eq!(
+        on(Device::Pad(0), Press::Pad(pad("lstick.up"))),
+        cmd("WALK.NORTH")
+    );
     assert_eq!(on(Device::Pad(0), Press::Pad(pad("rb"))), cmd("STD.SWITCH"));
-    assert_eq!(keys.lookup_on(&menu, Device::Pad(0), &Press::Pad(pad("south"))).cloned(), Some(Action::Engine("confirm".into())), "the engine's pad default in MENU (M 8)");
-    assert_eq!(on(Device::Pad(0), Press::Key(key("w"))), None, "a pad presses no keys");
-    assert_eq!(pad("rb+lb+start"), pad("lb+rb+start"), "a chord's held buttons are sorted");
-    assert_ne!(pad("start+lb"), pad("lb+start"), "the last button is the one pressed");
+    assert_eq!(
+        keys.lookup_on(&menu, Device::Pad(0), &Press::Pad(pad("south")))
+            .cloned(),
+        Some(Action::Engine("confirm".into())),
+        "the engine's pad default in MENU (M 8)"
+    );
+    assert_eq!(
+        on(Device::Pad(0), Press::Key(key("w"))),
+        None,
+        "a pad presses no keys"
+    );
+    assert_eq!(
+        pad("rb+lb+start"),
+        pad("lb+rb+start"),
+        "a chord's held buttons are sorted"
+    );
+    assert_ne!(
+        pad("start+lb"),
+        pad("lb+start"),
+        "the last button is the one pressed"
+    );
     assert!(rlml_app::input::PadPress::parse("lb+jump").is_err());
     assert_eq!(keys.deadzone(&game), 0.4, "`pad GAME deadzone 40%`");
     assert_eq!(keys.deadzone(&stack(&["MENU"])), 0.5, "the default");
@@ -256,8 +410,14 @@ fn keyboard_parts_and_pads() {
 fn pad_events_make_presses() {
     use rlml_app::pad::{PadState, Raw};
     let mut s = PadState::default();
-    let b = |name: &str, down| Raw::Button { name: name.into(), down };
-    let ax = |name: &str, value| Raw::Axis { name: name.into(), value };
+    let b = |name: &str, down| Raw::Button {
+        name: name.into(),
+        down,
+    };
+    let ax = |name: &str, value| Raw::Axis {
+        name: name.into(),
+        value,
+    };
     assert_eq!(s.event(&b("south", true), 0.5), Some(pad("south")));
     assert_eq!(s.event(&b("south", false), 0.5), None);
     // a held shoulder makes a chord
@@ -266,10 +426,21 @@ fn pad_events_make_presses() {
     s.event(&b("start", false), 0.5);
     s.event(&b("lb", false), 0.5);
     // a stick gives its direction once when it crosses the deadzone
-    assert_eq!(s.event(&ax("lstick.y", 0.3), 0.5), None, "inside the deadzone");
+    assert_eq!(
+        s.event(&ax("lstick.y", 0.3), 0.5),
+        None,
+        "inside the deadzone"
+    );
     assert_eq!(s.event(&ax("lstick.y", 0.8), 0.5), Some(pad("lstick.up")));
     assert_eq!(s.event(&ax("lstick.y", 0.9), 0.5), None, "held: no repeat");
-    assert_eq!(s.event(&ax("lstick.y", 0.0), 0.5), None, "back to the middle");
-    assert_eq!(s.event(&ax("lstick.x", -0.7), 0.5), Some(pad("lstick.left")));
+    assert_eq!(
+        s.event(&ax("lstick.y", 0.0), 0.5),
+        None,
+        "back to the middle"
+    );
+    assert_eq!(
+        s.event(&ax("lstick.x", -0.7), 0.5),
+        Some(pad("lstick.left"))
+    );
     assert_eq!(s.event(&ax("dpad.y", -1.0), 0.5), Some(pad("dpad.down")));
 }

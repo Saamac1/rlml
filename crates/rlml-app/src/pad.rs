@@ -37,7 +37,10 @@ impl PadState {
             Raw::Button { name, down: true } => {
                 let held: Vec<String> = self.held.iter().filter(|h| *h != name).cloned().collect();
                 self.held.insert(name.clone());
-                Some(PadPress { button: name.clone(), held })
+                Some(PadPress {
+                    button: name.clone(),
+                    held,
+                })
             }
             Raw::Button { name, down: false } => {
                 self.held.remove(name);
@@ -62,7 +65,10 @@ impl PadState {
                     ("y", 1) => "up",
                     _ => "down",
                 };
-                Some(PadPress { button: format!("{stick}.{dir}"), held: self.held.iter().cloned().collect() })
+                Some(PadPress {
+                    button: format!("{stick}.{dir}"),
+                    held: self.held.iter().cloned().collect(),
+                })
             }
             Raw::Connected | Raw::Disconnected => None,
         }
@@ -96,8 +102,14 @@ pub fn from_gilrs(ev: gilrs::EventType) -> Option<Raw> {
         })
     };
     Some(match ev {
-        EventType::ButtonPressed(b, _) => Raw::Button { name: button(b)?.to_string(), down: true },
-        EventType::ButtonReleased(b, _) => Raw::Button { name: button(b)?.to_string(), down: false },
+        EventType::ButtonPressed(b, _) => Raw::Button {
+            name: button(b)?.to_string(),
+            down: true,
+        },
+        EventType::ButtonReleased(b, _) => Raw::Button {
+            name: button(b)?.to_string(),
+            down: false,
+        },
         EventType::AxisChanged(a, value, _) => {
             let name = match a {
                 Axis::LeftStickX => "lstick.x",
@@ -108,7 +120,10 @@ pub fn from_gilrs(ev: gilrs::EventType) -> Option<Raw> {
                 Axis::DPadY => "dpad.y",
                 _ => return None,
             };
-            Raw::Axis { name: name.to_string(), value }
+            Raw::Axis {
+                name: name.to_string(),
+                value,
+            }
         }
         EventType::Connected => Raw::Connected,
         EventType::Disconnected => Raw::Disconnected,

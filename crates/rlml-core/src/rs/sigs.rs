@@ -215,8 +215,15 @@ fn sig_type(text: &str) -> Result<Ty, String> {
             t => types::parse(t, &|_| false)?,
         })
     };
-    let alts: Vec<Ty> = text.split('|').map(|t| alt(t.trim())).collect::<Result<_, _>>()?;
-    Ok(if alts.len() == 1 { alts.into_iter().next().unwrap() } else { Ty::Union(alts) })
+    let alts: Vec<Ty> = text
+        .split('|')
+        .map(|t| alt(t.trim()))
+        .collect::<Result<_, _>>()?;
+    Ok(if alts.len() == 1 {
+        alts.into_iter().next().unwrap()
+    } else {
+        Ty::Union(alts)
+    })
 }
 
 fn parse_line(line: &str) -> Result<Sig, String> {
@@ -233,14 +240,20 @@ fn parse_line(line: &str) -> Result<Sig, String> {
     let name = rest[..open].trim().to_string();
     let mut params = Vec::new();
     let mut more = false;
-    for p in rest[open + 1..close].split(',').map(str::trim).filter(|p| !p.is_empty()) {
+    for p in rest[open + 1..close]
+        .split(',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+    {
         if p == "…" {
             more = true;
             continue;
         }
         let optional = p.starts_with('[');
         let p = p.trim_start_matches('[').trim_end_matches(']');
-        let (pname, ty) = p.split_once(':').ok_or_else(|| format!("parameter `{p}` needs a type"))?;
+        let (pname, ty) = p
+            .split_once(':')
+            .ok_or_else(|| format!("parameter `{p}` needs a type"))?;
         let pname = pname.trim();
         params.push(SigParam {
             name: pname.trim_start_matches('_').to_string(),
@@ -249,9 +262,15 @@ fn parse_line(line: &str) -> Result<Sig, String> {
             positional: pname.starts_with('_'),
         });
     }
-    let after = rest[close + 1..].trim().strip_prefix("->").ok_or("missing `->`")?.trim();
+    let after = rest[close + 1..]
+        .trim()
+        .strip_prefix("->")
+        .ok_or("missing `->`")?
+        .trim();
     let (ret, context) = match after.rsplit_once(' ') {
-        Some((r, c)) if ["generator", "coroutine", "query_or_present"].contains(&c) => (r.trim(), c),
+        Some((r, c)) if ["generator", "coroutine", "query_or_present"].contains(&c) => {
+            (r.trim(), c)
+        }
         _ => (after, ""),
     };
     let ret = match ret {
@@ -265,7 +284,15 @@ fn parse_line(line: &str) -> Result<Sig, String> {
         "query_or_present" => Context::QueryOrPresent,
         _ => Context::Anywhere,
     };
-    Ok(Sig { name, kind, params, rest: more, ret, context, text: line.to_string() })
+    Ok(Sig {
+        name,
+        kind,
+        params,
+        rest: more,
+        ret,
+        context,
+        text: line.to_string(),
+    })
 }
 
 /// Every engine function version, in table order.
@@ -292,7 +319,11 @@ pub fn versions(name: &str) -> Vec<&'static Sig> {
 pub fn kind_of(name: &str) -> Option<FnKind> {
     let v = versions(name);
     let first = v.first()?.kind;
-    Some(if v.iter().all(|s| s.kind == first) { first } else { FnKind::ChangesReceiver })
+    Some(if v.iter().all(|s| s.kind == first) {
+        first
+    } else {
+        FnKind::ChangesReceiver
+    })
 }
 
 /// Parameters of engine events for a general handler; a component's
@@ -340,9 +371,12 @@ pub fn field(of: &Ty, name: &str) -> Option<Ty> {
 pub fn game_field(name: &str) -> Option<Ty> {
     use Ty::*;
     Some(match name {
-        "start" | "keys" | "title" | "layout" | "naming" | "walk" | "walk_stop" | "leader" | "rest" | "follow_ai" => Name,
+        "start" | "keys" | "title" | "layout" | "naming" | "walk" | "walk_stop" | "leader"
+        | "rest" | "follow_ai" => Name,
         "at" => Area,
-        "seed" | "turn" | "time" | "call_depth" | "loop_steps" | "masking" | "follow_distance" => Number,
+        "seed" | "turn" | "time" | "call_depth" | "loop_steps" | "masking" | "follow_distance" => {
+            Number
+        }
         "party" => Name,
         "leash" => Bool,
         "seats" => Range,
@@ -373,8 +407,15 @@ mod tests {
         assert_eq!(spawn.len(), 6);
         assert_eq!(spawn[0].params[1].name, "at");
         let travel = &versions("travel")[0];
-        assert!(travel.params[1].name == "map" && !travel.params[1].positional && travel.params[2].optional);
-        assert_eq!(versions("draw")[0].params[1].ty.to_string(), "number|dice|all");
+        assert!(
+            travel.params[1].name == "map"
+                && !travel.params[1].positional
+                && travel.params[2].optional
+        );
+        assert_eq!(
+            versions("draw")[0].params[1].ty.to_string(),
+            "number|dice|all"
+        );
         assert_eq!(versions("choose")[0].ret, Ret::Member);
         assert!(versions("say")[0].rest && versions("say")[0].context == Context::Coroutine);
         assert_eq!(versions("external")[0].context, Context::Generator);
@@ -390,17 +431,30 @@ mod tests {
             let v = versions(name);
             for (i, a) in v.iter().enumerate() {
                 for b in &v[i + 1..] {
-                    let first = |s: &Sig| s.params.first().map(|p| p.ty.clone()).unwrap_or(Ty::None);
+                    let first =
+                        |s: &Sig| s.params.first().map(|p| p.ty.clone()).unwrap_or(Ty::None);
                     let (fa, fb) = (first(a), first(b));
                     // a one-way conversion (a name is a card) is settled by the exact match
                     let by_type = fa != fb && !(types::fits(&fa, &fb) && types::fits(&fb, &fa));
-                    let named = |s: &Sig| s.params.iter().filter(|p| !p.positional).map(|p| p.name.clone()).collect::<Vec<_>>();
-                    let by_names = named(a).iter().any(|n| !named(b).contains(n)) || named(b).iter().any(|n| !named(a).contains(n));
+                    let named = |s: &Sig| {
+                        s.params
+                            .iter()
+                            .filter(|p| !p.positional)
+                            .map(|p| p.name.clone())
+                            .collect::<Vec<_>>()
+                    };
+                    let by_names = named(a).iter().any(|n| !named(b).contains(n))
+                        || named(b).iter().any(|n| !named(a).contains(n));
                     let arity = |s: &Sig| s.params.iter().filter(|p| !p.optional).count();
                     let by_arity = arity(a) != arity(b);
                     // `from` is told apart by its third argument (M 9.2)
                     let by_third = name == "from";
-                    assert!(by_type || by_names || by_arity || by_third, "{name}: `{}` and `{}` cannot be told apart", a.text, b.text);
+                    assert!(
+                        by_type || by_names || by_arity || by_third,
+                        "{name}: `{}` and `{}` cannot be told apart",
+                        a.text,
+                        b.text
+                    );
                 }
             }
         }
@@ -409,7 +463,11 @@ mod tests {
     #[test]
     fn kinds() {
         assert_eq!(kind_of("spawn"), Some(FnKind::Changes));
-        assert_eq!(kind_of("draw"), Some(FnKind::ChangesReceiver), "deck receiver, table query");
+        assert_eq!(
+            kind_of("draw"),
+            Some(FnKind::ChangesReceiver),
+            "deck receiver, table query"
+        );
         assert_eq!(kind_of("add"), Some(FnKind::ChangesReceiver));
         assert_eq!(kind_of("chance"), Some(FnKind::Query));
         assert_eq!(kind_of("say"), Some(FnKind::Present));
@@ -419,10 +477,17 @@ mod tests {
     #[test]
     fn fields_and_events() {
         assert_eq!(field(&Ty::Entity, "at"), Some(Ty::Pos));
-        assert_eq!(field(&Ty::Collection(Member::Card), "first"), Some(Ty::Card));
+        assert_eq!(
+            field(&Ty::Collection(Member::Card), "first"),
+            Some(Ty::Card)
+        );
         assert_eq!(field(&Ty::Area, "first"), Some(Ty::Pos));
         assert_eq!(field(&Ty::Deck, "first"), None, "a deck has only `.count`");
-        assert_eq!(field(&Ty::Table, "count"), None, "a table has no fields (RS 5.5)");
+        assert_eq!(
+            field(&Ty::Table, "count"),
+            None,
+            "a table has no fields (RS 5.5)"
+        );
         assert_eq!(game_field("start"), Some(Ty::Name));
         assert_eq!(engine_component_field("sight", "radius"), Some(Ty::Number));
         assert_eq!(engine_component_field("movement", "mode"), Some(Ty::Name));

@@ -25,7 +25,11 @@ struct Frac {
 
 impl Frac {
     fn new(n: i64, d: i64) -> Frac {
-        if d < 0 { Frac { n: -n, d: -d } } else { Frac { n, d } }
+        if d < 0 {
+            Frac { n: -n, d: -d }
+        } else {
+            Frac { n, d }
+        }
     }
 
     /// `depth × self` rounded half up: floor(x + 1/2).
@@ -51,7 +55,11 @@ impl Frac {
 
 /// The cells in line of sight from `origin` up to `radius`, by symmetric
 /// shadowcasting. `blocks` tells whether a cell blocks sight.
-pub fn line_of_sight(origin: (i32, i32), radius: i64, blocks: &dyn Fn(i32, i32) -> bool) -> BTreeSet<(i32, i32)> {
+pub fn line_of_sight(
+    origin: (i32, i32),
+    radius: i64,
+    blocks: &dyn Fn(i32, i32) -> bool,
+) -> BTreeSet<(i32, i32)> {
     let mut seen = BTreeSet::new();
     seen.insert(origin);
     for quadrant in 0..4 {
@@ -121,7 +129,11 @@ impl World<'_> {
             let mut found = None;
             for (_, item) in self.m.section_rows("tiles") {
                 let (_, row) = item.marker();
-                let row_key = if row.key() == "default" { "default".to_string() } else { self.full_name(row.key(), row.namespace.as_deref()) };
+                let row_key = if row.key() == "default" {
+                    "default".to_string()
+                } else {
+                    self.full_name(row.key(), row.namespace.as_deref())
+                };
                 if row_key != key {
                     continue;
                 }
@@ -154,7 +166,9 @@ impl World<'_> {
         for dx in -1..=1 {
             for dy in -1..=1 {
                 let (x, y) = (p.x + dx, p.y + dy);
-                if (0..m.layers.len()).any(|l| m.tile(l, x, y).is_some_and(|t| self.tile_flag(t, "lit"))) {
+                if (0..m.layers.len())
+                    .any(|l| m.tile(l, x, y).is_some_and(|t| self.tile_flag(t, "lit")))
+                {
                     return true;
                 }
             }
@@ -167,7 +181,9 @@ impl World<'_> {
     fn light_reach(&self, map: MapId) -> BTreeSet<(i32, i32)> {
         let mut out = BTreeSet::new();
         for e in self.s.entities_on(map) {
-            let Some(light) = self.s.get(e).get("light") else { continue };
+            let Some(light) = self.s.get(e).get("light") else {
+                continue;
+            };
             let r = light.get("radius").and_then(Value::as_number).unwrap_or(0);
             let Some(at) = self.s.at(e) else { continue };
             for (x, y) in line_of_sight((at.x, at.y), r, &|x, y| self.blocks_sight(map, x, y)) {
@@ -185,7 +201,9 @@ impl World<'_> {
         let at = self.s.at(e)?;
         let num = |f: &str, d: i64| sight.get(f).and_then(Value::as_number).unwrap_or(d);
         let (radius, dark) = (num("radius", 0), num("dark", 1));
-        let in_sight = line_of_sight((at.x, at.y), radius.max(dark), &|x, y| self.blocks_sight(at.map, x, y));
+        let in_sight = line_of_sight((at.x, at.y), radius.max(dark), &|x, y| {
+            self.blocks_sight(at.map, x, y)
+        });
         let m = &self.s.maps[at.map];
         let reach = self.light_reach(at.map);
         Some(
@@ -205,7 +223,12 @@ impl World<'_> {
     /// views there; a member without `sight` sees the whole map. `None`
     /// when no member is on the map.
     pub fn shared_view(&self, map: MapId) -> Option<BTreeSet<(i32, i32)>> {
-        let on_map: Vec<EntityId> = self.s.players().into_iter().filter(|&e| self.s.at(e).is_some_and(|p| p.map == map)).collect();
+        let on_map: Vec<EntityId> = self
+            .s
+            .players()
+            .into_iter()
+            .filter(|&e| self.s.at(e).is_some_and(|p| p.map == map))
+            .collect();
         if on_map.is_empty() {
             return None;
         }
@@ -214,7 +237,13 @@ impl World<'_> {
         for e in on_map {
             match self.field_of_view(e) {
                 Some(v) => view.extend(v),
-                None => return Some((0..m.height).flat_map(|y| (0..m.width).map(move |x| (x, y))).collect()),
+                None => {
+                    return Some(
+                        (0..m.height)
+                            .flat_map(|y| (0..m.width).map(move |x| (x, y)))
+                            .collect(),
+                    );
+                }
             }
         }
         Some(view)
@@ -239,10 +268,14 @@ impl World<'_> {
     /// shared view without members (M 7.2).
     pub fn in_view(&mut self, cells: &[Pos]) -> bool {
         if let Some((map, view)) = &self.held_view {
-            return cells.iter().any(|p| p.map == *map && view.contains(&(p.x, p.y)));
+            return cells
+                .iter()
+                .any(|p| p.map == *map && view.contains(&(p.x, p.y)));
         }
         match self.current_view() {
-            Some((map, view)) => cells.iter().any(|p| p.map == map && view.contains(&(p.x, p.y))),
+            Some((map, view)) => cells
+                .iter()
+                .any(|p| p.map == map && view.contains(&(p.x, p.y))),
             None => false,
         }
     }
@@ -263,13 +296,17 @@ impl World<'_> {
         let member = self.s.is_member(a) || self.s.player == Some(a);
         if member && !self.s.get(a).alive {
             return match &self.last_view {
-                Some((map, view)) => cells.iter().any(|p| p.map == *map && view.contains(&(p.x, p.y))),
+                Some((map, view)) => cells
+                    .iter()
+                    .any(|p| p.map == *map && view.contains(&(p.x, p.y))),
                 None => false,
             };
         }
         let Some(at) = self.s.at(a) else { return false };
         match self.field_of_view(a) {
-            Some(view) => cells.iter().any(|p| p.map == at.map && view.contains(&(p.x, p.y))),
+            Some(view) => cells
+                .iter()
+                .any(|p| p.map == at.map && view.contains(&(p.x, p.y))),
             None => member && cells.iter().any(|p| p.map == at.map),
         }
     }
@@ -303,7 +340,18 @@ impl World<'_> {
             for dir in Dir::ALL {
                 let (dx, dy) = dir.delta();
                 let n = (x + dx, y + dy);
-                if dist.contains_key(&n) || self.blocks(Pos { map: from.map, x: n.0, y: n.1 }, "sound", None, true) {
+                if dist.contains_key(&n)
+                    || self.blocks(
+                        Pos {
+                            map: from.map,
+                            x: n.0,
+                            y: n.1,
+                        },
+                        "sound",
+                        None,
+                        true,
+                    )
+                {
                     continue;
                 }
                 dist.insert(n, d + 1);
@@ -318,12 +366,25 @@ impl World<'_> {
     pub fn listen(&mut self, e: EntityId) -> Vec<Sound> {
         let from = self.heard_mark.get(&e).copied().unwrap_or(0);
         self.heard_mark.insert(e, self.sounds_made);
-        let Some(acuity) = self.s.get(e).get("hearing").map(|h| h.get("acuity").and_then(Value::as_number).unwrap_or(0)) else {
+        let Some(acuity) = self
+            .s
+            .get(e)
+            .get("hearing")
+            .map(|h| h.get("acuity").and_then(Value::as_number).unwrap_or(0))
+        else {
             self.heard.insert(e, vec![]);
             return vec![];
         };
-        let Some(at) = self.s.at(e) else { return vec![] };
-        let masking = self.m.named_game().and_then(|g| g.items.iter().find(|i| i.key() == "masking")).and_then(|i| i.word(1)).and_then(|w| w.parse().ok()).unwrap_or(3);
+        let Some(at) = self.s.at(e) else {
+            return vec![];
+        };
+        let masking = self
+            .m
+            .named_game()
+            .and_then(|g| g.items.iter().find(|i| i.key() == "masking"))
+            .and_then(|i| i.word(1))
+            .and_then(|w| w.parse().ok())
+            .unwrap_or(3);
         let first = self.sounds_made - self.sounds.len() as u64;
         let mut out = Vec::new();
         for (k, n) in self.sounds.clone().into_iter().enumerate() {
@@ -332,10 +393,17 @@ impl World<'_> {
             }
             let level = self.sound_level(&n.kind);
             let reach = self.spread(n.at, level.max(0));
-            let Some(d) = reach.get(&(at.x, at.y)) else { continue };
+            let Some(d) = reach.get(&(at.x, at.y)) else {
+                continue;
+            };
             let heard = level - d + acuity;
             if heard > 0 {
-                out.push(Sound { kind: n.kind.clone(), at: n.at, source: n.source, level: heard });
+                out.push(Sound {
+                    kind: n.kind.clone(),
+                    at: n.at,
+                    source: n.source,
+                    level: heard,
+                });
             }
         }
         out.sort_by_key(|s| -s.level);
@@ -344,7 +412,12 @@ impl World<'_> {
         }
         self.heard.insert(e, out.clone());
         // a sound nobody can still hear can go
-        let oldest = self.heard_mark.values().copied().min().unwrap_or(self.sounds_made);
+        let oldest = self
+            .heard_mark
+            .values()
+            .copied()
+            .min()
+            .unwrap_or(self.sounds_made);
         while self.sounds_made - (self.sounds.len() as u64) < oldest && !self.sounds.is_empty() {
             self.sounds.remove(0);
         }
@@ -366,25 +439,58 @@ impl World<'_> {
 
     /// `route` through the cells of `known` only, when given: a travel's
     /// route passes only cells the players see or remember (M 8.1).
-    pub fn route_within(&self, from: Pos, to: &[Pos], who: Option<EntityId>, known: Option<&BTreeSet<(i32, i32)>>) -> Vec<Pos> {
-        let goals: BTreeSet<(i32, i32)> = to.iter().filter(|p| p.map == from.map).map(|p| (p.x, p.y)).collect();
+    pub fn route_within(
+        &self,
+        from: Pos,
+        to: &[Pos],
+        who: Option<EntityId>,
+        known: Option<&BTreeSet<(i32, i32)>>,
+    ) -> Vec<Pos> {
+        let goals: BTreeSet<(i32, i32)> = to
+            .iter()
+            .filter(|p| p.map == from.map)
+            .map(|p| (p.x, p.y))
+            .collect();
         if goals.is_empty() || goals.contains(&(from.x, from.y)) {
             return vec![];
         }
         let map = &self.s.maps[from.map];
-        let h = |(x, y): (i32, i32)| goals.iter().map(|g| ((g.0 - x).abs().max((g.1 - y).abs())) as i64).min().unwrap_or(0);
+        let h = |(x, y): (i32, i32)| {
+            goals
+                .iter()
+                .map(|g| ((g.0 - x).abs().max((g.1 - y).abs())) as i64)
+                .min()
+                .unwrap_or(0)
+        };
         let mv = who.and_then(|w| self.s.get(w).get("movement"));
-        let dirs = mv.and_then(|m| m.get("dirs")).and_then(Value::as_number).unwrap_or(8);
+        let dirs = mv
+            .and_then(|m| m.get("dirs"))
+            .and_then(Value::as_number)
+            .unwrap_or(8);
         let corners = matches!(mv.and_then(|m| m.get("corners")), Some(Value::Bool(true)));
         // the cost of entering a cell, or `None` if it is closed: a blocking
         // actor is passed at four steps on a route `for` someone (M 9.3)
         let enter = |x: i32, y: i32| -> Option<i64> {
-            let p = Pos { map: from.map, x, y };
-            if !map.inside(x, y) || known.is_some_and(|k| !k.contains(&(x, y))) || self.blocks_tiles(p, "move", who) {
+            let p = Pos {
+                map: from.map,
+                x,
+                y,
+            };
+            if !map.inside(x, y)
+                || known.is_some_and(|k| !k.contains(&(x, y)))
+                || self.blocks_tiles(p, "move", who)
+            {
                 return None;
             }
             let Some(w) = who else { return Some(1) };
-            let blockers: Vec<EntityId> = self.s.entities_at(p).into_iter().filter(|&e| e != w && self.blocks_entities(p, "move", Some(w)) && self.blocks_entity(e)).collect();
+            let blockers: Vec<EntityId> = self
+                .s
+                .entities_at(p)
+                .into_iter()
+                .filter(|&e| {
+                    e != w && self.blocks_entities(p, "move", Some(w)) && self.blocks_entity(e)
+                })
+                .collect();
             if blockers.is_empty() {
                 Some(1)
             } else if blockers.iter().all(|&e| self.is_actor(e)) {
@@ -396,7 +502,8 @@ impl World<'_> {
         let start = (from.x, from.y);
         let mut g: BTreeMap<(i32, i32), i64> = BTreeMap::from([(start, 0)]);
         let mut parent: BTreeMap<(i32, i32), (i32, i32)> = BTreeMap::new();
-        let mut open: BTreeSet<(i64, i64, i32, i32)> = BTreeSet::from([(h(start), h(start), start.1, start.0)]);
+        let mut open: BTreeSet<(i64, i64, i32, i32)> =
+            BTreeSet::from([(h(start), h(start), start.1, start.0)]);
         let mut closed = BTreeSet::new();
         while let Some(&(f, hh, y, x)) = open.iter().next() {
             open.remove(&(f, hh, y, x));
@@ -415,7 +522,14 @@ impl World<'_> {
                     c = p;
                 }
                 route.reverse();
-                return route.into_iter().map(|(x, y)| Pos { map: from.map, x, y }).collect();
+                return route
+                    .into_iter()
+                    .map(|(x, y)| Pos {
+                        map: from.map,
+                        x,
+                        y,
+                    })
+                    .collect();
             }
             for d in Dir::ALL {
                 let (dx, dy) = d.delta();
@@ -428,12 +542,25 @@ impl World<'_> {
                     continue;
                 }
                 if diagonal && who.is_some() && !corners {
-                    let side = |x: i32, y: i32| self.blocks(Pos { map: from.map, x, y }, "move", who, true);
+                    let side = |x: i32, y: i32| {
+                        self.blocks(
+                            Pos {
+                                map: from.map,
+                                x,
+                                y,
+                            },
+                            "move",
+                            who,
+                            true,
+                        )
+                    };
                     if side(x + dx, y) || side(x, y + dy) {
                         continue;
                     }
                 }
-                let Some(cost) = enter(n.0, n.1) else { continue };
+                let Some(cost) = enter(n.0, n.1) else {
+                    continue;
+                };
                 let ng = g[&cur] + cost;
                 if g.get(&n).is_none_or(|old| ng < *old) {
                     g.insert(n, ng);
@@ -452,13 +579,24 @@ impl World<'_> {
     /// `ray(a, b, for, range, mode)`: the flight from `a` towards `b`
     /// without the start, on to `range` steps, ending before the first cell
     /// that stops it (M 9.3).
-    pub fn ray(&self, a: Pos, b: Pos, who: Option<EntityId>, range: i64, mode: Option<&str>) -> Vec<Pos> {
+    pub fn ray(
+        &self,
+        a: Pos,
+        b: Pos,
+        who: Option<EntityId>,
+        range: i64,
+        mode: Option<&str>,
+    ) -> Vec<Pos> {
         if a == b {
             return vec![];
         }
         let far = if range > 0 {
             let k = range.max(1) as i32 * 2 + 1;
-            Pos { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, ..a }
+            Pos {
+                x: a.x + (b.x - a.x) * k,
+                y: a.y + (b.y - a.y) * k,
+                ..a
+            }
         } else {
             b
         };
@@ -471,7 +609,8 @@ impl World<'_> {
                 break;
             }
             // tiles that stop movement, and tiles or entities that stop the mode
-            let stops = self.blocks_tiles(p, "move", None) || mode.is_some_and(|m| self.blocks(p, m, who, true));
+            let stops = self.blocks_tiles(p, "move", None)
+                || mode.is_some_and(|m| self.blocks(p, m, who, true));
             if stops {
                 break;
             }
@@ -484,7 +623,8 @@ impl World<'_> {
     /// loudest first, not its own (M 6.8).
     pub fn hear_events(&mut self, e: EntityId) -> RtResult<()> {
         let sounds = self.listen(e);
-        let mut env = super::eval::Env::new(super::eval::BodyKind::Handler, "hear", None, "<engine>");
+        let mut env =
+            super::eval::Env::new(super::eval::BodyKind::Handler, "hear", None, "<engine>");
         env.map = self.s.at(e).map(|p| p.map);
         for s in sounds.into_iter().filter(|s| s.source != Some(e)) {
             self.emit("hear", vec![Value::Entity(e), Value::Sound(s)], &env)?;
@@ -498,12 +638,30 @@ mod tests {
     use super::*;
 
     fn grid<'a>(rows: &'a [&'a str]) -> impl Fn(i32, i32) -> bool + 'a {
-        move |x, y| rows.get(y as usize).and_then(|r| r.as_bytes().get(x as usize)).is_none_or(|c| *c == b'#')
+        move |x, y| {
+            rows.get(y as usize)
+                .and_then(|r| r.as_bytes().get(x as usize))
+                .is_none_or(|c| *c == b'#')
+        }
     }
 
     fn view(rows: &[&str], o: (i32, i32), r: i64) -> Vec<String> {
         let seen = line_of_sight(o, r, &grid(rows));
-        rows.iter().enumerate().map(|(y, row)| row.chars().enumerate().map(|(x, c)| if seen.contains(&(x as i32, y as i32)) { c } else { ' ' }).collect()).collect()
+        rows.iter()
+            .enumerate()
+            .map(|(y, row)| {
+                row.chars()
+                    .enumerate()
+                    .map(|(x, c)| {
+                        if seen.contains(&(x as i32, y as i32)) {
+                            c
+                        } else {
+                            ' '
+                        }
+                    })
+                    .collect()
+            })
+            .collect()
     }
 
     #[test]
@@ -514,7 +672,9 @@ mod tests {
 
     #[test]
     fn a_pillar_casts_a_shadow() {
-        let rows = ["#######", "#.....#", "#..#..#", "#.....#", "#.....#", "#######"];
+        let rows = [
+            "#######", "#.....#", "#..#..#", "#.....#", "#.....#", "#######",
+        ];
         let v = view(&rows, (3, 4), 9);
         assert_eq!(v[2], "#..#..#", "the pillar itself is seen");
         assert_eq!(&v[1][3..4], " ", "the cell behind it is in its shadow");
@@ -523,8 +683,18 @@ mod tests {
 
     #[test]
     fn sight_is_symmetric_between_floors() {
-        let rows = ["#########", "#.......#", "#..#.#..#", "#...#...#", "#.......#", "#########"];
-        let floors: Vec<(i32, i32)> = (0..6).flat_map(|y| (0..9).map(move |x| (x, y))).filter(|&(x, y)| !grid(&rows)(x, y)).collect();
+        let rows = [
+            "#########",
+            "#.......#",
+            "#..#.#..#",
+            "#...#...#",
+            "#.......#",
+            "#########",
+        ];
+        let floors: Vec<(i32, i32)> = (0..6)
+            .flat_map(|y| (0..9).map(move |x| (x, y)))
+            .filter(|&(x, y)| !grid(&rows)(x, y))
+            .collect();
         for &a in &floors {
             let sa = line_of_sight(a, 20, &grid(&rows));
             for &b in &floors {

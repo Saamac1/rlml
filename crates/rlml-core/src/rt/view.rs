@@ -38,7 +38,11 @@ pub fn blend(c: Rgb, to: Rgb, share: f32) -> Rgb {
 
 /// `60%` as 0.6.
 pub fn percent(word: &str) -> Option<f32> {
-    word.strip_suffix('%')?.parse::<f32>().ok().filter(|p| (0.0..=100.0).contains(p)).map(|p| p / 100.0)
+    word.strip_suffix('%')?
+        .parse::<f32>()
+        .ok()
+        .filter(|p| (0.0..=100.0).contains(p))
+        .map(|p| p / 100.0)
 }
 
 impl World<'_> {
@@ -49,18 +53,57 @@ impl World<'_> {
             let words: Vec<&str> = item.tokens.iter().map(|t| t.text.as_str()).collect();
             let remember = words.contains(&"remember");
             let filter = words.iter().position(|w| *w == "where").and_then(|i| {
-                let end = words.iter().position(|w| ["remember", "smooth", "alpha", "color"].contains(w)).filter(|e| *e > i).unwrap_or(words.len());
+                let end = words
+                    .iter()
+                    .position(|w| ["remember", "smooth", "alpha", "color"].contains(w))
+                    .filter(|e| *e > i)
+                    .unwrap_or(words.len());
                 crate::rs::parse::parse_expr(item.span(i + 1, end)).ok()
             });
-            let after = |k: &str| words.iter().position(|w| *w == k).and_then(|i| words.get(i + 1).copied());
-            let veil = (source == "fog").then(|| after("alpha").and_then(percent)).flatten().map(|a| (a, after("color").and_then(|c| self.color(c, item.namespace.as_deref())).unwrap_or([0, 0, 0])));
-            out.push(Layer { source, filter, remember, veil });
+            let after = |k: &str| {
+                words
+                    .iter()
+                    .position(|w| *w == k)
+                    .and_then(|i| words.get(i + 1).copied())
+            };
+            let veil = (source == "fog")
+                .then(|| after("alpha").and_then(percent))
+                .flatten()
+                .map(|a| {
+                    (
+                        a,
+                        after("color")
+                            .and_then(|c| self.color(c, item.namespace.as_deref()))
+                            .unwrap_or([0, 0, 0]),
+                    )
+                });
+            out.push(Layer {
+                source,
+                filter,
+                remember,
+                veil,
+            });
         }
         if out.is_empty() {
             out = vec![
-                Layer { source: "map".into(), filter: None, remember: true, veil: None },
-                Layer { source: "entities".into(), filter: None, remember: false, veil: None },
-                Layer { source: "fog".into(), filter: None, remember: false, veil: None },
+                Layer {
+                    source: "map".into(),
+                    filter: None,
+                    remember: true,
+                    veil: None,
+                },
+                Layer {
+                    source: "entities".into(),
+                    filter: None,
+                    remember: false,
+                    veil: None,
+                },
+                Layer {
+                    source: "fog".into(),
+                    filter: None,
+                    remember: false,
+                    veil: None,
+                },
             ];
         }
         out
@@ -69,7 +112,11 @@ impl World<'_> {
     /// A color by name (`colors`, D 9.1) or six lower-case hex digits.
     pub fn color(&self, word: &str, ns: Option<&str>) -> Option<Rgb> {
         let hex = |h: &str| {
-            (h.len() == 6).then(|| [0, 2, 4].map(|i| u8::from_str_radix(&h[i..i + 2], 16).ok()))?.into_iter().collect::<Option<Vec<u8>>>().map(|v| [v[0], v[1], v[2]])
+            (h.len() == 6)
+                .then(|| [0, 2, 4].map(|i| u8::from_str_radix(&h[i..i + 2], 16).ok()))?
+                .into_iter()
+                .collect::<Option<Vec<u8>>>()
+                .map(|v| [v[0], v[1], v[2]])
         };
         if let Some(c) = hex(word) {
             return Some(c);
@@ -77,7 +124,9 @@ impl World<'_> {
         let full = self.m.resolve(ns, word).ok()?.full.clone();
         self.m.section_rows("colors").find_map(|(_, item)| {
             let (_, row) = item.marker();
-            (names::qualify(row.namespace.as_deref(), row.key()) == full).then(|| row.word(1).and_then(hex)).flatten()
+            (names::qualify(row.namespace.as_deref(), row.key()) == full)
+                .then(|| row.word(1).and_then(hex))
+                .flatten()
         })
     }
 
@@ -94,7 +143,12 @@ impl World<'_> {
 
     /// The look of a tile from the style rows, down the ladder (D 9.2).
     fn find_look(&self, tile: &str) -> Look {
-        let style = self.m.settings().get("style").map(|i| i.rest(1).to_string()).unwrap_or_else(|| "ascii".into());
+        let style = self
+            .m
+            .settings()
+            .get("style")
+            .map(|i| i.rest(1).to_string())
+            .unwrap_or_else(|| "ascii".into());
         let mut ladder = vec![tile.to_string()];
         let mut t = tile.to_string();
         while let Some((head, _)) = t.rsplit_once('.') {
@@ -104,24 +158,46 @@ impl World<'_> {
         ladder.push("default".into());
         for key in ladder {
             let mut found = None;
-            for b in self.m.sections.iter().filter(|b| b.kind == "tiles.glyphs" && b.args.first().is_some_and(|a| a.text == style)) {
+            for b in self.m.sections.iter().filter(|b| {
+                b.kind == "tiles.glyphs" && b.args.first().is_some_and(|a| a.text == style)
+            }) {
                 for item in &b.items {
                     let (_, row) = item.marker();
-                    let row_key = if row.key() == "default" { "default".to_string() } else { self.full_name(row.key(), row.namespace.as_deref()) };
+                    let row_key = if row.key() == "default" {
+                        "default".to_string()
+                    } else {
+                        self.full_name(row.key(), row.namespace.as_deref())
+                    };
                     if row_key != key {
                         continue;
                     }
-                    let Ok((ch, rest)) = crate::model::glyph_char(&row.shift(1)) else { continue };
+                    let Ok((ch, rest)) = crate::model::glyph_char(&row.shift(1)) else {
+                        continue;
+                    };
                     let ns = row.namespace.as_deref();
-                    let after = |w: &str| rest.tokens.iter().position(|t| t.is(w)).and_then(|i| rest.word(i + 1)).and_then(|c| self.color(c, ns));
-                    found = Some(Look { ch, fg: after("fg"), bg: after("bg") });
+                    let after = |w: &str| {
+                        rest.tokens
+                            .iter()
+                            .position(|t| t.is(w))
+                            .and_then(|i| rest.word(i + 1))
+                            .and_then(|c| self.color(c, ns))
+                    };
+                    found = Some(Look {
+                        ch,
+                        fg: after("fg"),
+                        bg: after("bg"),
+                    });
                 }
             }
             if let Some(l) = found {
                 return l;
             }
         }
-        Look { ch: '?', fg: None, bg: None }
+        Look {
+            ch: '?',
+            fg: None,
+            bg: None,
+        }
     }
 
     /// A tile's ASCII glyph (D 9.2).
@@ -138,7 +214,9 @@ impl World<'_> {
         let m = &self.s.maps[map];
         match &self.last_view {
             Some((lm, v)) if *lm == map => v.clone(),
-            _ => (0..m.height).flat_map(|y| (0..m.width).map(move |x| (x, y))).collect(),
+            _ => (0..m.height)
+                .flat_map(|y| (0..m.width).map(move |x| (x, y)))
+                .collect(),
         }
     }
 
@@ -147,8 +225,12 @@ impl World<'_> {
     /// stops to wait, so memory, which routes use,
     /// does not depend on what was drawn (M 3.1, M 4.4).
     pub fn see(&mut self) {
-        let Some(map) = self.s.active_map() else { return };
-        let Some(view) = self.shared_view(map) else { return };
+        let Some(map) = self.s.active_map() else {
+            return;
+        };
+        let Some(view) = self.shared_view(map) else {
+            return;
+        };
         self.last_view = Some((map, view.clone()));
         for cell in view {
             if !self.s.maps[map].remembered.contains(&cell) {
@@ -159,7 +241,16 @@ impl World<'_> {
 
     /// Draws a map as rows of characters.
     pub fn render(&mut self, map: MapId) -> Vec<String> {
-        self.render_cells(map).into_iter().map(|r| r.into_iter().map(|c| c.ch).collect::<String>().trim_end().to_string()).collect()
+        self.render_cells(map)
+            .into_iter()
+            .map(|r| {
+                r.into_iter()
+                    .map(|c| c.ch)
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect()
     }
 
     /// Draws a map as cells with colors. A look without a background takes
@@ -169,9 +260,14 @@ impl World<'_> {
         let (w, h) = (self.s.maps[map].width, self.s.maps[map].height);
         // what is in view shows as remembered too; drawing does not write
         // the memory, which `see` does at fixed points (M 4.4)
-        let mut remembered: BTreeSet<(i32, i32)> = self.s.maps[map].remembered.iter().copied().collect();
+        let mut remembered: BTreeSet<(i32, i32)> =
+            self.s.maps[map].remembered.iter().copied().collect();
         remembered.extend(view.iter().copied());
-        let blank = Look { ch: ' ', fg: None, bg: None };
+        let blank = Look {
+            ch: ' ',
+            fg: None,
+            bg: None,
+        };
         let mut grid = vec![vec![blank; w as usize]; h as usize];
         let mut drawn = vec![vec![false; w as usize]; h as usize];
         for layer in self.layers_section() {
@@ -179,11 +275,16 @@ impl World<'_> {
                 "map" => {
                     for y in 0..h {
                         for x in 0..w {
-                            if !(view.contains(&(x, y)) || layer.remember && remembered.contains(&(x, y))) {
+                            if !(view.contains(&(x, y))
+                                || layer.remember && remembered.contains(&(x, y)))
+                            {
                                 continue;
                             }
                             let m = &self.s.maps[map];
-                            let tiles: Vec<String> = (0..m.layers.len()).rev().filter_map(|l| m.tile(l, x, y).map(String::from)).collect();
+                            let tiles: Vec<String> = (0..m.layers.len())
+                                .rev()
+                                .filter_map(|l| m.tile(l, x, y).map(String::from))
+                                .collect();
                             let Some(top) = tiles.first() else { continue };
                             let mut look = self.look(top);
                             if look.bg.is_none() {
@@ -196,7 +297,15 @@ impl World<'_> {
                 }
                 "entities" => {
                     for e in self.s.entities_on(map) {
-                        let Some(Value::Name(tile)) = self.s.get(e).get("render").and_then(|c| c.get("tile")).cloned() else { continue };
+                        let Some(Value::Name(tile)) = self
+                            .s
+                            .get(e)
+                            .get("render")
+                            .and_then(|c| c.get("tile"))
+                            .cloned()
+                        else {
+                            continue;
+                        };
                         let Some(p) = self.s.at(e) else { continue };
                         if !view.contains(&(p.x, p.y)) && self.s.get(e).get("revealed").is_none() {
                             continue;
@@ -258,7 +367,12 @@ impl World<'_> {
         let view = self.player_view(p.map);
         let seen = view.contains(&(p.x, p.y));
         let drawn = |e: EntityId| self.s.get(e).get("render").is_some();
-        let entity = self.s.entities_at(p).into_iter().rev().find(|&e| drawn(e) && (seen || self.s.get(e).get("revealed").is_some()));
+        let entity = self
+            .s
+            .entities_at(p)
+            .into_iter()
+            .rev()
+            .find(|&e| drawn(e) && (seen || self.s.get(e).get("revealed").is_some()));
         if let Some(e) = entity {
             return Some(self.description(lang, &Value::Entity(e)));
         }
@@ -266,7 +380,9 @@ impl World<'_> {
             return None;
         }
         let m = &self.s.maps[p.map];
-        let tile = (0..m.layers.len()).rev().find_map(|l| m.tile(l, p.x, p.y).map(String::from))?;
+        let tile = (0..m.layers.len())
+            .rev()
+            .find_map(|l| m.tile(l, p.x, p.y).map(String::from))?;
         Some(self.description(lang, &Value::Name(tile)))
     }
 

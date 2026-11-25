@@ -30,7 +30,16 @@ pub enum Dir {
 
 impl Dir {
     /// The fixed order of M 9.3 and D 2.4.
-    pub const ALL: [Dir; 8] = [Dir::North, Dir::Northeast, Dir::East, Dir::Southeast, Dir::South, Dir::Southwest, Dir::West, Dir::Northwest];
+    pub const ALL: [Dir; 8] = [
+        Dir::North,
+        Dir::Northeast,
+        Dir::East,
+        Dir::Southeast,
+        Dir::South,
+        Dir::Southwest,
+        Dir::West,
+        Dir::Northwest,
+    ];
 
     pub fn parse(s: &str) -> Option<Dir> {
         Some(match s {
@@ -91,13 +100,25 @@ impl Dir {
 pub struct Side(pub Option<u8>);
 
 impl Side {
-    const NAMES: [&'static str; 8] = ["front", "frontright", "right", "backright", "back", "backleft", "left", "frontleft"];
+    const NAMES: [&'static str; 8] = [
+        "front",
+        "frontright",
+        "right",
+        "backright",
+        "back",
+        "backleft",
+        "left",
+        "frontleft",
+    ];
 
     pub fn parse(s: &str) -> Option<Side> {
         if s == "none" {
             return Some(Side(Option::None));
         }
-        Side::NAMES.iter().position(|n| *n == s).map(|i| Side(Some(i as u8)))
+        Side::NAMES
+            .iter()
+            .position(|n| *n == s)
+            .map(|i| Side(Some(i as u8)))
     }
 
     pub fn opposite(self) -> Side {
@@ -128,7 +149,11 @@ pub struct Pos {
 impl Pos {
     pub fn step(self, d: Dir) -> Pos {
         let (dx, dy) = d.delta();
-        Pos { x: self.x + dx, y: self.y + dy, ..self }
+        Pos {
+            x: self.x + dx,
+            y: self.y + dy,
+            ..self
+        }
     }
 
     /// Chebyshev distance (D 8.8); cells of different maps are infinitely
@@ -175,22 +200,44 @@ impl Area {
     }
 
     pub fn contains(&self, p: Pos) -> bool {
-        self.cells.binary_search_by_key(&p.order(), |c| c.order()).is_ok()
+        self.cells
+            .binary_search_by_key(&p.order(), |c| c.order())
+            .is_ok()
     }
 
     /// `a and b`.
     pub fn and(&self, other: &Area) -> Area {
-        Area { cells: self.cells.iter().copied().filter(|p| other.contains(*p)).collect() }
+        Area {
+            cells: self
+                .cells
+                .iter()
+                .copied()
+                .filter(|p| other.contains(*p))
+                .collect(),
+        }
     }
 
     /// `a or b`.
     pub fn or(&self, other: &Area) -> Area {
-        Area::new(self.cells.iter().chain(other.cells.iter()).copied().collect())
+        Area::new(
+            self.cells
+                .iter()
+                .chain(other.cells.iter())
+                .copied()
+                .collect(),
+        )
     }
 
     /// `a - b`.
     pub fn minus(&self, other: &Area) -> Area {
-        Area { cells: self.cells.iter().copied().filter(|p| !other.contains(*p)).collect() }
+        Area {
+            cells: self
+                .cells
+                .iter()
+                .copied()
+                .filter(|p| !other.contains(*p))
+                .collect(),
+        }
     }
 }
 
@@ -248,7 +295,11 @@ pub struct Sound {
 pub enum Value {
     Number(i64),
     /// `NdM+K`.
-    Dice { n: u32, sides: u32, bonus: i64 },
+    Dice {
+        n: u32,
+        sides: u32,
+        bonus: i64,
+    },
     /// `a..b`; `None` is an open upper end.
     Range(i64, Option<i64>),
     Percent(i64),
@@ -426,8 +477,16 @@ mod tests {
     #[test]
     fn members_and_equality() {
         assert_eq!(Value::Range(1, Some(3)).members().unwrap().len(), 3);
-        assert_eq!(Value::Range(0, Some(-1)).members().unwrap().len(), 0, "an empty range (RS 2.6)");
-        assert_ne!(Value::Pos(p(0, 0)), Value::Pos(Pos { map: 1, x: 0, y: 0 }), "cells belong to their map");
+        assert_eq!(
+            Value::Range(0, Some(-1)).members().unwrap().len(),
+            0,
+            "an empty range (RS 2.6)"
+        );
+        assert_ne!(
+            Value::Pos(p(0, 0)),
+            Value::Pos(Pos { map: 1, x: 0, y: 0 }),
+            "cells belong to their map"
+        );
         assert_eq!(Value::Entity(3), Value::Entity(3));
     }
 }

@@ -20,11 +20,21 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     pub fn error(file: impl Into<String>, line: usize, message: impl Into<String>) -> Self {
-        Diagnostic { level: Level::Error, file: file.into(), line, message: message.into() }
+        Diagnostic {
+            level: Level::Error,
+            file: file.into(),
+            line,
+            message: message.into(),
+        }
     }
 
     pub fn warning(file: impl Into<String>, line: usize, message: impl Into<String>) -> Self {
-        Diagnostic { level: Level::Warning, file: file.into(), line, message: message.into() }
+        Diagnostic {
+            level: Level::Warning,
+            file: file.into(),
+            line,
+            message: message.into(),
+        }
     }
 }
 
@@ -78,8 +88,14 @@ mod tests {
 
     #[test]
     fn display_includes_file_line_and_level() {
-        assert_eq!(Diagnostic::error("maps/caves.rlml", 12, "unknown character").to_string(), "maps/caves.rlml:12: error: unknown character");
-        assert_eq!(Diagnostic::warning("game.rlml", 0, "x").to_string(), "game.rlml: warning: x");
+        assert_eq!(
+            Diagnostic::error("maps/caves.rlml", 12, "unknown character").to_string(),
+            "maps/caves.rlml:12: error: unknown character"
+        );
+        assert_eq!(
+            Diagnostic::warning("game.rlml", 0, "x").to_string(),
+            "game.rlml: warning: x"
+        );
     }
 
     #[test]

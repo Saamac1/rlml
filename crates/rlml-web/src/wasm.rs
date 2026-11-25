@@ -44,7 +44,11 @@ impl Pads {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Pads {
         let gilrs = gilrs::Gilrs::new().ok();
-        let first = gilrs.iter().flat_map(|g| g.gamepads()).map(|(id, _)| crate::pads::encode(usize::from(id), &rlml_app::pad::Raw::Connected)).collect();
+        let first = gilrs
+            .iter()
+            .flat_map(|g| g.gamepads())
+            .map(|(id, _)| crate::pads::encode(usize::from(id), &rlml_app::pad::Raw::Connected))
+            .collect();
         Pads { gilrs, first }
     }
 
@@ -88,7 +92,11 @@ fn tree(bundle: &JsValue, field: &str) -> Result<Vec<(String, String)>, JsValue>
         let (path, text) = (pair.get(0).as_string(), pair.get(1).as_string());
         match (path, text) {
             (Some(p), Some(t)) => out.push((p, t)),
-            _ => return Err(err(format!("game.json: `{field}` holds a file that is no text"))),
+            _ => {
+                return Err(err(format!(
+                    "game.json: `{field}` holds a file that is no text"
+                )));
+            }
         }
     }
     Ok(out)
@@ -106,7 +114,9 @@ impl WebGame {
     /// thrown, one a line.
     #[wasm_bindgen(constructor)]
     pub fn new(bundle: JsValue, seed: u32, cols: usize, rows: usize) -> Result<WebGame, JsValue> {
-        let main = Reflect::get(&bundle, &JsValue::from_str("main"))?.as_string().unwrap_or_else(|| "game.rlml".into());
+        let main = Reflect::get(&bundle, &JsValue::from_str("main"))?
+            .as_string()
+            .unwrap_or_else(|| "game.rlml".into());
         let files = crate::bundle::files(tree(&bundle, "game")?, tree(&bundle, "engine")?);
         let m = crate::bundle::load(&files, &main).map_err(err)?;
         // the app borrows the model, and a wasm-bindgen class carries no

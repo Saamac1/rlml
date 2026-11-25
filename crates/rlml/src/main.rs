@@ -36,7 +36,11 @@ impl Files for DiskFiles {
         let mut out = Vec::new();
         for e in entries.flatten() {
             let name = e.file_name().to_string_lossy().to_string();
-            if e.path().is_dir() { out.push(format!("{name}/")) } else { out.push(name) }
+            if e.path().is_dir() {
+                out.push(format!("{name}/"))
+            } else {
+                out.push(name)
+            }
         }
         Some(out)
     }
@@ -115,7 +119,9 @@ fn main() -> ExitCode {
                 return ExitCode::SUCCESS;
             }
             a if game.is_none() && !a.starts_with('-') => game = Some(PathBuf::from(a)),
-            a if command == "replay" && log_in.is_none() && !a.starts_with('-') => log_in = Some(PathBuf::from(a)),
+            a if command == "replay" && log_in.is_none() && !a.starts_with('-') => {
+                log_in = Some(PathBuf::from(a))
+            }
             a => {
                 eprintln!("unexpected argument `{a}`\n\n{USAGE}");
                 return ExitCode::from(2);
@@ -128,7 +134,9 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     };
     let (root, main) = if game.is_dir() {
-        let main = ["game.rlml", "game.rlml.md", "game.md"].into_iter().find(|m| game.join(m).is_file());
+        let main = ["game.rlml", "game.rlml.md", "game.md"]
+            .into_iter()
+            .find(|m| game.join(m).is_file());
         match main {
             Some(m) => (game.clone(), m.to_string()),
             None => {
@@ -138,10 +146,16 @@ fn main() -> ExitCode {
         }
     } else {
         let root = game.parent().map(Path::to_path_buf).unwrap_or_default();
-        (root, game.file_name().unwrap().to_string_lossy().to_string())
+        (
+            root,
+            game.file_name().unwrap().to_string_lossy().to_string(),
+        )
     };
     // the workspace's own `lib` folder holds the standard library
-    let engine = lib.or_else(|| Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")).filter(|p| p.join("lib/std.rlml").is_file()));
+    let engine = lib.or_else(|| {
+        Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
+            .filter(|p| p.join("lib/std.rlml").is_file())
+    });
     let files = DiskFiles { game: root, engine };
     let (model, report) = rlml_core::check_game(&files, &main);
     if command == "play" {
@@ -151,7 +165,10 @@ fn main() -> ExitCode {
             }
             return ExitCode::FAILURE;
         }
-        let game_name = model.named_game().map(|g| g.name.clone()).unwrap_or_default();
+        let game_name = model
+            .named_game()
+            .map(|g| g.name.clone())
+            .unwrap_or_default();
         let data = data.or_else(|| rlml_tui::saves::user_data(&game_name));
         return match rlml_tui::term::play(&model, seed, log_out.as_deref(), data.as_deref()) {
             Ok(()) => ExitCode::SUCCESS,
@@ -197,7 +214,10 @@ fn main() -> ExitCode {
             eprintln!("replay needs an input log\n\n{USAGE}");
             return ExitCode::from(2);
         };
-        let log = match std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|t| rlml_core::rt::input::InputLog::read(&t)) {
+        let log = match std::fs::read_to_string(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|t| rlml_core::rt::input::InputLog::read(&t))
+        {
             Ok(l) => l,
             Err(e) => {
                 eprintln!("{}: {e}", path.display());
@@ -229,12 +249,25 @@ fn main() -> ExitCode {
             count(Kind::Component),
             count(Kind::Map),
             count(Kind::Command),
-            model.code.iter().filter(|d| d.kind == rlml_core::rogue::DeclKind::Handler).count(),
-            model.languages.iter().map(|f| f.language.as_str()).collect::<std::collections::BTreeSet<_>>().len(),
+            model
+                .code
+                .iter()
+                .filter(|d| d.kind == rlml_core::rogue::DeclKind::Handler)
+                .count(),
+            model
+                .languages
+                .iter()
+                .map(|f| f.language.as_str())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
         );
     }
     println!("{errors} errors, {warnings} warnings");
-    if errors == 0 { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+    if errors == 0 {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
 }
 
 fn write_log(path: &Path, log: &rlml_core::rt::input::InputLog) -> Result<(), String> {

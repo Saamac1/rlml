@@ -13,7 +13,8 @@ pub const STD: &str = "STD";
 pub fn is_part(p: &str) -> bool {
     let mut chars = p.chars();
     matches!(chars.next(), Some('A'..='Z'))
-        && p.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        && p.chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
         && !p.ends_with('_')
         && !p.contains("__")
 }
@@ -32,7 +33,9 @@ pub fn is_ref(s: &str) -> bool {
 pub fn is_vocabulary(s: &str) -> bool {
     !s.is_empty()
         && s.split('.').all(|p| {
-            p.chars().next().is_some_and(|c| c.is_ascii_lowercase()) && p.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+            p.chars().next().is_some_and(|c| c.is_ascii_lowercase())
+                && p.chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
         })
 }
 
@@ -66,9 +69,17 @@ pub fn candidates(ns: Option<&str>, name: &str) -> Vec<String> {
 }
 
 /// Resolves a reference; the error lists every name tried.
-pub fn resolve(ns: Option<&str>, name: &str, exists: impl Fn(&str) -> bool) -> Result<String, String> {
+pub fn resolve(
+    ns: Option<&str>,
+    name: &str,
+    exists: impl Fn(&str) -> bool,
+) -> Result<String, String> {
     let tried = candidates(ns, name);
-    tried.iter().find(|c| exists(c)).cloned().ok_or_else(|| tried.join(", "))
+    tried
+        .iter()
+        .find(|c| exists(c))
+        .cloned()
+        .ok_or_else(|| tried.join(", "))
 }
 
 /// A tile index or index range (D 7.1).
@@ -125,14 +136,20 @@ pub fn tile_name(s: &str) -> Result<TileName, String> {
             let (head, tail) = (&body[..at], &body[at + 2..]);
             let (head, from) = head.rsplit_once('.').ok_or_else(bad)?;
             let from = index_number(from)?;
-            let to = if tail.is_empty() { None } else { Some(index_number(tail)?) };
+            let to = if tail.is_empty() {
+                None
+            } else {
+                Some(index_number(tail)?)
+            };
             if to.is_some_and(|t| t < from) {
                 return Err(format!("empty tile index range in `{s}`"));
             }
             (head, Some(Index::Range(from, to)))
         }
         None => match body.rsplit_once('.') {
-            Some((head, last)) if last.starts_with(|c: char| c.is_ascii_digit()) => (head, Some(Index::One(index_number(last)?))),
+            Some((head, last)) if last.starts_with(|c: char| c.is_ascii_digit()) => {
+                (head, Some(Index::One(index_number(last)?)))
+            }
             _ => (body, None),
         },
     };
@@ -157,7 +174,9 @@ mod tests {
         for ok in ["A", "MAIN_MENU", "LOOT.RARE", "SFX.HIT2", "A1_B"] {
             assert!(is_name(ok), "{ok}");
         }
-        for bad in ["", "lower", "Mixed", "_A", "A_", "A__B", "3D_FIRE", "A..B", "A.", ".A", "A-B", "ÄÄ"] {
+        for bad in [
+            "", "lower", "Mixed", "_A", "A_", "A__B", "3D_FIRE", "A..B", "A.", ".A", "A-B", "ÄÄ",
+        ] {
             assert!(!is_name(bad), "{bad}");
         }
         assert!(is_ref(".LOOT"));
@@ -178,26 +197,45 @@ mod tests {
         assert_eq!(candidates(None, "N"), ["N", "STD.N"]);
         assert_eq!(candidates(Some("STD"), "HP"), ["STD.HP", "HP"]);
         assert_eq!(candidates(Some("A.B"), ".N"), ["N"]);
-        assert_eq!(candidates(Some("UNDEAD"), "SFX.HIT"), ["UNDEAD.SFX.HIT", "SFX.HIT", "STD.SFX.HIT"]);
+        assert_eq!(
+            candidates(Some("UNDEAD"), "SFX.HIT"),
+            ["UNDEAD.SFX.HIT", "SFX.HIT", "STD.SFX.HIT"]
+        );
     }
 
     #[test]
     fn resolution() {
         let defined = ["A.N", "N", "M", "STD.HP"];
         let exists = |n: &str| defined.contains(&n);
-        assert_eq!(resolve(Some("A.B"), "N", exists), Ok("A.N".into()), "inner shadows outer");
+        assert_eq!(
+            resolve(Some("A.B"), "N", exists),
+            Ok("A.N".into()),
+            "inner shadows outer"
+        );
         assert_eq!(resolve(Some("A.B"), ".N", exists), Ok("N".into()));
         assert_eq!(resolve(None, "HP", exists), Ok("STD.HP".into()));
-        assert_eq!(resolve(Some("A.B"), "X", exists), Err("A.B.X, A.X, X, STD.X".into()));
+        assert_eq!(
+            resolve(Some("A.B"), "X", exists),
+            Err("A.B.X, A.X, X, STD.X".into())
+        );
     }
 
     #[test]
     fn tile_names() {
         let t = tile_name("LAVA.crust.2").unwrap();
-        assert_eq!((t.base.as_str(), t.variants.as_slice(), t.index), ("LAVA", &["crust".to_string()][..], Some(Index::One(2))));
+        assert_eq!(
+            (t.base.as_str(), t.variants.as_slice(), t.index),
+            ("LAVA", &["crust".to_string()][..], Some(Index::One(2)))
+        );
         assert_eq!(t.key(), "LAVA.crust");
-        assert_eq!(tile_name("WATER.1..2").unwrap().index, Some(Index::Range(1, Some(2))));
-        assert_eq!(tile_name("WATER.4..").unwrap().index, Some(Index::Range(4, None)));
+        assert_eq!(
+            tile_name("WATER.1..2").unwrap().index,
+            Some(Index::Range(1, Some(2)))
+        );
+        assert_eq!(
+            tile_name("WATER.4..").unwrap().index,
+            Some(Index::Range(4, None))
+        );
         assert_eq!(tile_name("GLYPH.NKI.1..36").unwrap().base, "GLYPH.NKI");
         assert_eq!(tile_name("STAIR.down").unwrap().key(), "STAIR.down");
         assert!(tile_name("WATER.03").unwrap_err().contains("leading zeros"));

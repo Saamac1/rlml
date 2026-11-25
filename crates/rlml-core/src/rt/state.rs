@@ -15,7 +15,12 @@ use super::value::{Area, Card, ComponentValue, EntityId, MapId, Pos, Value};
 pub enum Place {
     Nowhere,
     Map(Pos),
-    In { holder: EntityId, component: String, field: String, slot: usize },
+    In {
+        holder: EntityId,
+        component: String,
+        field: String,
+        slot: usize,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -164,7 +169,11 @@ impl MapState {
     }
 
     pub fn label(&self, label: &str) -> &[(i32, i32)] {
-        self.labels.iter().find(|(l, _)| l == label).map(|(_, c)| c.as_slice()).unwrap_or(&[])
+        self.labels
+            .iter()
+            .find(|(l, _)| l == label)
+            .map(|(_, c)| c.as_slice())
+            .unwrap_or(&[])
     }
 
     /// The map's own clock: `game.time` less the time it was frozen
@@ -269,7 +278,12 @@ impl State {
 
     /// A new, unplaced instance.
     pub fn create(&mut self, kind: &str) -> EntityId {
-        self.entities.push(Instance { kind: kind.to_string(), components: vec![], place: Place::Nowhere, alive: true });
+        self.entities.push(Instance {
+            kind: kind.to_string(),
+            components: vec![],
+            place: Place::Nowhere,
+            alive: true,
+        });
         self.entities.len() - 1
     }
 
@@ -283,12 +297,19 @@ impl State {
 
     /// Living instances in a cell, in creation order (M 4.2).
     pub fn entities_at(&self, p: Pos) -> Vec<EntityId> {
-        (0..self.entities.len()).filter(|&e| self.entities[e].alive && self.entities[e].place == Place::Map(p)).collect()
+        (0..self.entities.len())
+            .filter(|&e| self.entities[e].alive && self.entities[e].place == Place::Map(p))
+            .collect()
     }
 
     /// Living instances on a map, in creation order.
     pub fn entities_on(&self, map: MapId) -> Vec<EntityId> {
-        (0..self.entities.len()).filter(|&e| self.entities[e].alive && matches!(self.entities[e].place, Place::Map(p) if p.map == map)).collect()
+        (0..self.entities.len())
+            .filter(|&e| {
+                self.entities[e].alive
+                    && matches!(self.entities[e].place, Place::Map(p) if p.map == map)
+            })
+            .collect()
     }
 
     /// Members of a collection field by slot, a stack's members in creation
@@ -296,7 +317,14 @@ impl State {
     pub fn members(&self, holder: EntityId, component: &str, field: &str) -> Vec<EntityId> {
         let mut out: Vec<(usize, EntityId)> = (0..self.entities.len())
             .filter_map(|e| match &self.entities[e].place {
-                Place::In { holder: h, component: c, field: f, slot } if self.entities[e].alive && *h == holder && c == component && f == field => Some((*slot, e)),
+                Place::In {
+                    holder: h,
+                    component: c,
+                    field: f,
+                    slot,
+                } if self.entities[e].alive && *h == holder && c == component && f == field => {
+                    Some((*slot, e))
+                }
                 _ => None,
             })
             .collect();
@@ -373,7 +401,11 @@ impl State {
     /// The next wake of actors on `map`: the smallest moment, then the
     /// smallest sequence number (M 6.1.2).
     pub fn next_wake(&self, map: MapId) -> Option<Wake> {
-        self.wakes.iter().filter(|w| self.at(w.entity).is_some_and(|p| p.map == map)).min_by_key(|w| (w.at, w.seq)).copied()
+        self.wakes
+            .iter()
+            .filter(|w| self.at(w.entity).is_some_and(|p| p.map == map))
+            .min_by_key(|w| (w.at, w.seq))
+            .copied()
     }
 
     pub fn deck(&self, name: &str) -> Option<&DeckState> {
@@ -381,7 +413,10 @@ impl State {
     }
 
     pub fn deck_mut(&mut self, name: &str) -> Option<&mut DeckState> {
-        self.decks.iter_mut().find(|(n, _)| n == name).map(|(_, d)| d)
+        self.decks
+            .iter_mut()
+            .find(|(n, _)| n == name)
+            .map(|(_, d)| d)
     }
 
     /// The active map: the player's, or a living member's, or where the
@@ -411,14 +446,27 @@ impl State {
     /// seat does nothing.
     pub fn join_seat(&mut self, n: SeatId) {
         if self.seat(n).is_none() {
-            let i = self.seats.iter().position(|s| s.n > n).unwrap_or(self.seats.len());
-            self.seats.insert(i, Seat { n, members: vec![], active: None });
+            let i = self
+                .seats
+                .iter()
+                .position(|s| s.n > n)
+                .unwrap_or(self.seats.len());
+            self.seats.insert(
+                i,
+                Seat {
+                    n,
+                    members: vec![],
+                    active: None,
+                },
+            );
         }
     }
 
     /// The lowest free seat number.
     pub fn free_seat(&self) -> SeatId {
-        (1..=u8::MAX).find(|&n| self.seat(n).is_none()).unwrap_or(u8::MAX)
+        (1..=u8::MAX)
+            .find(|&n| self.seat(n).is_none())
+            .unwrap_or(u8::MAX)
     }
 
     /// Frees seat `n`: its members lose `seat` (M 8.2).
@@ -432,7 +480,10 @@ impl State {
 
     /// The seat `e` is a member of.
     pub fn seat_of(&self, e: EntityId) -> Option<SeatId> {
-        self.seats.iter().find(|s| s.members.contains(&e)).map(|s| s.n)
+        self.seats
+            .iter()
+            .find(|s| s.members.contains(&e))
+            .map(|s| s.n)
     }
 
     pub fn is_member(&self, e: EntityId) -> bool {
@@ -462,7 +513,10 @@ impl State {
             if was_active && free {
                 s.active = Some(e);
             }
-            self.get_mut(e).set(ComponentValue { name: "seat".into(), fields: vec![("n".into(), Value::Number(n as i64))] });
+            self.get_mut(e).set(ComponentValue {
+                name: "seat".into(),
+                fields: vec![("n".into(), Value::Number(n as i64))],
+            });
         }
         // a controlled member that leaves its seat, for whatever reason,
         // hands control to the seat's next living member (M 6.1.10)
@@ -498,18 +552,32 @@ impl State {
 
     /// A seat's living members in joining order.
     pub fn seat_members(&self, n: SeatId) -> Vec<EntityId> {
-        self.seat(n).map(|s| s.members.iter().copied().filter(|&e| self.get(e).alive).collect()).unwrap_or_default()
+        self.seat(n)
+            .map(|s| {
+                s.members
+                    .iter()
+                    .copied()
+                    .filter(|&e| self.get(e).alive)
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// `players`: every seat's living members, by seat and then joining
     /// order (M 6.1.10).
     pub fn players(&self) -> Vec<EntityId> {
-        self.seats.iter().flat_map(|s| s.members.iter().copied()).filter(|&e| self.get(e).alive).collect()
+        self.seats
+            .iter()
+            .flat_map(|s| s.members.iter().copied())
+            .filter(|&e| self.get(e).alive)
+            .collect()
     }
 
     /// A seat's living controlled member.
     pub fn active(&self, n: SeatId) -> Option<EntityId> {
-        self.seat(n).and_then(|s| s.active).filter(|&e| self.get(e).alive)
+        self.seat(n)
+            .and_then(|s| s.active)
+            .filter(|&e| self.get(e).alive)
     }
 
     /// `controlled(e)` (M 6.1.10): does `e` wait for its seat's input on
@@ -521,11 +589,15 @@ impl State {
         if !self.get(e).alive {
             return false;
         }
-        let Some(n) = self.seat_of(e) else { return false };
+        let Some(n) = self.seat_of(e) else {
+            return false;
+        };
         let active = self.active(n);
         // the member whose command runs has its wake out of the queue
         // meanwhile; it can still act
-        let cannot = |a: EntityId| self.at(a).is_none() || (self.wake_of(a).is_none() && self.acting != Some(a));
+        let cannot = |a: EntityId| {
+            self.at(a).is_none() || (self.wake_of(a).is_none() && self.acting != Some(a))
+        };
         self.party_each || active == Some(e) || active.is_none_or(cannot)
     }
 
@@ -545,7 +617,8 @@ mod tests {
 
     fn state() -> State {
         let mut s = State::default();
-        s.maps.push(MapState::new("CAVE", 4, 3, vec![String::new()], 0));
+        s.maps
+            .push(MapState::new("CAVE", 4, 3, vec![String::new()], 0));
         s
     }
 
@@ -556,7 +629,11 @@ mod tests {
         let b = s.create("RAT");
         s.get_mut(b).place = Place::Map(p(1, 1));
         s.get_mut(a).place = Place::Map(p(1, 1));
-        assert_eq!(s.entities_at(p(1, 1)), [a, b], "creation order, not placing order");
+        assert_eq!(
+            s.entities_at(p(1, 1)),
+            [a, b],
+            "creation order, not placing order"
+        );
         s.get_mut(a).alive = false;
         assert_eq!(s.entities_at(p(1, 1)), [b]);
         assert_eq!(s.get(a).kind, "RAT", "a dead handle keeps its kind");
@@ -569,11 +646,20 @@ mod tests {
         s.get_mut(hero).place = Place::Map(p(2, 0));
         let (x, y, z) = (s.create("A"), s.create("B"), s.create("C"));
         for (e, slot) in [(x, 2), (y, 0), (z, 1)] {
-            s.get_mut(e).place = Place::In { holder: hero, component: "PACK".into(), field: "items".into(), slot };
+            s.get_mut(e).place = Place::In {
+                holder: hero,
+                component: "PACK".into(),
+                field: "items".into(),
+                slot,
+            };
         }
         assert_eq!(s.members(hero, "PACK", "items"), [y, z, x]);
         s.get_mut(z).alive = false;
-        assert_eq!(s.free_slot(hero, "PACK", "items"), 1, "the smallest free slot");
+        assert_eq!(
+            s.free_slot(hero, "PACK", "items"),
+            1,
+            "the smallest free slot"
+        );
         assert_eq!(s.at(x), Some(p(2, 0)), "a member is at its holder's cell");
     }
 
@@ -587,7 +673,11 @@ mod tests {
         s.schedule(a, 120);
         s.schedule(b, 60);
         s.schedule(c, 60);
-        assert_eq!(s.next_wake(0).unwrap().entity, b, "same moment: scheduled first runs first");
+        assert_eq!(
+            s.next_wake(0).unwrap().entity,
+            b,
+            "same moment: scheduled first runs first"
+        );
         s.schedule(b, 200);
         assert_eq!(s.wakes.len(), 3, "one wake per actor");
         assert_eq!(s.next_wake(0).unwrap().entity, c);

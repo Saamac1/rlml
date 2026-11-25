@@ -292,7 +292,9 @@ form!(Wake, "wake", entity, at, seq);
 form!(DeckState, "deck", draw, discard);
 form!(Seat, "seat", n, members, active);
 form!(Instance, "e", kind, components, place, alive);
-form!(Game, "game", start, at, seed, time, call_depth, loop_steps, components);
+form!(
+    Game, "game", start, at, seed, time, call_depth, loop_steps, components
+);
 form!(PathLoop, "loop", loop_no, state);
 
 impl Put for Dir {
@@ -380,7 +382,12 @@ impl Put for Place {
         match self {
             Place::Nowhere => w.word("nowhere"),
             Place::Map(p) => p.put(w),
-            Place::In { holder, component, field, slot } => {
+            Place::In {
+                holder,
+                component,
+                field,
+                slot,
+            } => {
                 w.open("in");
                 (holder, (component, (field, slot))).put(w);
                 w.close();
@@ -401,7 +408,12 @@ impl Get for Place {
                 r.open("in")?;
                 let (holder, (component, (field, slot))) = Get::get(r)?;
                 r.close()?;
-                Ok(Place::In { holder, component, field, slot })
+                Ok(Place::In {
+                    holder,
+                    component,
+                    field,
+                    slot,
+                })
             }
         }
     }
@@ -464,7 +476,10 @@ impl Get for Value {
             }
             _ => {}
         }
-        let tag = r.peek_tag().ok_or_else(|| r.err("a value".into()))?.to_string();
+        let tag = r
+            .peek_tag()
+            .ok_or_else(|| r.err("a value".into()))?
+            .to_string();
         // forms with their own `Get`
         match tag.as_str() {
             "pos" => return Ok(Value::Pos(<Pos as Get>::get(r)?)),
@@ -562,18 +577,29 @@ const BODY_KINDS: [(BodyKind, &str); 8] = [
 
 impl Put for BodyKind {
     fn put(&self, w: &mut Out) {
-        w.word(BODY_KINDS.iter().find(|(k, _)| k == self).map_or("handler", |(_, n)| n));
+        w.word(
+            BODY_KINDS
+                .iter()
+                .find(|(k, _)| k == self)
+                .map_or("handler", |(_, n)| n),
+        );
     }
 }
 
 impl Get for BodyKind {
     fn get(r: &mut In) -> RtResult<Self> {
         let t = r.word()?;
-        BODY_KINDS.iter().find(|(_, n)| *n == t).map(|(k, _)| *k).ok_or_else(|| r.err(format!("no body kind `{t}`")))
+        BODY_KINDS
+            .iter()
+            .find(|(_, n)| *n == t)
+            .map(|(k, _)| *k)
+            .ok_or_else(|| r.err(format!("no body kind `{t}`")))
     }
 }
 
-form!(Env, "env", locals, self_, holder, actor, it, kind, ns, map, rng, name, file);
+form!(
+    Env, "env", locals, self_, holder, actor, it, kind, ns, map, rng, name, file
+);
 form!(Suspended, "waiting", command, hash, cost, point, loops, env);
 
 /// A map's tiles, layer by layer, as runs of one tile: `(FLOOR 30)`.
@@ -621,7 +647,11 @@ impl Put for MapState {
         Tiles(&self.tiles).put(w);
         (&self.labels, &self.wires).put(w);
         (&self.vars, &self.remembered).put(w);
-        (self.transient, (self.loaded_at, (self.frozen_total, self.frozen_at))).put(w);
+        (
+            self.transient,
+            (self.loaded_at, (self.frozen_total, self.frozen_at)),
+        )
+            .put(w);
         w.close();
     }
 }
@@ -636,7 +666,21 @@ impl Get for MapState {
         let (vars, remembered) = Get::get(r)?;
         let (transient, (loaded_at, (frozen_total, frozen_at))) = Get::get(r)?;
         r.close()?;
-        Ok(MapState { name, width, height, layers, tiles, labels, wires, vars, remembered, transient, loaded_at, frozen_total, frozen_at })
+        Ok(MapState {
+            name,
+            width,
+            height,
+            layers,
+            tiles,
+            labels,
+            wires,
+            vars,
+            remembered,
+            transient,
+            loaded_at,
+            frozen_total,
+            frozen_at,
+        })
     }
 }
 
@@ -699,7 +743,25 @@ impl Get for State {
         let (profile, camera) = Get::get(r)?;
         let (scene_queue, scene_starts) = Get::get(r)?;
         r.close()?;
-        Ok(State { entities, game, maps, wakes, next_seq, decks, player, seats, party_each, acting, leash, seat_range, last_player_map, profile, camera, scene_queue, scene_starts })
+        Ok(State {
+            entities,
+            game,
+            maps,
+            wakes,
+            next_seq,
+            decks,
+            player,
+            seats,
+            party_each,
+            acting,
+            leash,
+            seat_range,
+            last_player_map,
+            profile,
+            camera,
+            scene_queue,
+            scene_starts,
+        })
     }
 }
 
@@ -711,7 +773,11 @@ impl Put for Snapshot {
         self.s.put(w);
         w.line();
         self.rng.put(w);
-        (&self.sounds, (self.sounds_made, (&self.heard_mark, &self.heard))).put(w);
+        (
+            &self.sounds,
+            (self.sounds_made, (&self.heard_mark, &self.heard)),
+        )
+            .put(w);
         w.line();
         (&self.last_view, self.switch).put(w);
         w.line();
@@ -729,7 +795,18 @@ impl Get for Snapshot {
         let (last_view, switch) = Get::get(r)?;
         let (waiting, woke) = Get::get(r)?;
         r.close()?;
-        Ok(Snapshot { s, rng, sounds, sounds_made, heard_mark, heard, last_view, switch, waiting, woke })
+        Ok(Snapshot {
+            s,
+            rng,
+            sounds,
+            sounds_made,
+            heard_mark,
+            heard,
+            last_view,
+            switch,
+            waiting,
+            woke,
+        })
     }
 }
 
@@ -784,7 +861,15 @@ impl Save {
         if r.peek().is_some() {
             return Err(r.err("text after the save".into()));
         }
-        Ok(Save { game, stamp, session, slots, now, checkpoint, log })
+        Ok(Save {
+            game,
+            stamp,
+            session,
+            slots,
+            now,
+            checkpoint,
+            log,
+        })
     }
 }
 
@@ -795,7 +880,15 @@ fn game_name(m: &Model) -> String {
 impl<'m> Runner<'m> {
     /// The game as a save, between actions (M 5.2).
     pub fn save(&self) -> Save {
-        Save { game: game_name(self.w.m), stamp: 0, session: 0, slots: 0, now: self.snapshot(), checkpoint: self.checkpoint.as_deref().cloned(), log: self.w.log.clone() }
+        Save {
+            game: game_name(self.w.m),
+            stamp: 0,
+            session: 0,
+            slots: 0,
+            now: self.snapshot(),
+            checkpoint: self.checkpoint.as_deref().cloned(),
+            log: self.w.log.clone(),
+        }
     }
 
     /// A runner that goes on from `save` (M 5.2): `begin` does not run, and
@@ -803,7 +896,10 @@ impl<'m> Runner<'m> {
     pub fn load(m: &'m Model, save: &Save) -> RtResult<Runner<'m>> {
         let name = game_name(m);
         if save.game != name {
-            return Err(format!("the save is of the game `{}`, not `{name}`", save.game));
+            return Err(format!(
+                "the save is of the game `{}`, not `{name}`",
+                save.game
+            ));
         }
         let mut r = Runner::new(World::new(m, save.now.s.game.seed));
         r.restore(&save.now);
@@ -812,7 +908,11 @@ impl<'m> Runner<'m> {
         r.w.profile_start = save.now.s.profile.clone();
         r.checkpoint = save.checkpoint.clone().map(Box::new);
         r.w.log = save.log.clone();
-        r.inputs = InputLog { seed: r.w.s.game.seed, seats: r.w.s.seats.len() as u8, ..InputLog::default() };
+        r.inputs = InputLog {
+            seed: r.w.s.game.seed,
+            seats: r.w.s.seats.len() as u8,
+            ..InputLog::default()
+        };
         r.scene_saved = true;
         Ok(r)
     }
@@ -879,10 +979,20 @@ impl In {
                             Some((_, '\\')) => match chars.next() {
                                 Some((_, 'n')) => s.push('\n'),
                                 Some((_, c)) => s.push(c),
-                                None => return Err(format!("save line {}: a text is not closed", line_of(i))),
+                                None => {
+                                    return Err(format!(
+                                        "save line {}: a text is not closed",
+                                        line_of(i)
+                                    ));
+                                }
                             },
                             Some((_, c)) => s.push(c),
-                            None => return Err(format!("save line {}: a text is not closed", line_of(i))),
+                            None => {
+                                return Err(format!(
+                                    "save line {}: a text is not closed",
+                                    line_of(i)
+                                ));
+                            }
                         }
                     }
                     toks.push((Tok::Text(s), line_of(i)));
@@ -904,7 +1014,11 @@ impl In {
     }
 
     fn err(&self, what: String) -> String {
-        let line = self.toks.get(self.at).or(self.toks.last()).map_or(0, |t| t.1);
+        let line = self
+            .toks
+            .get(self.at)
+            .or(self.toks.last())
+            .map_or(0, |t| t.1);
         format!("save line {line}: {what}")
     }
 

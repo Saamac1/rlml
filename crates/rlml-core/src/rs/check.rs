@@ -30,12 +30,14 @@ pub fn engine_function(name: &str) -> Option<FnKind> {
 }
 
 /// Context names (RS 2.4).
-const CONTEXT: &[&str] = &["self", "holder", "actor", "it", "player", "players", "game", "map", "camera", "profile"];
+const CONTEXT: &[&str] = &[
+    "self", "holder", "actor", "it", "player", "players", "game", "map", "camera", "profile",
+];
 
 /// Engine component names usable as values in calls (`ai(behavior: …)`).
 const ENGINE_COMPONENTS: &[&str] = &[
-    "render", "movement", "ai", "sight", "light", "facing", "timer", "interior", "shape", "label", "wire", "blocks", "hearing", "sound",
-    "name", "revealed", "seat",
+    "render", "movement", "ai", "sight", "light", "facing", "timer", "interior", "shape", "label",
+    "wire", "blocks", "hearing", "sound", "name", "revealed", "seat",
 ];
 
 /// Vocabulary values: `blocks(it, move, …)`, `via: line`, `delete_save(all)`.
@@ -115,11 +117,25 @@ pub fn local_types(m: &Model, decl: &Decl) -> BTreeMap<String, Ty> {
 }
 
 fn text_keys(m: &Model) -> BTreeSet<String> {
-    m.languages.iter().flat_map(|f| f.texts.iter().map(move |t| names::qualify(f.namespace.as_deref(), t.key()))).collect()
+    m.languages
+        .iter()
+        .flat_map(|f| {
+            f.texts
+                .iter()
+                .map(move |t| names::qualify(f.namespace.as_deref(), t.key()))
+        })
+        .collect()
 }
 
 /// Checks one declaration; returns the locals of its (last) body.
-fn check_decl(m: &Model, decl: &Decl, texts: &BTreeSet<String>, tiles: &mut BTreeSet<String>, r: &mut Report, lenient: bool) -> BTreeMap<String, Ty> {
+fn check_decl(
+    m: &Model,
+    decl: &Decl,
+    texts: &BTreeSet<String>,
+    tiles: &mut BTreeSet<String>,
+    r: &mut Report,
+    lenient: bool,
+) -> BTreeMap<String, Ty> {
     let item = decl.item.clone();
     let mut last = BTreeMap::new();
     let mut run = |ctx: Ctx, ret: bool, f: &mut dyn FnMut(&mut Body)| {
@@ -128,7 +144,20 @@ fn check_decl(m: &Model, decl: &Decl, texts: &BTreeSet<String>, tiles: &mut BTre
             Ctx::Ai => Ty::Union(vec![Ty::Command, Ty::None]),
             _ => Ty::Unknown,
         };
-        let mut b = Body { m, decl, ctx, ret, ret_ty, locals: BTreeMap::new(), own: BTreeSet::new(), it: vec![], texts, errors: vec![], tiles: &mut *tiles, lenient };
+        let mut b = Body {
+            m,
+            decl,
+            ctx,
+            ret,
+            ret_ty,
+            locals: BTreeMap::new(),
+            own: BTreeSet::new(),
+            it: vec![],
+            texts,
+            errors: vec![],
+            tiles: &mut *tiles,
+            lenient,
+        };
         f(&mut b);
         for e in b.errors {
             r.push(e);
@@ -140,15 +169,33 @@ fn check_decl(m: &Model, decl: &Decl, texts: &BTreeSet<String>, tiles: &mut BTre
             run(Ctx::Function, false, &mut |b| b.params(fields));
             for h in handlers {
                 // a component's handlers see its fields by name (RS 3.1)
-                run(Ctx::Handler { before: h.phase == Phase::Before }, false, &mut |b| {
-                    b.params(fields);
-                    b.handler(h, true);
-                });
+                run(
+                    Ctx::Handler {
+                        before: h.phase == Phase::Before,
+                    },
+                    false,
+                    &mut |b| {
+                        b.params(fields);
+                        b.handler(h, true);
+                    },
+                );
             }
         }
         ItemKind::Event { params } => run(Ctx::Function, false, &mut |b| b.params(params)),
-        ItemKind::Handler(h) => run(Ctx::Handler { before: h.phase == Phase::Before }, false, &mut |b| b.handler(h, false)),
-        ItemKind::Function { present, query, params, ret, body } => {
+        ItemKind::Handler(h) => run(
+            Ctx::Handler {
+                before: h.phase == Phase::Before,
+            },
+            false,
+            &mut |b| b.handler(h, false),
+        ),
+        ItemKind::Function {
+            present,
+            query,
+            params,
+            ret,
+            body,
+        } => {
             let ctx = if *query {
                 Ctx::Query
             } else if *present {
@@ -168,18 +215,33 @@ fn check_decl(m: &Model, decl: &Decl, texts: &BTreeSet<String>, tiles: &mut BTre
         }
         ItemKind::Command { params, body, .. } => run(Ctx::Command, true, &mut |b| {
             b.params(params);
-            let counts = params.iter().filter(|p| matches!(p.source, Some(Source::Count))).collect::<Vec<_>>();
+            let counts = params
+                .iter()
+                .filter(|p| matches!(p.source, Some(Source::Count)))
+                .collect::<Vec<_>>();
             if counts.len() > 1 {
-                b.error(counts[1].pos, "a command has at most one `count` parameter (RS 12.1)");
+                b.error(
+                    counts[1].pos,
+                    "a command has at most one `count` parameter (RS 12.1)",
+                );
             }
             for p in counts.iter().filter(|p| p.ty.base != "number") {
-                b.error(p.pos, format!("`count` is only for a `number` parameter, not `{}`", p.ty));
+                b.error(
+                    p.pos,
+                    format!("`count` is only for a `number` parameter, not `{}`", p.ty),
+                );
             }
             // a click fills a parameter after those its source names (M 8.1)
             if let Some(ring) = crate::rt::verbs::source_ring(params)
                 && let Some(first) = params.iter().find(|p| p.name == ring[0])
             {
-                b.error(first.pos, format!("the sources of `{}` name each other in a ring (M 2.5)", ring.join("`, `")));
+                b.error(
+                    first.pos,
+                    format!(
+                        "the sources of `{}` name each other in a ring (M 2.5)",
+                        ring.join("`, `")
+                    ),
+                );
             }
             b.body(body);
         }),
@@ -229,7 +291,11 @@ fn check_decl(m: &Model, decl: &Decl, texts: &BTreeSet<String>, tiles: &mut BTre
 
 impl Body<'_> {
     fn error(&mut self, pos: Pos, msg: impl Into<String>) {
-        self.errors.push(Diagnostic::error(&self.decl.file, pos.line, format!("column {}: {}", pos.col, msg.into())));
+        self.errors.push(Diagnostic::error(
+            &self.decl.file,
+            pos.line,
+            format!("column {}: {}", pos.col, msg.into()),
+        ));
     }
 
     fn ns(&self) -> Option<&str> {
@@ -237,7 +303,9 @@ impl Body<'_> {
     }
 
     fn is_component(&self, name: &str) -> bool {
-        self.m.resolve(self.ns(), name).is_ok_and(|d| d.kind == Kind::Component)
+        self.m
+            .resolve(self.ns(), name)
+            .is_ok_and(|d| d.kind == Kind::Component)
     }
 
     /// A type as written; a bad type is reported once and is `Unknown`.
@@ -279,13 +347,19 @@ impl Body<'_> {
     /// the subject.
     fn event_params(&self, event: &str, in_component: bool) -> Vec<Ty> {
         let mut tys: Vec<Ty> = if names::is_vocabulary(event) {
-            sigs::engine_event(event).map(|ps| ps.into_iter().map(|(_, t)| t).collect()).unwrap_or_default()
+            sigs::engine_event(event)
+                .map(|ps| ps.into_iter().map(|(_, t)| t).collect())
+                .unwrap_or_default()
         } else {
             match self.m.resolve(self.ns(), event).map(|d| &d.source) {
                 Ok(DefSource::Decl(d)) => match &d.item.kind {
-                    ItemKind::Event { params } => {
-                        params.iter().map(|p| types::parse(&p.ty.to_string(), &|n| self.is_component(n)).unwrap_or(Ty::Unknown)).collect()
-                    }
+                    ItemKind::Event { params } => params
+                        .iter()
+                        .map(|p| {
+                            types::parse(&p.ty.to_string(), &|n| self.is_component(n))
+                                .unwrap_or(Ty::Unknown)
+                        })
+                        .collect(),
                     _ => vec![],
                 },
                 _ => vec![],
@@ -303,7 +377,10 @@ impl Body<'_> {
             if !crate::check::ENGINE_EVENTS.contains(&h.event.as_str()) {
                 self.error(h.pos, format!("unknown engine event `{}`", h.event));
             } else if h.phase == Phase::Before {
-                self.error(h.pos, format!("engine event `{}` has no `before` phase (RS 4.1)", h.event));
+                self.error(
+                    h.pos,
+                    format!("engine event `{}` has no `before` phase (RS 4.1)", h.event),
+                );
             }
         } else if in_component
             && !self.lenient
@@ -314,7 +391,8 @@ impl Body<'_> {
         }
         let tys = self.event_params(&h.event, in_component);
         for (i, n) in h.names.iter().enumerate() {
-            self.locals.insert(n.clone(), tys.get(i).cloned().unwrap_or(Ty::Unknown));
+            self.locals
+                .insert(n.clone(), tys.get(i).cloned().unwrap_or(Ty::Unknown));
         }
         if let Some(w) = &h.when {
             self.cond(w);
@@ -345,7 +423,12 @@ impl Body<'_> {
             (o, n) if types::fits(n, o) => old.clone(),
             // a number local may hold dice or a percentage's product
             (o, n) => {
-                self.error(pos, format!("`{name}` has the type `{o}`; a `{n}` cannot be assigned to it (RS 2.6)"));
+                self.error(
+                    pos,
+                    format!(
+                        "`{name}` has the type `{o}`; a `{n}` cannot be assigned to it (RS 2.6)"
+                    ),
+                );
                 old.clone()
             }
         };
@@ -358,7 +441,11 @@ impl Body<'_> {
                 if self.ctx.pure() {
                     let root = root_word(target);
                     if !root.is_some_and(|r| self.own.contains(r)) {
-                        let what = if self.ctx == Ctx::Query { "a `query`" } else { "a `present fn`" };
+                        let what = if self.ctx == Ctx::Query {
+                            "a `query`"
+                        } else {
+                            "a `present fn`"
+                        };
                         self.error(s.pos, format!("{what} does not change the game's state; `{target}` is not a local name of its own (M 9.2)"));
                     }
                 }
@@ -370,7 +457,9 @@ impl Body<'_> {
                         if let Some(Ty::List(m)) = self.locals.get(w).cloned() {
                             if !m.is_known() {
                                 self.locals.insert(w.clone(), Ty::list(vt));
-                            } else if !types::fits(&vt, &m) && !types::fits(&vt, &Ty::list((*m).clone())) {
+                            } else if !types::fits(&vt, &m)
+                                && !types::fits(&vt, &Ty::list((*m).clone()))
+                            {
                                 self.error(s.pos, format!("`{w}` has the type `list {m}`; a `{vt}` cannot be added to it (RS 2.6)"));
                             }
                         }
@@ -382,7 +471,15 @@ impl Body<'_> {
             StmtKind::WaitInput { name, kind, arg } => {
                 self.waits(s.pos, "`wait`");
                 self.expr(arg);
-                self.bind(s.pos, name, if kind == "number" { Ty::Number } else { Ty::Text });
+                self.bind(
+                    s.pos,
+                    name,
+                    if kind == "number" {
+                        Ty::Number
+                    } else {
+                        Ty::Text
+                    },
+                );
             }
             StmtKind::OpenValue { call, .. } => {
                 self.waits(s.pos, "`open`");
@@ -434,7 +531,11 @@ impl Body<'_> {
                     }
                     match &o.body {
                         OptionBody::Block(b) => self.stmts(b),
-                        OptionBody::Adjust { target, range, pool } => {
+                        OptionBody::Adjust {
+                            target,
+                            range,
+                            pool,
+                        } => {
                             self.expr(target);
                             self.expr(range);
                             if let Some(p) = pool {
@@ -451,7 +552,9 @@ impl Body<'_> {
                 match &call.kind {
                     ExprKind::Call(f, args) => {
                         let def = match &f.kind {
-                            ExprKind::Name { name, root } => self.name(f.pos, name, *root, &[Kind::Event]).cloned(),
+                            ExprKind::Name { name, root } => {
+                                self.name(f.pos, name, *root, &[Kind::Event]).cloned()
+                            }
                             _ => {
                                 self.error(call.pos, "`emit` takes an event call such as `emit HIT(target, attacker, 1)`");
                                 Option::None
@@ -461,7 +564,14 @@ impl Body<'_> {
                         if let Some(d) = def.filter(|d| d.kind == Kind::Event)
                             && let Some(ps) = self.user_params(&d)
                         {
-                            self.check_args(f.pos, &format!("event `{}`", d.full), &ps, false, args, &tys);
+                            self.check_args(
+                                f.pos,
+                                &format!("event `{}`", d.full),
+                                &ps,
+                                false,
+                                args,
+                                &tys,
+                            );
                         }
                     }
                     _ => {
@@ -480,18 +590,25 @@ impl Body<'_> {
             StmtKind::Return(value) => match (value, self.ret) {
                 (Some(_), false) => {
                     let msg = match self.ctx {
-                        Ctx::Function | Ctx::Present => "a `fn` without a return type returns no value: add `-> type` or write `return` (RS 5.1)",
+                        Ctx::Function | Ctx::Present => {
+                            "a `fn` without a return type returns no value: add `-> type` or write `return` (RS 5.1)"
+                        }
                         _ => "`return` takes no value here",
                     };
                     self.error(s.pos, msg);
                     self.expr(value.as_ref().unwrap());
                 }
-                (None, true) if matches!(self.ctx, Ctx::Query | Ctx::Ai) => self.error(s.pos, "a `query` or `ai` returns a value"),
+                (None, true) if matches!(self.ctx, Ctx::Query | Ctx::Ai) => {
+                    self.error(s.pos, "a `query` or `ai` returns a value")
+                }
                 (Some(v), _) => {
                     let t = self.expr(v);
                     let want = self.ret_ty.clone();
                     if !types::fits(&t, &want) {
-                        self.error(v.pos, format!("`return {v}` gives a `{t}`; this returns `{want}`"));
+                        self.error(
+                            v.pos,
+                            format!("`return {v}` gives a `{t}`; this returns `{want}`"),
+                        );
                     }
                 }
                 _ => {}
@@ -515,7 +632,12 @@ impl Body<'_> {
 
     fn waits(&mut self, pos: Pos, what: &str) {
         if !self.ctx.waits() {
-            self.error(pos, format!("{what} is allowed only in a command or a coroutine scene (RS 5.1, M 6.1.6)"));
+            self.error(
+                pos,
+                format!(
+                    "{what} is allowed only in a command or a coroutine scene (RS 5.1, M 6.1.6)"
+                ),
+            );
         }
     }
 
@@ -567,7 +689,12 @@ impl Body<'_> {
                         Action::Wait(w) => self.wait_arg(w),
                     }
                 }
-                Row::When { cond, rows, otherwise, .. } => {
+                Row::When {
+                    cond,
+                    rows,
+                    otherwise,
+                    ..
+                } => {
                     self.cond(cond);
                     self.rows(rows);
                     self.rows(otherwise);
@@ -580,7 +707,11 @@ impl Body<'_> {
     /// Resolves an upper-case name and checks its kind; `kinds` empty takes
     /// any kind, also text keys.
     fn name(&mut self, pos: Pos, name: &str, root: bool, kinds: &[Kind]) -> Option<&Def> {
-        let written = if root { format!(".{name}") } else { name.to_string() };
+        let written = if root {
+            format!(".{name}")
+        } else {
+            name.to_string()
+        };
         let m = self.m;
         match m.resolve(self.ns(), &written) {
             Ok(def) => {
@@ -589,13 +720,24 @@ impl Body<'_> {
                 }
                 if !kinds.is_empty() && !kinds.contains(&def.kind) {
                     let want: Vec<String> = kinds.iter().map(|k| k.to_string()).collect();
-                    let msg = format!("`{}` is a {} ({}), not a {}", def.full, def.kind, def.place(), want.join(" or "));
+                    let msg = format!(
+                        "`{}` is a {} ({}), not a {}",
+                        def.full,
+                        def.kind,
+                        def.place(),
+                        want.join(" or ")
+                    );
                     self.error(pos, msg);
                 }
                 Some(def)
             }
             Err(e) => {
-                if self.lenient || (kinds.is_empty() && names::candidates(self.ns(), &written).iter().any(|c| self.texts.contains(c))) {
+                if self.lenient
+                    || (kinds.is_empty()
+                        && names::candidates(self.ns(), &written)
+                            .iter()
+                            .any(|c| self.texts.contains(c)))
+                {
                     return None;
                 }
                 self.error(pos, e);
@@ -645,7 +787,8 @@ impl Body<'_> {
                 let prefix = format!("{}{name}.", if *root { "." } else { "" });
                 let hits = names::candidates(self.ns(), name).iter().any(|c| {
                     let p = format!("{c}.");
-                    self.m.defs.keys().any(|k| k.starts_with(&p)) || self.texts.iter().any(|k| k.starts_with(&p))
+                    self.m.defs.keys().any(|k| k.starts_with(&p))
+                        || self.texts.iter().any(|k| k.starts_with(&p))
                 });
                 if !hits {
                     self.error(e.pos, format!("wildcard `{prefix}*` matches no names"));
@@ -658,7 +801,8 @@ impl Body<'_> {
                     let t = self.expr(i);
                     if !member.is_known() {
                         member = t;
-                    } else if t.is_known() && !types::fits(&t, &member) && !types::fits(&member, &t) {
+                    } else if t.is_known() && !types::fits(&t, &member) && !types::fits(&member, &t)
+                    {
                         self.error(i.pos, format!("a list holds one type: `{i}` is a `{t}` among `{member}` members (RS 2.6)"));
                     }
                 }
@@ -703,13 +847,22 @@ impl Body<'_> {
                     self.expr(b);
                 }
                 // a tile index range is a set of tile names (RS 2.6)
-                if index { Ty::Collection(Member::Name) } else { Ty::Range }
+                if index {
+                    Ty::Collection(Member::Name)
+                } else {
+                    Ty::Range
+                }
             }
-            Has { subject, component, .. } => {
+            Has {
+                subject, component, ..
+            } => {
                 self.expr(subject);
                 if names::is_vocabulary(component) {
                     if !ENGINE_COMPONENTS.contains(&component.as_str()) {
-                        self.error(e.pos, format!("`has {component}`: no engine component `{component}`"));
+                        self.error(
+                            e.pos,
+                            format!("`has {component}`: no engine component `{component}`"),
+                        );
                     }
                 } else {
                     self.name(e.pos, component, false, &[Kind::Component]);
@@ -761,9 +914,15 @@ impl Body<'_> {
             return Ty::Side;
         }
         if engine_function(w).is_some() {
-            self.error(pos, format!("`{w}` is an engine function: call it with `{w}(…)`"));
+            self.error(
+                pos,
+                format!("`{w}` is an engine function: call it with `{w}(…)`"),
+            );
         } else {
-            self.error(pos, format!("unknown name `{w}`: not a parameter, a local name or a context name"));
+            self.error(
+                pos,
+                format!("unknown name `{w}`: not a parameter, a local name or a context name"),
+            );
         }
         Ty::Unknown
     }
@@ -782,13 +941,20 @@ impl Body<'_> {
         // a tile variant: `GATE.open`, `STAIR.down`
         if let ExprKind::Name { name, root: r } = &root.kind {
             let def = self.name(root.pos, name, *r, &[]).cloned();
-            if def.as_ref().is_some_and(|d| d.kind == Kind::Tile) && parts.iter().all(|p| names::is_vocabulary(p)) {
+            if def.as_ref().is_some_and(|d| d.kind == Kind::Tile)
+                && parts.iter().all(|p| names::is_vocabulary(p))
+            {
                 return Ty::Name;
             }
             return Ty::Unknown;
         }
         let record = match &root.kind {
-            ExprKind::Word(w) if ["game", "profile", "map"].contains(&w.as_str()) && !self.locals.contains_key(w) => Some(w.as_str()),
+            ExprKind::Word(w)
+                if ["game", "profile", "map"].contains(&w.as_str())
+                    && !self.locals.contains_key(w) =>
+            {
+                Some(w.as_str())
+            }
             _ => Option::None,
         };
         let mut cur = match record {
@@ -816,7 +982,11 @@ impl Body<'_> {
                     let upper = parts[i..].iter().take_while(|q| names::is_part(q)).count();
                     let found = (1..=upper).rev().find_map(|n| {
                         let name = parts[i..i + n].join(".");
-                        self.m.resolve(self.ns(), &name).ok().filter(|d| d.kind == Kind::Component).map(|d| (n, d.full.clone()))
+                        self.m
+                            .resolve(self.ns(), &name)
+                            .ok()
+                            .filter(|d| d.kind == Kind::Component)
+                            .map(|d| (n, d.full.clone()))
                     });
                     match found {
                         Some((n, full)) => {
@@ -831,7 +1001,11 @@ impl Body<'_> {
                         }
                     }
                 }
-                Ty::Entity if ENGINE_COMPONENTS.contains(&p) && sigs::field(&Ty::Entity, p).is_none() => Ty::Component(Some(p.to_string())),
+                Ty::Entity
+                    if ENGINE_COMPONENTS.contains(&p) && sigs::field(&Ty::Entity, p).is_none() =>
+                {
+                    Ty::Component(Some(p.to_string()))
+                }
                 Ty::Component(Some(c)) => self.component_field(c, p),
                 Ty::Table => {
                     self.error(e.pos, format!("`{e}`: a table has no fields; only `draw` and `spawn` take a table (RS 5.5)"));
@@ -850,24 +1024,46 @@ impl Body<'_> {
         if names::is_vocabulary(component) {
             return sigs::engine_component_field(component, field).unwrap_or(Ty::Unknown);
         }
-        let Some(def) = self.m.defs.get(component) else { return Ty::Unknown };
+        let Some(def) = self.m.defs.get(component) else {
+            return Ty::Unknown;
+        };
         let ns = def.full.rsplit_once('.').map(|(n, _)| n.to_string());
         component_fields(def)
             .into_iter()
             .find(|f| f.name == field)
-            .map(|f| types::parse(&f.ty, &|n| self.m.resolve(ns.as_deref(), n).is_ok_and(|d| d.kind == Kind::Component)).unwrap_or(Ty::Unknown))
+            .map(|f| {
+                types::parse(&f.ty, &|n| {
+                    self.m
+                        .resolve(ns.as_deref(), n)
+                        .is_ok_and(|d| d.kind == Kind::Component)
+                })
+                .unwrap_or(Ty::Unknown)
+            })
             .unwrap_or(Ty::Unknown)
     }
 
     fn call(&mut self, e: &Expr, f: &Expr, args: &[Arg]) -> Ty {
         match &f.kind {
             ExprKind::Name { name, root } => {
-                let callable = [Kind::Function, Kind::Query, Kind::Command, Kind::Ai, Kind::Generator, Kind::Scene, Kind::Entity, Kind::Component];
+                let callable = [
+                    Kind::Function,
+                    Kind::Query,
+                    Kind::Command,
+                    Kind::Ai,
+                    Kind::Generator,
+                    Kind::Scene,
+                    Kind::Entity,
+                    Kind::Component,
+                ];
                 let def = self.name(f.pos, name, *root, &callable).cloned();
                 if self.ctx.pure()
                     && let Some(def) = &def
                     && let DefSource::Decl(d) = &def.source
-                    && let ItemKind::Function { present, query: false, .. } = &d.item.kind
+                    && let ItemKind::Function {
+                        present,
+                        query: false,
+                        ..
+                    } = &d.item.kind
                     && !(*present && self.ctx == Ctx::Present)
                 {
                     self.error(f.pos, format!("`{}` is a `fn` that may change the game's state; a `query` or `present fn` calls only queries (M 9.2)", def.full));
@@ -882,15 +1078,37 @@ impl Body<'_> {
                 let w = w.clone();
                 if ENGINE_COMPONENTS.contains(&w.as_str()) && engine_function(&w).is_none() {
                     // `ai(behavior: FOLLOWER)` is a component value (M 3.4)
-                    let tys: Vec<Ty> = args.iter().map(|a| if self.is_label_arg(&w, a, args) { Ty::Unknown } else { self.expr(&a.value) }).collect();
+                    let tys: Vec<Ty> = args
+                        .iter()
+                        .map(|a| {
+                            if self.is_label_arg(&w, a, args) {
+                                Ty::Unknown
+                            } else {
+                                self.expr(&a.value)
+                            }
+                        })
+                        .collect();
                     let fields = crate::fields::engine_component(&w).unwrap_or_default();
-                    let ps: Vec<(String, Ty, bool)> = fields.iter().map(|fd| (fd.name.clone(), sigs::engine_component_field(&w, &fd.name).unwrap_or(Ty::Unknown), true)).collect();
+                    let ps: Vec<(String, Ty, bool)> = fields
+                        .iter()
+                        .map(|fd| {
+                            (
+                                fd.name.clone(),
+                                sigs::engine_component_field(&w, &fd.name).unwrap_or(Ty::Unknown),
+                                true,
+                            )
+                        })
+                        .collect();
                     self.check_args(f.pos, &format!("`{w}`"), &ps, false, args, &tys);
                     return Ty::Component(Some(w));
                 }
                 let mut tys = Vec::new();
                 for a in args {
-                    let t = if self.is_label_arg(&w, a, args) { Ty::Unknown } else { self.expr(&a.value) };
+                    let t = if self.is_label_arg(&w, a, args) {
+                        Ty::Unknown
+                    } else {
+                        self.expr(&a.value)
+                    };
                     tys.push((a.name.clone(), t));
                 }
                 if ["choose", "pick", "shuffled"].contains(&w.as_str())
@@ -935,12 +1153,25 @@ impl Body<'_> {
             Kind::Entity => Ty::Card,
             Kind::Function | Kind::Query => match &def.source {
                 DefSource::Decl(d) => match &d.item.kind {
-                    ItemKind::Function { ret: Some(ReturnType::Type(t)), .. } => {
+                    ItemKind::Function {
+                        ret: Some(ReturnType::Type(t)),
+                        ..
+                    } => {
                         let ns = d.namespace.clone();
-                        types::parse(&t.to_string(), &|n| self.m.resolve(ns.as_deref(), n).is_ok_and(|d| d.kind == Kind::Component)).unwrap_or(Ty::Unknown)
+                        types::parse(&t.to_string(), &|n| {
+                            self.m
+                                .resolve(ns.as_deref(), n)
+                                .is_ok_and(|d| d.kind == Kind::Component)
+                        })
+                        .unwrap_or(Ty::Unknown)
                     }
-                    ItemKind::Function { ret: Some(ReturnType::NameOrText), .. } => Ty::Union(vec![Ty::Name, Ty::Text]),
-                    ItemKind::Function { ret: Option::None, .. } => Ty::None,
+                    ItemKind::Function {
+                        ret: Some(ReturnType::NameOrText),
+                        ..
+                    } => Ty::Union(vec![Ty::Name, Ty::Text]),
+                    ItemKind::Function {
+                        ret: Option::None, ..
+                    } => Ty::None,
                     _ => Ty::Unknown,
                 },
                 _ => Ty::Unknown,
@@ -957,14 +1188,25 @@ impl Body<'_> {
         let first = std::ptr::eq(a, &args[0]);
         let second = args.len() > 1 && std::ptr::eq(a, &args[1]);
         let is_name = matches!(a.value.kind, ExprKind::Name { .. });
-        let label = (f == "label" && first) || (f == "tag" && second) || (["travel", "spawn"].contains(&f) && named("at")) || (f == "tile" && named("label"));
-        let mode = (["ray", "movement"].contains(&f) && named("mode")) || (f == "blocks" && (second || named("what")));
+        let label = (f == "label" && first)
+            || (f == "tag" && second)
+            || (["travel", "spawn"].contains(&f) && named("at"))
+            || (f == "tile" && named("label"));
+        let mode = (["ray", "movement"].contains(&f) && named("mode"))
+            || (f == "blocks" && (second || named("what")));
         is_name && (label || mode)
     }
 
     /// Checks an engine call's kind against the body and gives its type
     /// from the version the arguments select (M 9.2).
-    fn engine_call(&mut self, pos: Pos, w: &str, receiver: Option<&Expr>, args: &[(Option<String>, Ty)], exprs: &[&Expr]) -> Ty {
+    fn engine_call(
+        &mut self,
+        pos: Pos,
+        w: &str,
+        receiver: Option<&Expr>,
+        args: &[(Option<String>, Ty)],
+        exprs: &[&Expr],
+    ) -> Ty {
         let Some(kind) = engine_function(w) else {
             if self.locals.contains_key(w) {
                 self.error(pos, format!("`{w}` is a local name and cannot be called"));
@@ -980,21 +1222,35 @@ impl Body<'_> {
             let local = receiver.is_some_and(|r| self.local_value(r));
             let bad = match kind {
                 FnKind::Changes => true,
-                FnKind::ChangesReceiver => !local && !(w == "draw" && receiver.is_some_and(|r| self.is_table(r))),
+                FnKind::ChangesReceiver => {
+                    !local && !(w == "draw" && receiver.is_some_and(|r| self.is_table(r)))
+                }
                 FnKind::Present => self.ctx == Ctx::Query && w != "reveal",
                 FnKind::Query => false,
             };
             if bad {
-                let what = if self.ctx == Ctx::Query { "a `query`" } else { "a `present fn`" };
+                let what = if self.ctx == Ctx::Query {
+                    "a `query`"
+                } else {
+                    "a `present fn`"
+                };
                 let why = match kind {
                     FnKind::Present => "is presentation",
-                    FnKind::ChangesReceiver => "changes its receiver, which is not a local copy or list",
+                    FnKind::ChangesReceiver => {
+                        "changes its receiver, which is not a local copy or list"
+                    }
                     _ => "changes the game's state",
                 };
-                self.error(pos, format!("`{w}` {why}; it is not allowed in {what} (M 9.2)"));
+                self.error(
+                    pos,
+                    format!("`{w}` {why}; it is not allowed in {what} (M 9.2)"),
+                );
             }
         }
-        let fitting: Vec<&Sig> = sigs::versions(w).into_iter().filter(|s| fits_version(s, args)).collect();
+        let fitting: Vec<&Sig> = sigs::versions(w)
+            .into_iter()
+            .filter(|s| fits_version(s, args))
+            .collect();
         if fitting.is_empty() {
             self.no_version(pos, w, args, exprs);
             return Ty::Unknown;
@@ -1025,8 +1281,19 @@ impl Body<'_> {
     fn no_version(&mut self, pos: Pos, w: &str, args: &[(Option<String>, Ty)], exprs: &[&Expr]) {
         let versions = sigs::versions(w);
         if let [sig] = versions.as_slice() {
-            let ps: Vec<(String, Ty, bool)> = sig.params.iter().map(|p| (p.name.clone(), p.ty.clone(), p.optional)).collect();
-            let call_args: Vec<Arg> = args.iter().zip(exprs).map(|((n, _), e)| Arg { name: n.clone(), value: (*e).clone() }).collect();
+            let ps: Vec<(String, Ty, bool)> = sig
+                .params
+                .iter()
+                .map(|p| (p.name.clone(), p.ty.clone(), p.optional))
+                .collect();
+            let call_args: Vec<Arg> = args
+                .iter()
+                .zip(exprs)
+                .map(|((n, _), e)| Arg {
+                    name: n.clone(),
+                    value: (*e).clone(),
+                })
+                .collect();
             let tys: Vec<Ty> = args.iter().map(|(_, t)| t.clone()).collect();
             let before = self.errors.len();
             self.check_args(pos, &format!("`{w}`"), &ps, sig.rest, &call_args, &tys);
@@ -1034,19 +1301,40 @@ impl Body<'_> {
                 return;
             }
         }
-        let given: Vec<String> = args.iter().map(|(n, t)| match n {
-            Some(n) => format!("{n}: {t}"),
-            Option::None => t.to_string(),
-        }).collect();
-        let list: Vec<String> = versions.iter().map(|s| s.text.split_once(' ').map(|(_, r)| r.to_string()).unwrap_or_default()).collect();
-        self.error(pos, format!("no version of `{w}` takes ({}); versions: {} (M 9.2)", given.join(", "), list.join(" · ")));
+        let given: Vec<String> = args
+            .iter()
+            .map(|(n, t)| match n {
+                Some(n) => format!("{n}: {t}"),
+                Option::None => t.to_string(),
+            })
+            .collect();
+        let list: Vec<String> = versions
+            .iter()
+            .map(|s| {
+                s.text
+                    .split_once(' ')
+                    .map(|(_, r)| r.to_string())
+                    .unwrap_or_default()
+            })
+            .collect();
+        self.error(
+            pos,
+            format!(
+                "no version of `{w}` takes ({}); versions: {} (M 9.2)",
+                given.join(", "),
+                list.join(" · ")
+            ),
+        );
     }
 
     /// A condition is a truth value.
     fn cond(&mut self, e: &Expr) {
         let t = self.expr(e);
         if !types::fits(&t, &Ty::Bool) {
-            self.error(e.pos, format!("a condition is a `bool`, not a `{t}`: `{e}`"));
+            self.error(
+                e.pos,
+                format!("a condition is a `bool`, not a `{t}`: `{e}`"),
+            );
         }
     }
 
@@ -1062,7 +1350,9 @@ impl Body<'_> {
     /// Parameters of a function, query, command, scene, generator or event:
     /// name, type and whether it may be left out.
     fn user_params(&self, def: &Def) -> Option<Vec<(String, Ty, bool)>> {
-        let DefSource::Decl(d) = &def.source else { return Option::None };
+        let DefSource::Decl(d) = &def.source else {
+            return Option::None;
+        };
         let ps = match &d.item.kind {
             ItemKind::Function { params, .. }
             | ItemKind::Command { params, .. }
@@ -1076,9 +1366,18 @@ impl Body<'_> {
         Some(
             ps.iter()
                 .map(|p| {
-                    let ty = types::parse(&p.ty.to_string(), &|n| self.m.resolve(ns.as_deref(), n).is_ok_and(|d| d.kind == Kind::Component)).unwrap_or(Ty::Unknown);
+                    let ty = types::parse(&p.ty.to_string(), &|n| {
+                        self.m
+                            .resolve(ns.as_deref(), n)
+                            .is_ok_and(|d| d.kind == Kind::Component)
+                    })
+                    .unwrap_or(Ty::Unknown);
                     // a parameter with a source is asked from the player when not given (RS 7.1)
-                    (p.name.clone(), ty, p.default.is_some() || p.source.is_some())
+                    (
+                        p.name.clone(),
+                        ty,
+                        p.default.is_some() || p.source.is_some(),
+                    )
                 })
                 .collect(),
         )
@@ -1086,14 +1385,29 @@ impl Body<'_> {
 
     /// Checks arguments against parameters: count, names, required ones and
     /// types (RS 2.5).
-    fn check_args(&mut self, pos: Pos, what: &str, params: &[(String, Ty, bool)], rest: bool, args: &[Arg], tys: &[Ty]) {
+    fn check_args(
+        &mut self,
+        pos: Pos,
+        what: &str,
+        params: &[(String, Ty, bool)],
+        rest: bool,
+        args: &[Arg],
+        tys: &[Ty],
+    ) {
         let mut given = vec![false; params.len()];
         let mut next = 0;
         for (a, t) in args.iter().zip(tys) {
             let i = match &a.name {
                 Option::None => {
                     if next >= params.len() {
-                        self.error(a.value.pos, format!("{what} takes {} arguments; `{}` is one too many", params.len(), a.value));
+                        self.error(
+                            a.value.pos,
+                            format!(
+                                "{what} takes {} arguments; `{}` is one too many",
+                                params.len(),
+                                a.value
+                            ),
+                        );
                         return;
                     }
                     next += 1;
@@ -1104,18 +1418,33 @@ impl Body<'_> {
                     Option::None if rest => continue,
                     Option::None => {
                         let names: Vec<&str> = params.iter().map(|(p, _, _)| p.as_str()).collect();
-                        self.error(a.value.pos, format!("{what} has no parameter `{n}` (parameters: {})", names.join(", ")));
+                        self.error(
+                            a.value.pos,
+                            format!(
+                                "{what} has no parameter `{n}` (parameters: {})",
+                                names.join(", ")
+                            ),
+                        );
                         continue;
                     }
                 },
             };
             if given[i] {
-                self.error(a.value.pos, format!("{what}: `{}` is given twice", params[i].0));
+                self.error(
+                    a.value.pos,
+                    format!("{what}: `{}` is given twice", params[i].0),
+                );
                 continue;
             }
             given[i] = true;
             if !types::fits(t, &params[i].1) {
-                self.error(a.value.pos, format!("{what}: `{}` takes a `{}`, but `{}` is a `{t}`", params[i].0, params[i].1, a.value));
+                self.error(
+                    a.value.pos,
+                    format!(
+                        "{what}: `{}` takes a `{}`, but `{}` is a `{t}`",
+                        params[i].0, params[i].1, a.value
+                    ),
+                );
             }
         }
         for (i, (p, _, optional)) in params.iter().enumerate() {
@@ -1135,16 +1464,34 @@ impl Body<'_> {
             }
             Kind::Ai => {
                 if self.ctx != Ctx::Ai {
-                    self.error(pos, format!("`{}()` runs another ai only inside an `ai` (RS 2.8)", def.full));
+                    self.error(
+                        pos,
+                        format!(
+                            "`{}()` runs another ai only inside an `ai` (RS 2.8)",
+                            def.full
+                        ),
+                    );
                 }
                 if let Some(a) = args.first() {
-                    self.error(a.value.pos, format!("an ai takes no arguments: `{}`", def.full));
+                    self.error(
+                        a.value.pos,
+                        format!("an ai takes no arguments: `{}`", def.full),
+                    );
                 }
             }
             Kind::Entity => self.card_args(pos, def, args, tys),
             Kind::Component => {
                 let fields = component_fields(def);
-                let ps: Vec<(String, Ty, bool)> = fields.iter().map(|f| (f.name.clone(), self.component_field(&def.full, &f.name), true)).collect();
+                let ps: Vec<(String, Ty, bool)> = fields
+                    .iter()
+                    .map(|f| {
+                        (
+                            f.name.clone(),
+                            self.component_field(&def.full, &f.name),
+                            true,
+                        )
+                    })
+                    .collect();
                 self.check_args(pos, &format!("`{}`", def.full), &ps, false, args, tys);
             }
             _ => {}
@@ -1158,9 +1505,21 @@ impl Body<'_> {
         for (i, (a, t)) in args.iter().zip(tys).enumerate() {
             let Some(n) = &a.name else {
                 if i > 0 {
-                    self.error(a.value.pos, format!("card `{}`: overrides are named by their component (RS 2.8)", def.full));
+                    self.error(
+                        a.value.pos,
+                        format!(
+                            "card `{}`: overrides are named by their component (RS 2.8)",
+                            def.full
+                        ),
+                    );
                 } else if !types::fits(t, &Ty::Union(vec![Ty::Number, Ty::Dice, Ty::Range])) {
-                    self.error(a.value.pos, format!("card `{}`: the first bare argument is the count, not a `{t}`", def.full));
+                    self.error(
+                        a.value.pos,
+                        format!(
+                            "card `{}`: the first bare argument is the count, not a `{t}`",
+                            def.full
+                        ),
+                    );
                 }
                 continue;
             };
@@ -1168,13 +1527,19 @@ impl Body<'_> {
                 match crate::fields::engine_component(n) {
                     Some(fs) => (n.clone(), fs.into_iter().map(|f| f.name).collect()),
                     Option::None => {
-                        self.error(a.value.pos, format!("card `{}`: no engine component `{n}`", def.full));
+                        self.error(
+                            a.value.pos,
+                            format!("card `{}`: no engine component `{n}`", def.full),
+                        );
                         continue;
                     }
                 }
             } else {
                 match self.m.resolve_kind(self.ns(), n, &[Kind::Component]) {
-                    Ok(c) => (c.full.clone(), component_fields(c).into_iter().map(|f| f.name).collect()),
+                    Ok(c) => (
+                        c.full.clone(),
+                        component_fields(c).into_iter().map(|f| f.name).collect(),
+                    ),
                     Err(e) => {
                         if !self.lenient {
                             self.error(a.value.pos, format!("card `{}`: {e}", def.full));
@@ -1185,7 +1550,9 @@ impl Body<'_> {
             };
             let value = Ty::Component(Some(comp.clone()));
             let ok = match fields.as_slice() {
-                [one] => types::fits(t, &self.component_field(&comp, one)) || types::fits(t, &value),
+                [one] => {
+                    types::fits(t, &self.component_field(&comp, one)) || types::fits(t, &value)
+                }
                 _ => types::fits(t, &value),
             };
             if !ok {
@@ -1193,7 +1560,10 @@ impl Body<'_> {
                     [one] => format!("a `{}`", self.component_field(&comp, one)),
                     _ => format!("a component value `{comp}(…)`"),
                 };
-                self.error(a.value.pos, format!("card `{}`: `{n}` takes {want}, not a `{t}`", def.full));
+                self.error(
+                    a.value.pos,
+                    format!("card `{}`: `{n}` takes {want}, not a `{t}`", def.full),
+                );
             }
         }
     }
@@ -1202,11 +1572,20 @@ impl Body<'_> {
     /// message), and its placeholders match the call's text arguments in
     /// every language (D 10, D 11.4, M 7.3).
     fn text_args(&mut self, pos: Pos, w: &str, args: &[Arg]) {
-        let Some(first) = args.first().filter(|a| a.name.is_none()) else { return };
+        let Some(first) = args.first().filter(|a| a.name.is_none()) else {
+            return;
+        };
         let keys: Vec<String> = match &first.value.kind {
             ExprKind::Name { name, root } => {
-                let written = if *root { format!(".{name}") } else { name.clone() };
-                match names::candidates(self.ns(), &written).into_iter().find(|c| self.texts.contains(c) || self.m.kind(c) == Some(Kind::Message)) {
+                let written = if *root {
+                    format!(".{name}")
+                } else {
+                    name.clone()
+                };
+                match names::candidates(self.ns(), &written)
+                    .into_iter()
+                    .find(|c| self.texts.contains(c) || self.m.kind(c) == Some(Kind::Message))
+                {
                     Some(k) => vec![k],
                     Option::None => return,
                 }
@@ -1215,23 +1594,47 @@ impl Body<'_> {
                 let mut out = Vec::new();
                 for c in names::candidates(self.ns(), name) {
                     let prefix = format!("{c}.");
-                    out.extend(self.texts.iter().filter(|k| k.starts_with(&prefix)).cloned());
+                    out.extend(
+                        self.texts
+                            .iter()
+                            .filter(|k| k.starts_with(&prefix))
+                            .cloned(),
+                    );
                 }
                 out
             }
             _ => return,
         };
-        let given: BTreeSet<String> = args.iter().filter_map(|a| a.name.clone()).filter(|n| names::is_part(n)).collect();
-        let languages: BTreeSet<String> = self.m.languages.iter().map(|f| f.language.clone()).collect();
+        let given: BTreeSet<String> = args
+            .iter()
+            .filter_map(|a| a.name.clone())
+            .filter(|n| names::is_part(n))
+            .collect();
+        let languages: BTreeSet<String> = self
+            .m
+            .languages
+            .iter()
+            .map(|f| f.language.clone())
+            .collect();
         for key in &keys {
             if w == "log" {
                 match self.m.defs.get(key).filter(|d| d.kind == Kind::Message) {
                     Some(d) => {
                         if let DefSource::Row(row) = &d.source {
-                            let params: BTreeSet<String> = row.tokens.iter().skip(1).map(|t| t.text.clone()).collect();
+                            let params: BTreeSet<String> =
+                                row.tokens.iter().skip(1).map(|t| t.text.clone()).collect();
                             if params != given {
-                                let list = |s: &BTreeSet<String>| s.iter().cloned().collect::<Vec<_>>().join(", ");
-                                self.error(pos, format!("message `{key}` takes ({}); the call gives ({}) (D 11.4)", list(&params), list(&given)));
+                                let list = |s: &BTreeSet<String>| {
+                                    s.iter().cloned().collect::<Vec<_>>().join(", ")
+                                };
+                                self.error(
+                                    pos,
+                                    format!(
+                                        "message `{key}` takes ({}); the call gives ({}) (D 11.4)",
+                                        list(&params),
+                                        list(&given)
+                                    ),
+                                );
                             }
                         }
                         continue;
@@ -1274,7 +1677,10 @@ impl Body<'_> {
             && !self.locals.contains_key(w)
             && names::is_vocabulary(last)
         {
-            self.error(pos, format!("`game.{last}` is an engine field and read-only for logic (D 3.3)"));
+            self.error(
+                pos,
+                format!("`game.{last}` is an engine field and read-only for logic (D 3.3)"),
+            );
             return;
         }
         let base_ty = self.expr(base);
@@ -1283,7 +1689,10 @@ impl Body<'_> {
             return;
         }
         if sigs::field(&base_ty, last).is_some() {
-            self.error(pos, format!("`{target}` is kept by the engine and read-only for logic (M 3.4)"));
+            self.error(
+                pos,
+                format!("`{target}` is kept by the engine and read-only for logic (M 3.4)"),
+            );
             return;
         }
         let ft = self.expr(target);
@@ -1296,7 +1705,10 @@ impl Body<'_> {
             },
         };
         if !ok {
-            self.error(pos, format!("`{target}` has the type `{ft}`; a `{value}` cannot be assigned to it"));
+            self.error(
+                pos,
+                format!("`{target}` has the type `{ft}`; a `{value}` cannot be assigned to it"),
+            );
         }
     }
 
@@ -1306,7 +1718,10 @@ impl Body<'_> {
         match &e.kind {
             ExprKind::Word(w) => self.own.contains(w),
             ExprKind::List(_) | ExprKind::EmptyDict => true,
-            ExprKind::Call(f, _) => matches!(&f.kind, ExprKind::Field(_, w) if w == "copy") || matches!(&f.kind, ExprKind::Word(w) if w == "copy"),
+            ExprKind::Call(f, _) => {
+                matches!(&f.kind, ExprKind::Field(_, w) if w == "copy")
+                    || matches!(&f.kind, ExprKind::Word(w) if w == "copy")
+            }
             _ => false,
         }
     }
@@ -1319,7 +1734,10 @@ impl Body<'_> {
 /// The one version of an engine function that the arguments fit, if there
 /// is exactly one (M 9.2).
 pub fn select(name: &str, args: &[(Option<String>, Ty)]) -> Option<&'static Sig> {
-    let fitting: Vec<&Sig> = sigs::versions(name).into_iter().filter(|s| fits_version(s, args)).collect();
+    let fitting: Vec<&Sig> = sigs::versions(name)
+        .into_iter()
+        .filter(|s| fits_version(s, args))
+        .collect();
     prefer_exact(&fitting, args)
 }
 
@@ -1332,8 +1750,14 @@ fn prefer_exact(fitting: &[&'static Sig], args: &[(Option<String>, Ty)]) -> Opti
         [] => Option::None,
         many => {
             let first = args.first().map(|(_, t)| t)?;
-            let exact = |p: &Ty| p == first || matches!(p, Ty::Union(alts) if alts.contains(first) && alts.len() == 1);
-            let hits: Vec<&&Sig> = many.iter().filter(|s| s.params.first().is_some_and(|p| exact(&p.ty))).collect();
+            let exact = |p: &Ty| {
+                p == first
+                    || matches!(p, Ty::Union(alts) if alts.contains(first) && alts.len() == 1)
+            };
+            let hits: Vec<&&Sig> = many
+                .iter()
+                .filter(|s| s.params.first().is_some_and(|p| exact(&p.ty)))
+                .collect();
             match hits.as_slice() {
                 [one] => Some(**one),
                 _ => Option::None,
@@ -1356,7 +1780,11 @@ pub fn fits_version(sig: &Sig, args: &[(Option<String>, Ty)]) -> bool {
                 next += 1;
                 next - 1
             }
-            Some(n) => match sig.params.iter().position(|p| !p.positional && &p.name == n) {
+            Some(n) => match sig
+                .params
+                .iter()
+                .position(|p| !p.positional && &p.name == n)
+            {
                 Some(i) => i,
                 // further named arguments: text parameters of `say` (M 9.3)
                 Option::None if sig.rest => continue,
@@ -1395,7 +1823,13 @@ fn binary_ty(op: BinOp, a: &Ty, b: &Ty) -> Ty {
         Add if *a == Ty::Pos && matches!(b, Ty::Dir | Ty::Unknown) => Ty::Pos,
         Add if *a == Ty::Text && *b == Ty::Text => Ty::Text,
         Add | Sub if *a == Ty::Percent && *b == Ty::Percent => Ty::Percent,
-        Add | Sub | Mul | Div | Rem if [a, b].iter().all(|t| matches!(t, Ty::Number | Ty::Dice | Ty::Range | Ty::Percent)) => Ty::Number,
+        Add | Sub | Mul | Div | Rem
+            if [a, b]
+                .iter()
+                .all(|t| matches!(t, Ty::Number | Ty::Dice | Ty::Range | Ty::Percent)) =>
+        {
+            Ty::Number
+        }
         _ => Ty::Unknown,
     }
 }
@@ -1431,7 +1865,14 @@ fn root_word(e: &Expr) -> Option<&str> {
 fn collect_assigned(body: &[Stmt], out: &mut BTreeSet<String>) {
     for s in body {
         match &s.kind {
-            StmtKind::Assign { target: Expr { kind: ExprKind::Word(w), .. }, .. } => {
+            StmtKind::Assign {
+                target:
+                    Expr {
+                        kind: ExprKind::Word(w),
+                        ..
+                    },
+                ..
+            } => {
                 out.insert(w.clone());
             }
             StmtKind::WaitInput { name, .. } | StmtKind::OpenValue { name, .. } => {
@@ -1449,7 +1890,9 @@ fn collect_assigned(body: &[Stmt], out: &mut BTreeSet<String>) {
                     collect_assigned(b, out);
                 }
             }
-            StmtKind::Repeat { body, .. } | StmtKind::While { body, .. } => collect_assigned(body, out),
+            StmtKind::Repeat { body, .. } | StmtKind::While { body, .. } => {
+                collect_assigned(body, out)
+            }
             StmtKind::Match { cases, .. } => {
                 for (_, b) in cases {
                     collect_assigned(b, out);

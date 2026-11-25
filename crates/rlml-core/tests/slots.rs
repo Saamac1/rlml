@@ -19,7 +19,13 @@ fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<Strin
         if p.is_dir() {
             read_tree(root, &p, out);
         } else {
-            out.insert(p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"), std::fs::read_to_string(&p).unwrap());
+            out.insert(
+                p.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+                std::fs::read_to_string(&p).unwrap(),
+            );
         }
     }
 }
@@ -31,14 +37,21 @@ fn mini(extra: &str) -> MemFiles {
     read_tree(&repo, &repo.join("lib"), &mut f.engine);
     let game = repo.join("esimerkit/mini");
     read_tree(&game, &game, &mut f.game);
-    f.game.get_mut("game.rlml").unwrap().push_str("\ninclude extra.rlml\n");
+    f.game
+        .get_mut("game.rlml")
+        .unwrap()
+        .push_str("\ninclude extra.rlml\n");
     f.game.insert("extra.rlml".into(), extra.into());
     f
 }
 
 fn model(f: &MemFiles) -> Model {
     let (m, r) = rlml_core::check_game(f, "game.rlml");
-    assert!(!r.has_errors(), "{:#?}", r.errors().map(|d| d.to_string()).collect::<Vec<_>>());
+    assert!(
+        !r.has_errors(),
+        "{:#?}",
+        r.errors().map(|d| d.to_string()).collect::<Vec<_>>()
+    );
     m
 }
 
@@ -61,13 +74,46 @@ fn names(saves: &Saves<MemStore>) -> Vec<String> {
 
 #[test]
 fn the_section_reads_and_is_checked() {
-    let m = model(&mini("autosave\n- slots 3\n- manual 2\n- quit none\n- on input every 20\n- on checkpoint\n- on arrive\n"));
+    let m = model(&mini(
+        "autosave\n- slots 3\n- manual 2\n- quit none\n- on input every 20\n- on checkpoint\n- on arrive\n",
+    ));
     let r = AutosaveRules::read(&m);
-    assert_eq!(r, AutosaveRules { slots: 3, manual: 2, quit_save: false, on_input: Some(20), on_scene: false, on_checkpoint: true, on_arrive: true });
+    assert_eq!(
+        r,
+        AutosaveRules {
+            slots: 3,
+            manual: 2,
+            quit_save: false,
+            on_input: Some(20),
+            on_scene: false,
+            on_checkpoint: true,
+            on_arrive: true
+        }
+    );
     let none = model(&mini(""));
-    assert_eq!(AutosaveRules::read(&none), AutosaveRules { slots: 0, manual: 3, quit_save: true, on_input: None, on_scene: false, on_checkpoint: false, on_arrive: false }, "the defaults without the section");
-    let bad = errors(&mini("autosave\n- slots many\n- quit maybe\n- on input every 0\n- on lunch\n- often\n"));
-    for want in ["`slots` takes a count", "`quit` is save or none", "`on input` takes `every N`", "`on` is input, scene", "unknown `autosave` row `often`"] {
+    assert_eq!(
+        AutosaveRules::read(&none),
+        AutosaveRules {
+            slots: 0,
+            manual: 3,
+            quit_save: true,
+            on_input: None,
+            on_scene: false,
+            on_checkpoint: false,
+            on_arrive: false
+        },
+        "the defaults without the section"
+    );
+    let bad = errors(&mini(
+        "autosave\n- slots many\n- quit maybe\n- on input every 0\n- on lunch\n- often\n",
+    ));
+    for want in [
+        "`slots` takes a count",
+        "`quit` is save or none",
+        "`on input` takes `every N`",
+        "`on` is input, scene",
+        "unknown `autosave` row `often`",
+    ] {
         assert!(bad.iter().any(|e| e.contains(want)), "{want}: {bad:#?}");
     }
 }
@@ -92,7 +138,13 @@ fn the_stack_drops_its_oldest_and_keeps_newer_ones_after_a_load() {
     let mut r = Runner::load(&m, &save).unwrap();
     r.run(0).unwrap();
     saves.autosave(r.save()).unwrap();
-    assert!(saves.list().iter().any(|l| l.save.now.s.game.time == newest), "the newer save is still in the stack");
+    assert!(
+        saves
+            .list()
+            .iter()
+            .any(|l| l.save.now.s.game.time == newest),
+        "the newer save is still in the stack"
+    );
 }
 
 #[test]
@@ -104,11 +156,22 @@ fn own_saves_take_their_own_slots() {
     s.press("s").unwrap();
     assert_eq!(saves.manual(&s.r).unwrap(), Saved::In(Slot::Manual(2)));
     s.press("s").unwrap();
-    assert_eq!(saves.manual(&s.r).unwrap(), Saved::In(Slot::Manual(1)), "the oldest own slot again");
-    assert_eq!(saves.quit(&s.r).unwrap(), Some(Slot::Auto(1)), "`slots N`: leaving saves in the stack");
+    assert_eq!(
+        saves.manual(&s.r).unwrap(),
+        Saved::In(Slot::Manual(1)),
+        "the oldest own slot again"
+    );
+    assert_eq!(
+        saves.quit(&s.r).unwrap(),
+        Some(Slot::Auto(1)),
+        "`slots N`: leaving saves in the stack"
+    );
     let none = model(&mini("autosave\n- manual 0\n"));
     let mut saves = Saves::new(MemStore::default(), AutosaveRules::read(&none));
-    assert!(saves.manual(&session(&none, "").r).is_err(), "`manual 0`: no own saves");
+    assert!(
+        saves.manual(&session(&none, "").r).is_err(),
+        "`manual 0`: no own saves"
+    );
 }
 
 #[test]
@@ -116,13 +179,24 @@ fn permadeath_has_one_slot() {
     let m = model(&mini("autosave\n- slots 1\n"));
     let mut saves = Saves::new(MemStore::default(), AutosaveRules::read(&m));
     let s = session(&m, "s s");
-    assert_eq!(saves.manual(&s.r).unwrap(), Saved::AndEnds, "the player's save ends the game (M 5.4)");
+    assert_eq!(
+        saves.manual(&s.r).unwrap(),
+        Saved::AndEnds,
+        "the player's save ends the game (M 5.4)"
+    );
     saves.autosave(s.r.save()).unwrap();
     assert_eq!(saves.quit(&s.r).unwrap(), Some(Slot::Only));
     assert_eq!(names(&saves), ["game"]);
     saves.delete_auto();
-    assert!(names(&saves).is_empty(), "`delete_save(auto)` removes the only slot");
-    assert_eq!(saves.quit(&s.r).unwrap(), None, "and leaving saves nothing after it (M 5.5)");
+    assert!(
+        names(&saves).is_empty(),
+        "`delete_save(auto)` removes the only slot"
+    );
+    assert_eq!(
+        saves.quit(&s.r).unwrap(),
+        None,
+        "and leaving saves nothing after it (M 5.5)"
+    );
 }
 
 #[test]
@@ -146,9 +220,17 @@ fn delete_auto_keeps_other_sessions_and_own_saves() {
     saves.autosave(s.r.save()).unwrap();
     saves.manual(&s.r).unwrap();
     saves.delete_auto();
-    assert_eq!(names(&saves), ["auto-1", "manual-1"], "the earlier session's save and the own save stay");
+    assert_eq!(
+        names(&saves),
+        ["auto-1", "manual-1"],
+        "the earlier session's save and the own save stay"
+    );
     saves.autosave(s.r.save()).unwrap();
-    assert_eq!(names(&saves).len(), 2, "no more automatic saves this session");
+    assert_eq!(
+        names(&saves).len(),
+        2,
+        "no more automatic saves this session"
+    );
 }
 
 const POINTS: &str = r#"
@@ -178,8 +260,16 @@ fn the_runner_saves_at_its_points() {
     let at = s.r.due[0].now.s.game.time;
     assert_eq!(at, s.r.w.s.game.time, "taken at the wait");
     s.r.due.clear();
-    s.r.player(&rlml_core::rt::value::CommandValue { name: "REST".into(), args: vec![] }).unwrap();
-    assert_eq!(s.r.due.len(), 1, "two `autosave()` calls in one action make one save");
+    s.r.player(&rlml_core::rt::value::CommandValue {
+        name: "REST".into(),
+        args: vec![],
+    })
+    .unwrap();
+    assert_eq!(
+        s.r.due.len(),
+        1,
+        "two `autosave()` calls in one action make one save"
+    );
     s.r.run(0).unwrap();
     s.r.due.clear();
 }
@@ -194,7 +284,11 @@ fn arriving_on_a_map_saves_once() {
     let mut s = s;
     s.press("l").unwrap();
     assert_eq!(s.r.due.len(), 1, "`on arrive`: one save");
-    assert_eq!(s.r.due[0].now.s.maps.len(), 2, "taken after the player arrived on the second cave");
+    assert_eq!(
+        s.r.due[0].now.s.maps.len(),
+        2,
+        "taken after the player arrived on the second cave"
+    );
 }
 
 #[test]
@@ -207,5 +301,9 @@ fn a_nosave_map_stops_the_players_save() {
     let s = session(&m, "s");
     assert!(s.r.w.save_blocked(), "the player is on CAVE_A");
     let mut saves = Saves::new(MemStore::default(), AutosaveRules::read(&m));
-    assert_eq!(saves.quit(&s.r).unwrap(), None, "leaving does not save there (M 5.2)");
+    assert_eq!(
+        saves.quit(&s.r).unwrap(),
+        None,
+        "leaving does not save there (M 5.2)"
+    );
 }

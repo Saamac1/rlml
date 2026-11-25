@@ -28,13 +28,19 @@ pub struct Journal(Rc<RefCell<Inner>>);
 impl Journal {
     /// The folder as OPFS has it, `(path, text)` each.
     pub fn new(files: Vec<(String, String)>) -> Journal {
-        Journal(Rc::new(RefCell::new(Inner { files: files.into_iter().collect(), changes: vec![] })))
+        Journal(Rc::new(RefCell::new(Inner {
+            files: files.into_iter().collect(),
+            changes: vec![],
+        })))
     }
 
     /// A store of the files under `dir` (`saves/`), or of the folder's
     /// own files with `""`.
     pub fn store(&self, dir: &str) -> JournalStore {
-        JournalStore { j: self.clone(), dir: dir.to_string() }
+        JournalStore {
+            j: self.clone(),
+            dir: dir.to_string(),
+        }
     }
 
     /// What changed since the last call, in order.
@@ -81,6 +87,12 @@ impl Store for JournalStore {
 
     fn list(&self) -> Vec<String> {
         let inner = self.j.0.borrow();
-        inner.files.keys().filter_map(|p| p.strip_prefix(self.dir.as_str())).filter(|n| !n.contains('/')).map(String::from).collect()
+        inner
+            .files
+            .keys()
+            .filter_map(|p| p.strip_prefix(self.dir.as_str()))
+            .filter(|n| !n.contains('/'))
+            .map(String::from)
+            .collect()
     }
 }

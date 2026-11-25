@@ -25,9 +25,34 @@ use crate::error::Diagnostic;
 use crate::token::{Token, tokenize};
 
 pub const BLOCK_KINDS: &[&str] = &[
-    "game", "profile", "settings", "autosave", "constants", "component", "entity", "deck", "table", "terrain", "tileset", "tiles",
-    "tiles.glyphs", "map", "prefab", "colors", "panels", "logs", "presentation", "layers", "layout", "menu", "keys", "pad", "log",
-    "messages", "panel", "sounds",
+    "game",
+    "profile",
+    "settings",
+    "autosave",
+    "constants",
+    "component",
+    "entity",
+    "deck",
+    "table",
+    "terrain",
+    "tileset",
+    "tiles",
+    "tiles.glyphs",
+    "map",
+    "prefab",
+    "colors",
+    "panels",
+    "logs",
+    "presentation",
+    "layers",
+    "layout",
+    "menu",
+    "keys",
+    "pad",
+    "log",
+    "messages",
+    "panel",
+    "sounds",
 ];
 
 pub const DRAWING_KINDS: &[&str] = &["map", "prefab", "layout", "panel"];
@@ -35,8 +60,19 @@ pub const DRAWING_KINDS: &[&str] = &["map", "prefab", "layout", "panel"];
 /// Sections without a name; their header words are all arguments, and rows
 /// from every file merge by row key (D 4.8).
 pub const SECTION_KINDS: &[&str] = &[
-    "settings", "autosave", "constants", "terrain", "tiles", "tiles.glyphs", "colors", "panels", "logs", "presentation", "layers",
-    "messages", "sounds",
+    "settings",
+    "autosave",
+    "constants",
+    "terrain",
+    "tiles",
+    "tiles.glyphs",
+    "colors",
+    "panels",
+    "logs",
+    "presentation",
+    "layers",
+    "messages",
+    "sounds",
 ];
 
 /// Blocks whose name is optional: a library's unnamed `game` or `profile`
@@ -66,9 +102,20 @@ pub struct RawItem {
 }
 
 impl RawItem {
-    pub fn new(file: &str, line: usize, namespace: Option<String>, text: &str) -> Result<RawItem, Diagnostic> {
+    pub fn new(
+        file: &str,
+        line: usize,
+        namespace: Option<String>,
+        text: &str,
+    ) -> Result<RawItem, Diagnostic> {
         let tokens = tokenize(text).map_err(|e| Diagnostic::error(file, line, e.0))?;
-        Ok(RawItem { file: file.to_string(), line, namespace, text: text.to_string(), tokens })
+        Ok(RawItem {
+            file: file.to_string(),
+            line,
+            namespace,
+            text: text.to_string(),
+            tokens,
+        })
     }
 
     /// The first word.
@@ -101,12 +148,23 @@ impl RawItem {
     /// The item without its first `n` words.
     pub fn shift(&self, n: usize) -> RawItem {
         let Some(first) = self.tokens.get(n) else {
-            return RawItem { text: String::new(), tokens: vec![], ..self.clone() };
+            return RawItem {
+                text: String::new(),
+                tokens: vec![],
+                ..self.clone()
+            };
         };
         let off = first.start;
         RawItem {
             text: self.text[off..].to_string(),
-            tokens: self.tokens[n..].iter().map(|t| Token { start: t.start - off, end: t.end - off, ..t.clone() }).collect(),
+            tokens: self.tokens[n..]
+                .iter()
+                .map(|t| Token {
+                    start: t.start - off,
+                    end: t.end - off,
+                    ..t.clone()
+                })
+                .collect(),
             ..self.clone()
         }
     }
@@ -167,7 +225,10 @@ impl RawBlock {
     }
 
     pub fn sub(&self, name: &str) -> impl Iterator<Item = &RawItem> {
-        self.subs.iter().filter(move |s| s.name == name).flat_map(|s| s.items.iter())
+        self.subs
+            .iter()
+            .filter(move |s| s.name == name)
+            .flat_map(|s| s.items.iter())
     }
 
     pub fn has_arg(&self, word: &str) -> bool {
@@ -263,8 +324,15 @@ fn header_kind(line: &str) -> Option<(Modifier, &str)> {
         "new" => Modifier::New,
         _ => Modifier::None,
     };
-    let kind = if modifier == Modifier::None { first } else { words.next()? };
-    BLOCK_KINDS.iter().find(|k| **k == kind).map(|k| (modifier, *k))
+    let kind = if modifier == Modifier::None {
+        first
+    } else {
+        words.next()?
+    };
+    BLOCK_KINDS
+        .iter()
+        .find(|k| **k == kind)
+        .map(|k| (modifier, *k))
 }
 
 /// `>` followed by a space or the end of the line (D 2.5).
@@ -290,7 +358,11 @@ pub fn strip_emphasis(line: &str) -> &str {
             let start = search + pos;
             let at_word_start = start == 0 || t[..start].ends_with(char::is_whitespace);
             let after = &t[start + marker.len()..body_end];
-            if at_word_start && !after.is_empty() && !after.starts_with(char::is_whitespace) && !after.starts_with('*') {
+            if at_word_start
+                && !after.is_empty()
+                && !after.starts_with(char::is_whitespace)
+                && !after.starts_with('*')
+            {
                 return t[..start].trim_end();
             }
             search = start + marker.len();
@@ -301,11 +373,15 @@ pub fn strip_emphasis(line: &str) -> &str {
 
 fn fence_lang(line: &str) -> Option<&str> {
     let t = line.trim_start();
-    t.starts_with("```").then(|| t.trim_start_matches('`').trim())
+    t.starts_with("```")
+        .then(|| t.trim_start_matches('`').trim())
 }
 
 pub fn parse(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
-    let mut out = ParsedFile { file: file.to_string(), ..Default::default() };
+    let mut out = ParsedFile {
+        file: file.to_string(),
+        ..Default::default()
+    };
     let mut errors = Vec::new();
     let mut current: Option<RawBlock> = None;
     let mut code: Option<RawCode> = None;
@@ -344,7 +420,11 @@ pub fn parse(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
                 if fence.is_some() {
                     state = State::Body;
                 } else {
-                    current.as_mut().unwrap().drawing.push(line.trim_end().to_string());
+                    current
+                        .as_mut()
+                        .unwrap()
+                        .drawing
+                        .push(line.trim_end().to_string());
                 }
                 continue;
             }
@@ -354,7 +434,11 @@ pub fn parse(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
                     continue;
                 }
                 if !sub_header(trimmed).is_some() && fence.is_none() {
-                    current.as_mut().unwrap().drawing.push(line.trim_end().to_string());
+                    current
+                        .as_mut()
+                        .unwrap()
+                        .drawing
+                        .push(line.trim_end().to_string());
                     continue;
                 }
                 state = State::Body;
@@ -363,8 +447,15 @@ pub fn parse(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
                 if trimmed.is_empty() || is_comment(trimmed) {
                     continue;
                 }
-                if header_kind(line).is_some() || line.starts_with("include ") || line.starts_with("language ") {
-                    errors.push(Diagnostic::error(file, lineno, "a language file holds only `KEY text` lines after its `language` header"));
+                if header_kind(line).is_some()
+                    || line.starts_with("include ")
+                    || line.starts_with("language ")
+                {
+                    errors.push(Diagnostic::error(
+                        file,
+                        lineno,
+                        "a language file holds only `KEY text` lines after its `language` header",
+                    ));
                     continue;
                 }
                 // the text is taken verbatim: no emphasis comments (D 10)
@@ -378,14 +469,20 @@ pub fn parse(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
         }
 
         if let Some(lang) = fence {
-            let pending = matches!(state, State::Body | State::AwaitDrawing) && current.as_ref().is_some_and(RawBlock::drawing_pending);
+            let pending = matches!(state, State::Body | State::AwaitDrawing)
+                && current.as_ref().is_some_and(RawBlock::drawing_pending);
             if lang.is_empty() && pending {
                 current.as_mut().unwrap().drawing_line = lineno + 1;
                 state = State::FencedDrawing;
             } else if lang == "roguescript" {
                 flush(&mut current, &mut out);
                 seen_definition = true;
-                code = Some(RawCode { file: file.to_string(), line: lineno + 1, namespace: out.namespace.clone(), lines: vec![] });
+                code = Some(RawCode {
+                    file: file.to_string(),
+                    line: lineno + 1,
+                    namespace: out.namespace.clone(),
+                    lines: vec![],
+                });
                 state = State::Code;
             } else {
                 errors.push(Diagnostic::error(
@@ -406,7 +503,9 @@ pub fn parse(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
         if trimmed.is_empty() {
             state = match state {
                 State::Sub => State::Sub,
-                State::Body if current.as_ref().is_some_and(RawBlock::drawing_pending) => State::AwaitDrawing,
+                State::Body if current.as_ref().is_some_and(RawBlock::drawing_pending) => {
+                    State::AwaitDrawing
+                }
                 State::AwaitDrawing => State::AwaitDrawing,
                 State::Outside => State::Outside,
                 _ => State::Closed,
@@ -442,13 +541,21 @@ pub fn parse(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
         let code_line = strip_emphasis(line);
         let code_trimmed = code_line.trim();
 
-        if let Some(word) = code_trimmed.split_whitespace().next().filter(|w| w.starts_with("tiles.") && *w != "tiles.glyphs")
-            && !line.starts_with(char::is_whitespace) {
-                errors.push(Diagnostic::error(file, lineno, format!("`{word}`: only `tiles.glyphs` depends on the presentation (D 9.2)")));
-                flush(&mut current, &mut out);
-                state = State::Closed;
-                continue;
-            }
+        if let Some(word) = code_trimmed
+            .split_whitespace()
+            .next()
+            .filter(|w| w.starts_with("tiles.") && *w != "tiles.glyphs")
+            && !line.starts_with(char::is_whitespace)
+        {
+            errors.push(Diagnostic::error(
+                file,
+                lineno,
+                format!("`{word}`: only `tiles.glyphs` depends on the presentation (D 9.2)"),
+            ));
+            flush(&mut current, &mut out);
+            state = State::Closed;
+            continue;
+        }
 
         if let Some((modifier, kind)) = header_kind(code_line) {
             flush(&mut current, &mut out);
@@ -474,16 +581,27 @@ pub fn parse(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
                     state = State::Outside;
                     let pattern: Vec<&str> = words.collect();
                     if pattern.len() != 1 {
-                        errors.push(Diagnostic::error(file, lineno, "include takes exactly one path"));
+                        errors.push(Diagnostic::error(
+                            file,
+                            lineno,
+                            "include takes exactly one path",
+                        ));
                     } else {
-                        out.entries.push(Entry::Include { pattern: pattern[0].to_string(), line: lineno });
+                        out.entries.push(Entry::Include {
+                            pattern: pattern[0].to_string(),
+                            line: lineno,
+                        });
                     }
                     continue;
                 }
                 Some("namespace") => {
                     let name: Vec<&str> = words.collect();
                     if seen_definition || out.namespace.is_some() {
-                        errors.push(Diagnostic::error(file, lineno, "`namespace` must come before the first definition, and only once"));
+                        errors.push(Diagnostic::error(
+                            file,
+                            lineno,
+                            "`namespace` must come before the first definition, and only once",
+                        ));
                     } else if name.len() != 1 || !crate::names::is_name(name[0]) {
                         errors.push(Diagnostic::error(file, lineno, "namespace takes one NAME"));
                     } else {
@@ -494,9 +612,17 @@ pub fn parse(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
                 Some("language") => {
                     let lang: Vec<&str> = words.collect();
                     if seen_definition || !out.entries.is_empty() {
-                        errors.push(Diagnostic::error(file, lineno, "`language` must be the first definition of a language file (D 10)"));
+                        errors.push(Diagnostic::error(
+                            file,
+                            lineno,
+                            "`language` must be the first definition of a language file (D 10)",
+                        ));
                     } else if lang.len() != 1 || !crate::names::is_vocabulary(lang[0]) {
-                        errors.push(Diagnostic::error(file, lineno, "language takes one lower-case language name, such as `language fi`"));
+                        errors.push(Diagnostic::error(
+                            file,
+                            lineno,
+                            "language takes one lower-case language name, such as `language fi`",
+                        ));
                     } else {
                         out.language = Some((lang[0].to_string(), lineno));
                         state = State::Language;
@@ -510,36 +636,58 @@ pub fn parse(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
 
         if let Some(name) = sub_header(code_trimmed) {
             match current.as_mut() {
-                Some(b) if b.subs.iter().any(|s| s.name == name) && name != "legend" => {
-                    errors.push(Diagnostic::error(file, lineno, format!("duplicate `{name}:`")))
-                }
+                Some(b) if b.subs.iter().any(|s| s.name == name) && name != "legend" => errors
+                    .push(Diagnostic::error(
+                        file,
+                        lineno,
+                        format!("duplicate `{name}:`"),
+                    )),
                 Some(b) => {
-                    b.subs.push(Sub { name: name.to_string(), line: lineno, items: vec![] });
+                    b.subs.push(Sub {
+                        name: name.to_string(),
+                        line: lineno,
+                        items: vec![],
+                    });
                     state = State::Sub;
                 }
-                None => errors.push(Diagnostic::error(file, lineno, format!("`{name}:` outside a block"))),
+                None => errors.push(Diagnostic::error(
+                    file,
+                    lineno,
+                    format!("`{name}:` outside a block"),
+                )),
             }
             continue;
         }
 
-        let item_text = code_trimmed.strip_prefix("- ").or_else(|| (code_trimmed == "-").then_some(""));
+        let item_text = code_trimmed
+            .strip_prefix("- ")
+            .or_else(|| (code_trimmed == "-").then_some(""));
         match (state, current.as_mut()) {
             (State::Body | State::Sub | State::AwaitDrawing, Some(block)) => {
                 if let Some(rest) = item_text {
                     match RawItem::new(file, lineno, out.namespace.clone(), rest) {
                         Ok(item) if item.tokens.is_empty() => errors.push(item.err("empty item")),
-                        Ok(item) if state == State::Sub => block.subs.last_mut().unwrap().items.push(item),
+                        Ok(item) if state == State::Sub => {
+                            block.subs.last_mut().unwrap().items.push(item)
+                        }
                         Ok(item) => block.items.push(item),
                         Err(e) => errors.push(e),
                     }
                 } else {
-                    errors.push(Diagnostic::error(file, lineno, format!("unexpected line in `{}` block: `{trimmed}`", block.kind)));
+                    errors.push(Diagnostic::error(
+                        file,
+                        lineno,
+                        format!("unexpected line in `{}` block: `{trimmed}`", block.kind),
+                    ));
                 }
             }
             (State::Closed, Some(block)) if item_text.is_some() => errors.push(Diagnostic::error(
                 file,
                 lineno,
-                format!("item after a blank line: the `{}` block ended at the blank line above", block.kind),
+                format!(
+                    "item after a blank line: the `{}` block ended at the blank line above",
+                    block.kind
+                ),
             )),
             _ => {
                 let word = code_trimmed.split_whitespace().next().unwrap_or("");
@@ -547,7 +695,16 @@ pub fn parse(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
                     "item outside a block".to_string()
                 } else if line.starts_with(char::is_whitespace) {
                     format!("unexpected text `{trimmed}`")
-                } else if ["workdir", "audio", "audioscript", "preload", "render", "buses"].contains(&word) {
+                } else if [
+                    "workdir",
+                    "audio",
+                    "audioscript",
+                    "preload",
+                    "render",
+                    "buses",
+                ]
+                .contains(&word)
+                {
                     format!("`{word}`: audio declarations (D 12) are not supported yet")
                 } else {
                     format!("unknown block kind `{word}`")
@@ -557,10 +714,18 @@ pub fn parse(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
         }
     }
     if matches!(state, State::FencedDrawing | State::SkipFence | State::Code) {
-        errors.push(Diagnostic::error(file, src.lines().count(), "unterminated code block"));
+        errors.push(Diagnostic::error(
+            file,
+            src.lines().count(),
+            "unterminated code block",
+        ));
     }
     flush(&mut current, &mut out);
-    if errors.is_empty() { Ok(out) } else { Err(errors) }
+    if errors.is_empty() {
+        Ok(out)
+    } else {
+        Err(errors)
+    }
 }
 
 /// `legend:`, `vars:` or `at:`.
@@ -572,14 +737,29 @@ fn sub_header(trimmed: &str) -> Option<&str> {
 /// Parses a `.rogue` file: RogueScript without code fences (RS 2.1), with an
 /// optional `namespace` line first.
 pub fn parse_rogue(file: &str, src: &str) -> Result<ParsedFile, Vec<Diagnostic>> {
-    let mut out = ParsedFile { file: file.to_string(), ..Default::default() };
-    let mut code = RawCode { file: file.to_string(), line: 1, namespace: None, lines: vec![] };
+    let mut out = ParsedFile {
+        file: file.to_string(),
+        ..Default::default()
+    };
+    let mut code = RawCode {
+        file: file.to_string(),
+        line: 1,
+        namespace: None,
+        lines: vec![],
+    };
     for (idx, line) in src.lines().enumerate() {
-        if code.lines.iter().all(|l| l.trim().is_empty() || l.trim_start().starts_with("//"))
+        if code
+            .lines
+            .iter()
+            .all(|l| l.trim().is_empty() || l.trim_start().starts_with("//"))
             && let Some(ns) = line.strip_prefix("namespace ")
         {
             if !crate::names::is_name(ns.trim()) {
-                return Err(vec![Diagnostic::error(file, idx + 1, "namespace takes one NAME")]);
+                return Err(vec![Diagnostic::error(
+                    file,
+                    idx + 1,
+                    "namespace takes one NAME",
+                )]);
             }
             out.namespace = Some(ns.trim().to_string());
             code.namespace = out.namespace.clone();
@@ -653,7 +833,9 @@ fn parse_header(
         rest = rest[end..].trim_start();
     }
     let section = SECTION_KINDS.contains(&kind);
-    let name_end = rest.find(|c: char| c.is_whitespace() || c == '(').unwrap_or(rest.len());
+    let name_end = rest
+        .find(|c: char| c.is_whitespace() || c == '(')
+        .unwrap_or(rest.len());
     let mut name = rest[..name_end].to_string();
     let mut after = &rest[name_end..];
     if section || !crate::names::is_ref(&name) {
@@ -670,9 +852,14 @@ fn parse_header(
     }
     let mut params = None;
     if after.starts_with('(') {
-        let close = matching_close(after, 0).ok_or_else(|| err("missing `)` in header parameters".into()))?;
+        let close = matching_close(after, 0)
+            .ok_or_else(|| err("missing `)` in header parameters".into()))?;
         let mut list = Vec::new();
-        for p in split_top_level(&after[1..close], ',').into_iter().map(str::trim).filter(|p| !p.is_empty()) {
+        for p in split_top_level(&after[1..close], ',')
+            .into_iter()
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+        {
             let (n, ty) = match p.split_once(':') {
                 Some((n, t)) => (n.trim(), Some(t.trim().to_string())),
                 None => (p, None),
@@ -680,7 +867,10 @@ fn parse_header(
             if !crate::names::is_vocabulary(n) {
                 return Err(err(format!("bad parameter `{p}`")));
             }
-            list.push(Param { name: n.to_string(), ty });
+            list.push(Param {
+                name: n.to_string(),
+                ty,
+            });
         }
         params = Some(list);
         after = &after[close + 1..];
@@ -709,7 +899,11 @@ mod tests {
     use super::*;
 
     fn blocks(src: &str) -> Vec<RawBlock> {
-        parse("t.rlml", src).unwrap_or_else(|e| panic!("{e:?}")).blocks().cloned().collect()
+        parse("t.rlml", src)
+            .unwrap_or_else(|e| panic!("{e:?}"))
+            .blocks()
+            .cloned()
+            .collect()
     }
 
     fn errs(src: &str) -> Vec<Diagnostic> {
@@ -720,10 +914,21 @@ mod tests {
     fn game_block_and_includes() {
         let pf = parse("game.rlml", "# Peli\n\ngame MINI\n- start CAVE_A\n- at SPAWN\n\ninclude lib/std.rlml\ninclude maps/*\n").unwrap();
         assert_eq!(pf.entries.len(), 3);
-        let Entry::Block(b) = &pf.entries[0] else { panic!() };
-        assert_eq!((b.kind.as_str(), b.name.as_str(), b.items.len()), ("game", "MINI", 2));
+        let Entry::Block(b) = &pf.entries[0] else {
+            panic!()
+        };
+        assert_eq!(
+            (b.kind.as_str(), b.name.as_str(), b.items.len()),
+            ("game", "MINI", 2)
+        );
         assert_eq!(b.items[1].line, 5);
-        assert_eq!(pf.entries[1], Entry::Include { pattern: "lib/std.rlml".into(), line: 7 });
+        assert_eq!(
+            pf.entries[1],
+            Entry::Include {
+                pattern: "lib/std.rlml".into(),
+                line: 7
+            }
+        );
     }
 
     #[test]
@@ -732,15 +937,27 @@ mod tests {
         assert_eq!((b[0].name.as_str(), b[0].args_text.as_str()), ("", "ascii"));
         assert_eq!(b[0].items[0].text, "WALL # fg STONE");
         assert_eq!(b[1].kind, "settings");
-        assert!(errs("tiles.blocks\n- WALL move\n")[0].message.contains("only `tiles.glyphs`"));
+        assert!(
+            errs("tiles.blocks\n- WALL move\n")[0]
+                .message
+                .contains("only `tiles.glyphs`")
+        );
     }
 
     #[test]
     fn library_game_block_may_be_unnamed() {
         let b = blocks("game\n- FACTIONS GROUPS all\n");
         assert_eq!(b[0].name, "");
-        assert!(errs("entity\n- HP now 3\n")[0].message.contains("needs a name"));
-        assert!(errs("menu pause\n- A\n")[0].message.contains("upper-case NAME"));
+        assert!(
+            errs("entity\n- HP now 3\n")[0]
+                .message
+                .contains("needs a name")
+        );
+        assert!(
+            errs("menu pause\n- A\n")[0]
+                .message
+                .contains("upper-case NAME")
+        );
     }
 
     #[test]
@@ -749,7 +966,11 @@ mod tests {
         let b = &blocks(src)[0];
         assert_eq!(b.drawing, ["######", "#.@..#", "######"]);
         assert_eq!(b.drawing_line, 4);
-        assert_eq!(b.sub("legend").count(), 2, "legend continues over a blank line");
+        assert_eq!(
+            b.sub("legend").count(),
+            2,
+            "legend continues over a blank line"
+        );
         assert_eq!(b.sub("vars").count(), 1);
         assert_eq!(b.sub("at").next().unwrap().text, "1,1 as START");
         assert_eq!(b.arg_after("size"), Some("6x3"));
@@ -772,13 +993,27 @@ mod tests {
     #[test]
     fn roguescript_blocks() {
         let pf = parse("t", "namespace STD\n\ncomponent HP\n- now number\n\n```roguescript\nfn F(x: number):\n    return\n```\n").unwrap();
-        let Entry::Code(c) = &pf.entries[1] else { panic!() };
+        let Entry::Code(c) = &pf.entries[1] else {
+            panic!()
+        };
         assert_eq!(c.lines, ["fn F(x: number):", "    return"]);
         assert_eq!(c.line, 7);
         assert_eq!(c.namespace.as_deref(), Some("STD"));
-        assert!(errs("```python\nx\n```\n")[0].message.contains("unknown code block language"));
-        assert!(errs("menu M\n- A\n```\nx\n```\n")[0].message.contains("must hold RogueScript"));
-        assert!(errs("```roguescript\nfn x()\n")[0].message.contains("unterminated"));
+        assert!(
+            errs("```python\nx\n```\n")[0]
+                .message
+                .contains("unknown code block language")
+        );
+        assert!(
+            errs("menu M\n- A\n```\nx\n```\n")[0]
+                .message
+                .contains("must hold RogueScript")
+        );
+        assert!(
+            errs("```roguescript\nfn x()\n")[0]
+                .message
+                .contains("unterminated")
+        );
     }
 
     #[test]
@@ -787,9 +1022,21 @@ mod tests {
         assert_eq!(pf.language, Some(("fi".into(), 3)));
         assert_eq!(pf.namespace.as_deref(), Some("UNDEAD"));
         assert_eq!(pf.texts[0].key(), "PAUSE.TITLE");
-        assert_eq!(pf.texts[1].rest(1), "Aloita **heti**.", "no emphasis comments in language files");
-        assert!(errs("menu M\n- A\n\nlanguage fi\n")[0].message.contains("first definition"));
-        assert!(errs("language fi\nA a\nmenu M\n")[0].message.contains("only `KEY text`"));
+        assert_eq!(
+            pf.texts[1].rest(1),
+            "Aloita **heti**.",
+            "no emphasis comments in language files"
+        );
+        assert!(
+            errs("menu M\n- A\n\nlanguage fi\n")[0]
+                .message
+                .contains("first definition")
+        );
+        assert!(
+            errs("language fi\nA a\nmenu M\n")[0]
+                .message
+                .contains("only `KEY text`")
+        );
         assert!(errs("language Finnish\n")[0].message.contains("lower-case"));
     }
 
@@ -811,23 +1058,47 @@ mod tests {
 
     #[test]
     fn modifiers_and_params() {
-        let b = blocks("patch entity STD.DEFAULT.PLAYER\n- HP now 15\n\nmenu SHOP.BUY(wares: collection, merchant: entity) list size 36x*\n- source wares\n");
-        assert_eq!((b[0].modifier, b[0].name.as_str()), (Modifier::Patch, "STD.DEFAULT.PLAYER"));
-        assert_eq!(b[1].params.as_ref().unwrap()[1], Param { name: "merchant".into(), ty: Some("entity".into()) });
+        let b = blocks(
+            "patch entity STD.DEFAULT.PLAYER\n- HP now 15\n\nmenu SHOP.BUY(wares: collection, merchant: entity) list size 36x*\n- source wares\n",
+        );
+        assert_eq!(
+            (b[0].modifier, b[0].name.as_str()),
+            (Modifier::Patch, "STD.DEFAULT.PLAYER")
+        );
+        assert_eq!(
+            b[1].params.as_ref().unwrap()[1],
+            Param {
+                name: "merchant".into(),
+                ty: Some("entity".into())
+            }
+        );
         assert_eq!(b[1].args_text, "list size 36x*");
     }
 
     #[test]
     fn namespace_rules() {
         let pf = parse("t", "# Otsikko\n> c\nnamespace STD\nmenu M\n- A\n").unwrap();
-        assert_eq!(pf.blocks().next().unwrap().items[0].namespace.as_deref(), Some("STD"));
-        assert!(errs("menu M\n- A\n\nnamespace X\n")[0].message.contains("before the first definition"));
+        assert_eq!(
+            pf.blocks().next().unwrap().items[0].namespace.as_deref(),
+            Some("STD")
+        );
+        assert!(
+            errs("menu M\n- A\n\nnamespace X\n")[0]
+                .message
+                .contains("before the first definition")
+        );
     }
 
     #[test]
     fn rogue_files() {
-        let pf = parse_rogue("ai.rogue", "// c\nnamespace UNDEAD\nai GHOST:\n    return WAIT()\n").unwrap();
-        let Entry::Code(c) = &pf.entries[0] else { panic!() };
+        let pf = parse_rogue(
+            "ai.rogue",
+            "// c\nnamespace UNDEAD\nai GHOST:\n    return WAIT()\n",
+        )
+        .unwrap();
+        let Entry::Code(c) = &pf.entries[0] else {
+            panic!()
+        };
         assert_eq!(c.namespace.as_deref(), Some("UNDEAD"));
         assert_eq!(c.lines[2], "ai GHOST:", "line numbers are kept");
     }

@@ -16,7 +16,11 @@ fn read_tree(root: &Path, dir: &Path, skip: &[&str], out: &mut Vec<(String, Stri
     for e in entries {
         let name = e.file_name().to_string_lossy().to_string();
         let p = e.path();
-        let rel = p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+        let rel = p
+            .strip_prefix(root)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
         if name.starts_with('.') || skip.contains(&rel.as_str()) {
             continue;
         }
@@ -35,7 +39,13 @@ fn stats(name: &str, v: &mut [Duration]) {
     v.sort();
     let sum: Duration = v.iter().sum();
     let p = |q: f64| v[((v.len() - 1) as f64 * q) as usize];
-    eprintln!("{name:>5}: n {:5}  mean {:7.3} ms  p95 {:7.3} ms  max {:7.3} ms", v.len(), sum.as_secs_f64() * 1e3 / v.len() as f64, p(0.95).as_secs_f64() * 1e3, p(1.0).as_secs_f64() * 1e3);
+    eprintln!(
+        "{name:>5}: n {:5}  mean {:7.3} ms  p95 {:7.3} ms  max {:7.3} ms",
+        v.len(),
+        sum.as_secs_f64() * 1e3 / v.len() as f64,
+        p(0.95).as_secs_f64() * 1e3,
+        p(1.0).as_secs_f64() * 1e3
+    );
 }
 
 fn main() {
@@ -78,7 +88,9 @@ fn main() {
             draw(&mut game, &mut draws, &mut app_draws);
         }
         now += Duration::from_millis(10);
-        game.push(rlml_app::events::Event::Key(termplate_core::keys::parse_binding(k).unwrap()));
+        game.push(rlml_app::events::Event::Key(
+            termplate_core::keys::parse_binding(k).unwrap(),
+        ));
         let t = Instant::now();
         game.input(now).unwrap();
         inputs.push(t.elapsed());

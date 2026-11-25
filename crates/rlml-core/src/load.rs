@@ -52,10 +52,16 @@ impl Files for MemFiles {
     }
 
     fn list(&self, root: Root, dir: &str) -> Option<Vec<String>> {
-        let prefix = if dir.is_empty() { String::new() } else { format!("{dir}/") };
+        let prefix = if dir.is_empty() {
+            String::new()
+        } else {
+            format!("{dir}/")
+        };
         let mut out: Vec<String> = Vec::new();
         for path in self.tree(root).keys() {
-            let Some(rest) = path.strip_prefix(&prefix) else { continue };
+            let Some(rest) = path.strip_prefix(&prefix) else {
+                continue;
+            };
             let entry = match rest.split_once('/') {
                 Some((folder, _)) => format!("{folder}/"),
                 None => rest.to_string(),
@@ -116,11 +122,17 @@ fn has_data_extension(name: &str) -> bool {
 
 /// Files a wildcard skips (D 3).
 fn skipped_by_wildcard(name: &str) -> bool {
-    name.starts_with('_') || name.starts_with('.') || ["README.md", "README.rlml", "README.rlml.md"].contains(&name)
+    name.starts_with('_')
+        || name.starts_with('.')
+        || ["README.md", "README.rlml", "README.rlml.md"].contains(&name)
 }
 
 fn join(dir: &str, path: &str) -> String {
-    let mut parts: Vec<&str> = if dir.is_empty() { vec![] } else { dir.split('/').collect() };
+    let mut parts: Vec<&str> = if dir.is_empty() {
+        vec![]
+    } else {
+        dir.split('/').collect()
+    };
     for p in path.split('/') {
         match p {
             "" | "." => {}
@@ -142,7 +154,9 @@ fn glob(files: &dyn Files, root: Root, pattern: &str) -> Option<Vec<String>> {
     let mut stack = vec![dir.to_string()];
     let mut found_dir = false;
     while let Some(d) = stack.pop() {
-        let Some(entries) = files.list(root, &d) else { continue };
+        let Some(entries) = files.list(root, &d) else {
+            continue;
+        };
         found_dir = true;
         for e in entries {
             if skipped_by_wildcard(e.trim_end_matches('/')) {
@@ -172,8 +186,16 @@ struct Loader<'a> {
 /// Loads the game from `main` (a path in the game root) and every file it
 /// includes.
 pub fn load(files: &dyn Files, main: &str) -> (Loaded, Report) {
-    let mut l = Loader { files, seen: HashSet::new(), out: Loaded::default(), report: Report::default() };
-    let place = Place { root: Root::Game, path: main.to_string() };
+    let mut l = Loader {
+        files,
+        seen: HashSet::new(),
+        out: Loaded::default(),
+        report: Report::default(),
+    };
+    let place = Place {
+        root: Root::Game,
+        path: main.to_string(),
+    };
     if files.read(Root::Game, main).is_none() {
         l.report.error(main, 0, "main file not found");
     } else {
@@ -195,7 +217,11 @@ impl Loader<'_> {
         // drawings count code points of the NFC form (D 8.1)
         let src: String = src.nfc().collect();
         self.out.files.push(place.clone());
-        let parsed = if place.path.ends_with(".rogue") { crate::syntax::parse_rogue(&name, &src) } else { crate::syntax::parse(&name, &src) };
+        let parsed = if place.path.ends_with(".rogue") {
+            crate::syntax::parse_rogue(&name, &src)
+        } else {
+            crate::syntax::parse(&name, &src)
+        };
         let parsed: ParsedFile = match parsed {
             Ok(p) => p,
             Err(errors) => {
@@ -206,7 +232,12 @@ impl Loader<'_> {
             }
         };
         if let Some((language, _)) = parsed.language {
-            self.out.languages.push(LanguageFile { file: name, language, namespace: parsed.namespace, texts: parsed.texts });
+            self.out.languages.push(LanguageFile {
+                file: name,
+                language,
+                namespace: parsed.namespace,
+                texts: parsed.texts,
+            });
             return;
         }
         for entry in parsed.entries {
@@ -225,14 +256,29 @@ impl Loader<'_> {
         ];
         if pattern.contains('*') {
             let last = pattern.rsplit('/').next().unwrap_or(pattern);
-            if pattern[..pattern.len() - last.len()].contains('*') || !(last == "*" || last == "**" || last.starts_with("*.") || last.starts_with("**.")) {
-                self.report.error(from_name, line, format!("unsupported wildcard `{pattern}`: use `dir/*`, `dir/**` or `dir/*.ext`"));
+            if pattern[..pattern.len() - last.len()].contains('*')
+                || !(last == "*"
+                    || last == "**"
+                    || last.starts_with("*.")
+                    || last.starts_with("**."))
+            {
+                self.report.error(
+                    from_name,
+                    line,
+                    format!(
+                        "unsupported wildcard `{pattern}`: use `dir/*`, `dir/**` or `dir/*.ext`"
+                    ),
+                );
                 return;
             }
             for (root, p) in phases {
                 if let Some(paths) = glob(self.files, root, &p) {
                     if paths.is_empty() {
-                        self.report.warning(from_name, line, format!("`include {pattern}` matches no files"));
+                        self.report.warning(
+                            from_name,
+                            line,
+                            format!("`include {pattern}` matches no files"),
+                        );
                     }
                     for path in paths {
                         self.file(Place { root, path });
@@ -240,7 +286,11 @@ impl Loader<'_> {
                     return;
                 }
             }
-            self.report.error(from_name, line, format!("`include {pattern}`: folder not found"));
+            self.report.error(
+                from_name,
+                line,
+                format!("`include {pattern}`: folder not found"),
+            );
             return;
         }
         if !has_data_extension(pattern) {
@@ -259,7 +309,14 @@ impl Loader<'_> {
                 tried.push(shown);
             }
         }
-        self.report.error(from_name, line, format!("`include {pattern}`: file not found (tried {})", tried.join(", ")));
+        self.report.error(
+            from_name,
+            line,
+            format!(
+                "`include {pattern}`: file not found (tried {})",
+                tried.join(", ")
+            ),
+        );
     }
 }
 
@@ -270,8 +327,14 @@ mod tests {
 
     fn mem(game: &[(&str, &str)], engine: &[(&str, &str)]) -> MemFiles {
         MemFiles {
-            game: game.iter().map(|(p, s)| (p.to_string(), s.to_string())).collect(),
-            engine: engine.iter().map(|(p, s)| (p.to_string(), s.to_string())).collect(),
+            game: game
+                .iter()
+                .map(|(p, s)| (p.to_string(), s.to_string()))
+                .collect(),
+            engine: engine
+                .iter()
+                .map(|(p, s)| (p.to_string(), s.to_string()))
+                .collect(),
         }
     }
 
@@ -289,7 +352,10 @@ mod tests {
     fn content_loads_at_the_include_line_once() {
         let f = mem(
             &[
-                ("game.rlml", "menu A\n- X\n\ninclude lib/b.rlml\ninclude lib/b.rlml\n\nmenu D\n- X\n"),
+                (
+                    "game.rlml",
+                    "menu A\n- X\n\ninclude lib/b.rlml\ninclude lib/b.rlml\n\nmenu D\n- X\n",
+                ),
                 ("lib/b.rlml", "menu B\n- X\n\ninclude c.rlml\n"),
                 ("lib/c.rlml", "menu C\n- X\n\ninclude b.rlml\n"),
             ],
@@ -304,12 +370,23 @@ mod tests {
     #[test]
     fn search_order_and_engine_library() {
         let f = mem(
-            &[("game.rlml", "include lib/std.rlml\ninclude lib/hp.rlml\n"), ("lib/hp.rlml", "menu GAME_HP\n- X\n")],
-            &[("lib/std.rlml", "include std/core.rlml\n"), ("lib/std/core.rlml", "menu CORE\n- X\n"), ("lib/hp.rlml", "menu STD_HP\n- X\n")],
+            &[
+                ("game.rlml", "include lib/std.rlml\ninclude lib/hp.rlml\n"),
+                ("lib/hp.rlml", "menu GAME_HP\n- X\n"),
+            ],
+            &[
+                ("lib/std.rlml", "include std/core.rlml\n"),
+                ("lib/std/core.rlml", "menu CORE\n- X\n"),
+                ("lib/hp.rlml", "menu STD_HP\n- X\n"),
+            ],
         );
         let (l, r) = load(&f, "game.rlml");
         assert!(r.0.is_empty(), "{r:?}");
-        assert_eq!(names(&l), ["CORE", "GAME_HP"], "the game's own lib/hp.rlml wins");
+        assert_eq!(
+            names(&l),
+            ["CORE", "GAME_HP"],
+            "the game's own lib/hp.rlml wins"
+        );
         assert_eq!(l.files[1].display(), "<engine>/lib/std.rlml");
     }
 
@@ -317,7 +394,10 @@ mod tests {
     fn wildcards_sort_and_skip() {
         let f = mem(
             &[
-                ("game.rlml", "include maps/*\ninclude content/**\ninclude logic/*.rogue\n"),
+                (
+                    "game.rlml",
+                    "include maps/*\ninclude content/**\ninclude logic/*.rogue\n",
+                ),
                 ("maps/b.rlml", "menu MB\n- X\n"),
                 ("maps/a.md", "menu MA\n- X\n"),
                 ("maps/_draft.rlml", "menu DRAFT\n- X\n"),
@@ -337,7 +417,13 @@ mod tests {
 
     #[test]
     fn language_files_are_kept_apart() {
-        let f = mem(&[("game.rlml", "include text/*\n"), ("text/fi.rlml", "language fi\nA.NAME a\n")], &[]);
+        let f = mem(
+            &[
+                ("game.rlml", "include text/*\n"),
+                ("text/fi.rlml", "language fi\nA.NAME a\n"),
+            ],
+            &[],
+        );
         let (l, _) = load(&f, "game.rlml");
         assert_eq!(l.languages[0].language, "fi");
         assert_eq!(l.languages[0].texts[0].key(), "A.NAME");
@@ -345,10 +431,19 @@ mod tests {
 
     #[test]
     fn errors() {
-        let f = mem(&[("game.rlml", "include lib/std.rlml\ninclude maps/*\ninclude a/*/b.rlml\ninclude x\n")], &[]);
+        let f = mem(
+            &[(
+                "game.rlml",
+                "include lib/std.rlml\ninclude maps/*\ninclude a/*/b.rlml\ninclude x\n",
+            )],
+            &[],
+        );
         let (_, r) = load(&f, "game.rlml");
         let msgs: Vec<&str> = r.0.iter().map(|d| d.message.as_str()).collect();
-        assert!(msgs[0].contains("file not found (tried lib/std.rlml, <engine>/lib/std.rlml)"), "{msgs:?}");
+        assert!(
+            msgs[0].contains("file not found (tried lib/std.rlml, <engine>/lib/std.rlml)"),
+            "{msgs:?}"
+        );
         assert!(msgs[1].contains("folder not found"));
         assert!(msgs[2].contains("unsupported wildcard"));
         assert!(msgs[3].contains("needs its extension"));

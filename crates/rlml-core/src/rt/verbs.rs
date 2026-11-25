@@ -37,13 +37,19 @@ fn words(e: &Expr, out: &mut BTreeSet<String>) {
             out.insert(w.clone());
         }
         ExprKind::List(xs) => xs.iter().for_each(|x| words(x, out)),
-        ExprKind::Field(b, _) | ExprKind::TileIndex(b, _) | ExprKind::Neg(b) | ExprKind::Not(b) => words(b, out),
+        ExprKind::Field(b, _) | ExprKind::TileIndex(b, _) | ExprKind::Neg(b) | ExprKind::Not(b) => {
+            words(b, out)
+        }
         ExprKind::Has { subject, .. } => words(subject, out),
         ExprKind::Call(f, args) => {
             words(f, out);
             args.iter().for_each(|a| words(&a.value, out));
         }
-        ExprKind::Subscript(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Is(a, b) | ExprKind::In(a, b) | ExprKind::Where(a, b) => {
+        ExprKind::Subscript(a, b)
+        | ExprKind::Binary(_, a, b)
+        | ExprKind::Is(a, b)
+        | ExprKind::In(a, b)
+        | ExprKind::Where(a, b) => {
             words(a, out);
             words(b, out);
         }
@@ -71,7 +77,11 @@ pub fn deps_of(p: &Param, params: &[Param]) -> BTreeSet<String> {
         Some(Source::Ask(Some(e))) => words(e, &mut ws),
         _ => {}
     }
-    params.iter().filter(|q| q.name != p.name && ws.contains(&q.name)).map(|q| q.name.clone()).collect()
+    params
+        .iter()
+        .filter(|q| q.name != p.name && ws.contains(&q.name))
+        .map(|q| q.name.clone())
+        .collect()
 }
 
 /// Is a parameter clickable: `aim`, `from`, or `ask` of `dir` or `pos`?
@@ -86,7 +96,10 @@ pub fn clickable(p: &Param) -> bool {
 /// A ring among the sources of a command's parameters, as the names in
 /// it, for the load check (M 2.5).
 pub fn source_ring(params: &[Param]) -> Option<Vec<String>> {
-    let deps: Vec<(String, BTreeSet<String>)> = params.iter().map(|p| (p.name.clone(), deps_of(p, params))).collect();
+    let deps: Vec<(String, BTreeSet<String>)> = params
+        .iter()
+        .map(|p| (p.name.clone(), deps_of(p, params)))
+        .collect();
     // a parameter is settled when all it names are; what never settles is a ring
     let mut settled: BTreeSet<String> = BTreeSet::new();
     loop {
@@ -100,7 +113,11 @@ pub fn source_ring(params: &[Param]) -> Option<Vec<String>> {
             break;
         }
     }
-    let ring: Vec<String> = deps.into_iter().map(|(n, _)| n).filter(|n| !settled.contains(n)).collect();
+    let ring: Vec<String> = deps
+        .into_iter()
+        .map(|(n, _)| n)
+        .filter(|n| !settled.contains(n))
+        .collect();
     (!ring.is_empty()).then_some(ring)
 }
 
@@ -113,7 +130,18 @@ pub fn toward(a: Pos, b: Pos) -> Option<Dir> {
     // y grows down: north is -y; sectors of 45° from east
     let angle = (-dy).atan2(dx).to_degrees();
     let i = (((angle + 360.0 + 22.5) % 360.0) / 45.0) as usize % 8;
-    Some([Dir::East, Dir::Northeast, Dir::North, Dir::Northwest, Dir::West, Dir::Southwest, Dir::South, Dir::Southeast][i])
+    Some(
+        [
+            Dir::East,
+            Dir::Northeast,
+            Dir::North,
+            Dir::Northwest,
+            Dir::West,
+            Dir::Southwest,
+            Dir::South,
+            Dir::Southeast,
+        ][i],
+    )
 }
 
 /// What a player's command needs before it runs (M 8, RS 7.1): the next
@@ -128,9 +156,16 @@ pub enum Ask {
     /// Filled without asking: `count` is 1 without the repeat count.
     Given(String, Value),
     /// `from`: a list menu of the members.
-    From { name: String, members: Vec<EntityId> },
+    From {
+        name: String,
+        members: Vec<EntityId>,
+    },
     /// `aim N [at SET]`: a cell in range; the candidates nearest first.
-    Aim { name: String, range: i64, candidates: Vec<Pos> },
+    Aim {
+        name: String,
+        range: i64,
+        candidates: Vec<Pos>,
+    },
     /// `ask` of `dir` or `pos`: a direction, the cell next to the actor
     /// that way for `pos`.
     Direction { name: String, pos: bool },
@@ -142,9 +177,18 @@ impl World<'_> {
     /// The next parameter of `actor`'s command `full` to ask, after the
     /// `given` arguments (named, or by position). A command alias or
     /// another kind asks nothing (M 8).
-    pub fn next_ask(&mut self, actor: EntityId, full: &str, given: &[(Option<String>, Value)]) -> RtResult<Ask> {
-        let Some(params) = self.command_params(full) else { return Ok(Ask::Ready) };
-        let Some(at) = self.s.at(actor) else { return Ok(Ask::Ready) };
+    pub fn next_ask(
+        &mut self,
+        actor: EntityId,
+        full: &str,
+        given: &[(Option<String>, Value)],
+    ) -> RtResult<Ask> {
+        let Some(params) = self.command_params(full) else {
+            return Ok(Ask::Ready);
+        };
+        let Some(at) = self.s.at(actor) else {
+            return Ok(Ask::Ready);
+        };
         let (_, ns, file) = self.decl_of(full).ok_or("no command")?;
         // the given values by parameter name
         let mut named: Vec<(String, Value)> = Vec::new();
@@ -178,10 +222,19 @@ impl World<'_> {
                 Source::Count => Ask::Given(p.name.clone(), Value::Number(1)),
                 Source::From(e) => {
                     let members: Vec<EntityId> = match self.eval(e, &mut env)? {
-                        Value::Collection(v) | Value::List(v) => v.iter().filter_map(Value::as_entity).collect(),
+                        Value::Collection(v) | Value::List(v) => {
+                            v.iter().filter_map(Value::as_entity).collect()
+                        }
                         _ => vec![],
                     };
-                    if members.is_empty() { Ask::Fails } else { Ask::From { name: p.name.clone(), members } }
+                    if members.is_empty() {
+                        Ask::Fails
+                    } else {
+                        Ask::From {
+                            name: p.name.clone(),
+                            members,
+                        }
+                    }
                 }
                 Source::Aim { range, at: within } => {
                     let range = match self.eval(range, &mut env)? {
@@ -199,16 +252,28 @@ impl World<'_> {
                                     _ => None,
                                 })
                                 .collect(),
-                            v => self.area(&v, &env, p.pos).map(|a| a.cells().to_vec()).unwrap_or_default(),
+                            v => self
+                                .area(&v, &env, p.pos)
+                                .map(|a| a.cells().to_vec())
+                                .unwrap_or_default(),
                         },
                     };
                     candidates.retain(|c| at.distance(*c) <= range);
                     candidates.sort_by_key(|c| (at.distance(*c), c.y, c.x));
                     candidates.dedup();
-                    Ask::Aim { name: p.name.clone(), range, candidates }
+                    Ask::Aim {
+                        name: p.name.clone(),
+                        range,
+                        candidates,
+                    }
                 }
-                Source::Ask(_) if matches!(p.ty.base.as_str(), "dir" | "pos") => Ask::Direction { name: p.name.clone(), pos: p.ty.base == "pos" },
-                Source::Ask(_) => Ask::Field { name: p.name.clone() },
+                Source::Ask(_) if matches!(p.ty.base.as_str(), "dir" | "pos") => Ask::Direction {
+                    name: p.name.clone(),
+                    pos: p.ty.base == "pos",
+                },
+                Source::Ask(_) => Ask::Field {
+                    name: p.name.clone(),
+                },
             });
         }
         Ok(Ask::Ready)
@@ -225,19 +290,34 @@ impl World<'_> {
 
     /// A command's clickable parameters with what their sources name.
     pub fn verb_params(&self, full: &str) -> Vec<VerbParam> {
-        let Some(params) = self.command_params(full) else { return vec![] };
-        params.iter().filter(|p| clickable(p)).map(|p| VerbParam { name: p.name.clone(), deps: deps_of(p, &params) }).collect()
+        let Some(params) = self.command_params(full) else {
+            return vec![];
+        };
+        params
+            .iter()
+            .filter(|p| clickable(p))
+            .map(|p| VerbParam {
+                name: p.name.clone(),
+                deps: deps_of(p, &params),
+            })
+            .collect()
     }
 
     /// Is the command hidden from the verb coin (`noverb`, RS 7.1)?
     pub fn is_noverb(&self, full: &str) -> bool {
-        self.decl_of(full).is_some_and(|(item, _, _)| matches!(item.kind, ItemKind::Command { noverb: true, .. }))
+        self.decl_of(full)
+            .is_some_and(|(item, _, _)| matches!(item.kind, ItemKind::Command { noverb: true, .. }))
     }
 
     /// The verb coin (M 8.1): the candidates, in order, that `t` fits for
     /// one of their free parameters, each with that fill. A command
     /// without clickable parameters fits nothing.
-    pub fn coin(&mut self, actor: EntityId, candidates: &[String], t: Target) -> RtResult<Vec<(String, (String, Value))>> {
+    pub fn coin(
+        &mut self,
+        actor: EntityId,
+        candidates: &[String],
+        t: Target,
+    ) -> RtResult<Vec<(String, (String, Value))>> {
         let mut out = Vec::new();
         for c in candidates {
             if out.iter().any(|(o, _): &(String, _)| o == c) {
@@ -252,18 +332,33 @@ impl World<'_> {
 
     /// Has the command a clickable parameter not filled yet?
     pub fn verb_open(&self, full: &str, filled: &[(String, Value)]) -> bool {
-        self.verb_params(full).iter().any(|p| !filled.iter().any(|(n, _)| *n == p.name))
+        self.verb_params(full)
+            .iter()
+            .any(|p| !filled.iter().any(|(n, _)| *n == p.name))
     }
 
     /// The parameter a click on `t` fills for `actor`'s command, and its
     /// value: the first free one it fits (M 8.1). `None`: it fits none.
     /// The sources are queries on the filled values, so nothing changes.
-    pub fn fill_verb(&mut self, actor: EntityId, full: &str, filled: &[(String, Value)], t: Target) -> RtResult<Option<(String, Value)>> {
-        let Some(params) = self.command_params(full) else { return Ok(None) };
-        let Some(at) = self.s.at(actor) else { return Ok(None) };
+    pub fn fill_verb(
+        &mut self,
+        actor: EntityId,
+        full: &str,
+        filled: &[(String, Value)],
+        t: Target,
+    ) -> RtResult<Option<(String, Value)>> {
+        let Some(params) = self.command_params(full) else {
+            return Ok(None);
+        };
+        let Some(at) = self.s.at(actor) else {
+            return Ok(None);
+        };
         let (_, ns, file) = self.decl_of(full).ok_or("no command")?;
         let is_filled = |n: &str| filled.iter().any(|(f, _)| f == n);
-        for p in params.iter().filter(|p| clickable(p) && !is_filled(&p.name)) {
+        for p in params
+            .iter()
+            .filter(|p| clickable(p) && !is_filled(&p.name))
+        {
             if !deps_of(p, &params).iter().all(|d| is_filled(d)) {
                 continue;
             }
@@ -288,7 +383,13 @@ impl World<'_> {
             Target::Cell(c) => {
                 let view = self.player_view(c.map);
                 let seen = view.contains(&(c.x, c.y));
-                let es: Vec<EntityId> = self.s.entities_at(c).into_iter().rev().filter(|&e| seen || self.s.get(e).get("revealed").is_some()).collect();
+                let es: Vec<EntityId> = self
+                    .s
+                    .entities_at(c)
+                    .into_iter()
+                    .rev()
+                    .filter(|&e| seen || self.s.get(e).get("revealed").is_some())
+                    .collect();
                 (Some(c), es)
             }
             Target::Entity(e) => (None, vec![e]),
@@ -300,7 +401,10 @@ impl World<'_> {
                     Value::Collection(v) | Value::List(v) => v,
                     _ => vec![],
                 };
-                entities.into_iter().find(|e| members.contains(&Value::Entity(*e))).map(Value::Entity)
+                entities
+                    .into_iter()
+                    .find(|e| members.contains(&Value::Entity(*e)))
+                    .map(Value::Entity)
             }
             Some(Source::Aim { range, at: within }) => {
                 let Some(c) = cell else { return Ok(None) };
@@ -313,7 +417,10 @@ impl World<'_> {
                 }
                 if let Some(w) = within {
                     let ok = match self.eval(w, env)? {
-                        Value::Collection(v) | Value::List(v) => entities.iter().any(|e| v.contains(&Value::Entity(*e))) || v.contains(&Value::Pos(c)),
+                        Value::Collection(v) | Value::List(v) => {
+                            entities.iter().any(|e| v.contains(&Value::Entity(*e)))
+                                || v.contains(&Value::Pos(c))
+                        }
                         v => self.area(&v, env, p.pos).is_ok_and(|a| a.contains(c)),
                     };
                     if !ok {
@@ -324,8 +431,14 @@ impl World<'_> {
             }
             Some(Source::Ask(_)) => {
                 let Some(c) = cell else { return Ok(None) };
-                let Some(d) = toward(at, c) else { return Ok(None) };
-                Some(if p.ty.base == "pos" { Value::Pos(at.step(d)) } else { Value::Dir(d) })
+                let Some(d) = toward(at, c) else {
+                    return Ok(None);
+                };
+                Some(if p.ty.base == "pos" {
+                    Value::Pos(at.step(d))
+                } else {
+                    Value::Dir(d)
+                })
             }
             _ => None,
         })

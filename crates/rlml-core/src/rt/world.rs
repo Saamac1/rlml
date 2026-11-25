@@ -117,12 +117,20 @@ pub struct LogEntry {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Pause {
     /// `say`: a modal window until the player confirms.
-    Say { key: String, args: Vec<(String, Value)>, speaker: Option<EntityId> },
+    Say {
+        key: String,
+        args: Vec<(String, Value)>,
+        speaker: Option<EntityId>,
+    },
     /// `wait confirm`: a confirmation without a text.
     Confirm,
     /// `choice`: the items as the player sees them, and the options to go
     /// on with (RS 9.7). `scene` names the item keys `<scene>.<item>`.
-    Choice { scene: String, items: Vec<ChoiceItem>, options: Vec<crate::rs::ast::ChoiceOption> },
+    Choice {
+        scene: String,
+        items: Vec<ChoiceItem>,
+        options: Vec<crate::rs::ast::ChoiceOption>,
+    },
     /// `open MENU(…)`: the menu or panel, until it closes; `into` takes
     /// `x = open …`'s value.
     Open { name: String, into: Option<String> },
@@ -192,24 +200,61 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], pause: None, scene_skipping: false, saves: SaveCalls::default(), depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area(), looks: Default::default(), flags: Default::default(), profile_touched: Default::default(), profile_start: vec![], held_view: None }
+        World {
+            m,
+            s,
+            rng: Rng::from_seed(seed),
+            created: vec![],
+            warnings: vec![],
+            log: vec![],
+            sounds: vec![],
+            travels: vec![],
+            pause: None,
+            scene_skipping: false,
+            saves: SaveCalls::default(),
+            depth: 0,
+            switch: None,
+            sounds_made: 0,
+            heard_mark: Default::default(),
+            heard: Default::default(),
+            last_view: None,
+            map_area: m.map_area(),
+            looks: Default::default(),
+            flags: Default::default(),
+            profile_touched: Default::default(),
+            profile_start: vec![],
+            held_view: None,
+        }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {
-        self.m.defs.get(full).and_then(|d| d.full.rsplit_once('.').map(|(n, _)| n.to_string()))
+        self.m
+            .defs
+            .get(full)
+            .and_then(|d| d.full.rsplit_once('.').map(|(n, _)| n.to_string()))
     }
 
     /// A field's type, from the component's definition or the engine's.
     fn field_ty(&self, component: &str, field: &str) -> Ty {
         if names::is_vocabulary(component) {
-            return crate::rs::sigs::engine_component_field(component, field).unwrap_or(Ty::Unknown);
+            return crate::rs::sigs::engine_component_field(component, field)
+                .unwrap_or(Ty::Unknown);
         }
-        let Some(def) = self.m.defs.get(component) else { return Ty::Unknown };
+        let Some(def) = self.m.defs.get(component) else {
+            return Ty::Unknown;
+        };
         let ns = self.component_ns(component);
         component_fields(def)
             .into_iter()
             .find(|f| f.name == field)
-            .map(|f| types::parse(&f.ty, &|n| self.m.resolve(ns.as_deref(), n).is_ok_and(|d| d.kind == Kind::Component)).unwrap_or(Ty::Unknown))
+            .map(|f| {
+                types::parse(&f.ty, &|n| {
+                    self.m
+                        .resolve(ns.as_deref(), n)
+                        .is_ok_and(|d| d.kind == Kind::Component)
+                })
+                .unwrap_or(Ty::Unknown)
+            })
             .unwrap_or(Ty::Unknown)
     }
 
@@ -217,7 +262,11 @@ impl<'m> World<'m> {
         if names::is_vocabulary(component) {
             return fields::engine_component(component).unwrap_or_default();
         }
-        self.m.defs.get(component).map(component_fields).unwrap_or_default()
+        self.m
+            .defs
+            .get(component)
+            .map(component_fields)
+            .unwrap_or_default()
     }
 
     // ---- data values (D 5.1) ----
@@ -234,7 +283,11 @@ impl<'m> World<'m> {
         let members = self.s.players().into_iter().chain(self.s.player);
         members.filter_map(|e| self.s.at(e)).any(|p| {
             let name = &self.s.maps[p.map].name;
-            self.m.defs.get(name).and_then(|d| d.block()).is_some_and(|b| b.has_arg("nosave"))
+            self.m
+                .defs
+                .get(name)
+                .and_then(|d| d.block())
+                .is_some_and(|b| b.has_arg("nosave"))
         })
     }
 
@@ -246,23 +299,37 @@ impl<'m> World<'m> {
         let words = toks(t);
         let one = words.first().map(|w| w.text.as_str()).unwrap_or("");
         Ok(match ty {
-            Ty::Number | Ty::Dice | Ty::Percent | Ty::Range => number_value(one).ok_or_else(|| format!("`{t}` is not a number"))?,
+            Ty::Number | Ty::Dice | Ty::Percent | Ty::Range => {
+                number_value(one).ok_or_else(|| format!("`{t}` is not a number"))?
+            }
             Ty::Bool => Value::Bool(one == "true"),
             Ty::Text => Value::Text(words.first().map(|w| w.text.clone()).unwrap_or_default()),
-            Ty::Dir => Value::Dir(Dir::parse(one).ok_or_else(|| format!("`{one}` is not a direction"))?),
-            Ty::Side => Value::Side(Side::parse(one).ok_or_else(|| format!("`{one}` is not a relative direction"))?),
+            Ty::Dir => {
+                Value::Dir(Dir::parse(one).ok_or_else(|| format!("`{one}` is not a direction"))?)
+            }
+            Ty::Side => Value::Side(
+                Side::parse(one).ok_or_else(|| format!("`{one}` is not a relative direction"))?,
+            ),
             Ty::Label => Value::Name(one.to_string()),
             Ty::Name => Value::Name(self.full_name(one, ns)),
             Ty::Deck => Value::Deck(self.full_name(one, ns)),
             Ty::Table => Value::Table(self.full_name(one, ns)),
             Ty::Card => Value::Card(self.card(&words, ns)?),
             Ty::Area => Value::Area(Area::default()),
-            Ty::List(m) => Value::List(words.iter().map(|w| self.data_value(m, &w.text, ns)).collect::<RtResult<_>>()?),
+            Ty::List(m) => Value::List(
+                words
+                    .iter()
+                    .map(|w| self.data_value(m, &w.text, ns))
+                    .collect::<RtResult<_>>()?,
+            ),
             Ty::Dict(k, v) => {
                 let mut pairs = Vec::new();
                 for pair in words.chunks(2) {
                     if let [a, b] = pair {
-                        pairs.push((self.data_value(k, &a.text, ns)?, self.data_value(v, &b.text, ns)?));
+                        pairs.push((
+                            self.data_value(k, &a.text, ns)?,
+                            self.data_value(v, &b.text, ns)?,
+                        ));
                     }
                 }
                 Value::Dict(pairs)
@@ -290,7 +357,8 @@ impl<'m> World<'m> {
             for item in b.items.iter().filter(|i| !names::is_vocabulary(i.key())) {
                 let ns = item.namespace.as_deref();
                 let row = Values { m, ns }.row(item)?;
-                let mut cv = self.given_fields(&row.component, &row.values[..row.given], ns, item)?;
+                let mut cv =
+                    self.given_fields(&row.component, &row.values[..row.given], ns, item)?;
                 for f in self.field_defs(&row.component) {
                     if cv.get(&f.name).is_none() {
                         let ty = self.field_ty(&row.component, &f.name);
@@ -322,15 +390,28 @@ impl<'m> World<'m> {
     /// N long, dropping the last in order or, without `sort`, the oldest.
     pub fn keep_list(&self, component: &str, field: &str, v: Value) -> Value {
         let Value::List(mut items) = v else { return v };
-        let Some(f) = self.field_defs(component).into_iter().find(|f| f.name == field) else { return Value::List(items) };
+        let Some(f) = self
+            .field_defs(component)
+            .into_iter()
+            .find(|f| f.name == field)
+        else {
+            return Value::List(items);
+        };
         let words: Vec<&str> = f.ty.split_whitespace().collect();
         if words.first() != Some(&"list") {
             return Value::List(items);
         }
-        let max = words.iter().skip(2).take_while(|w| **w != "sort").find_map(|w| w.parse::<usize>().ok());
+        let max = words
+            .iter()
+            .skip(2)
+            .take_while(|w| **w != "sort")
+            .find_map(|w| w.parse::<usize>().ok());
         let sort = words.iter().position(|w| *w == "sort");
         if let Some(i) = sort {
-            let by = words.get(i + 1).filter(|w| **w != "desc").map(|w| w.to_string());
+            let by = words
+                .get(i + 1)
+                .filter(|w| **w != "desc")
+                .map(|w| w.to_string());
             let desc = words[i..].contains(&"desc");
             let key = |v: &Value| match (&by, v) {
                 (Some(k), Value::Component(c)) => c.get(k).cloned().unwrap_or(Value::None),
@@ -370,9 +451,19 @@ impl<'m> World<'m> {
 
     /// A data card: `TARGET [count] [COMPONENT values …]` (D 6.4).
     pub fn card(&self, words: &[Token], ns: Option<&str>) -> RtResult<Card> {
-        let Some(first) = words.first() else { return Ok(Card { entity: None, count: None, overrides: vec![] }) };
+        let Some(first) = words.first() else {
+            return Ok(Card {
+                entity: None,
+                count: None,
+                overrides: vec![],
+            });
+        };
         if first.text == "none" {
-            return Ok(Card { entity: None, count: None, overrides: vec![] });
+            return Ok(Card {
+                entity: None,
+                count: None,
+                overrides: vec![],
+            });
         }
         let target = self.full_name(&first.text, ns);
         let mut rest = &words[1..];
@@ -380,7 +471,11 @@ impl<'m> World<'m> {
         if let Some(n) = rest.first()
             && (n.text == "all" || number_value(&n.text).is_some())
         {
-            count = Some(Box::new(if n.text == "all" { Value::All } else { number_value(&n.text).unwrap() }));
+            count = Some(Box::new(if n.text == "all" {
+                Value::All
+            } else {
+                number_value(&n.text).unwrap()
+            }));
             rest = &rest[1..];
         }
         if rest.first().is_some_and(|t| t.text == "copy") {
@@ -391,10 +486,14 @@ impl<'m> World<'m> {
             if names::is_vocabulary(w) {
                 fields::engine_component(w).is_some()
             } else {
-                self.m.resolve(ns, w).is_ok_and(|d| d.kind == Kind::Component)
+                self.m
+                    .resolve(ns, w)
+                    .is_ok_and(|d| d.kind == Kind::Component)
             }
         };
-        let starts: Vec<usize> = (0..rest.len()).filter(|&i| is_comp(&rest[i].text)).collect();
+        let starts: Vec<usize> = (0..rest.len())
+            .filter(|&i| is_comp(&rest[i].text))
+            .collect();
         let mut overrides = Vec::new();
         for (k, &s) in starts.iter().enumerate() {
             let e = starts.get(k + 1).copied().unwrap_or(rest.len());
@@ -404,21 +503,41 @@ impl<'m> World<'m> {
             let cv = self.given_fields(&row.component, &row.values[..row.given], ns, &item)?;
             overrides.push((row.component.clone(), Value::Component(cv)));
         }
-        Ok(Card { entity: Some(target), count, overrides })
+        Ok(Card {
+            entity: Some(target),
+            count,
+            overrides,
+        })
     }
 
     /// A component value with only the fields given on a row.
-    fn given_fields(&self, component: &str, given: &[(String, String)], ns: Option<&str>, item: &RawItem) -> RtResult<ComponentValue> {
-        let mut cv = ComponentValue { name: component.to_string(), fields: vec![] };
+    fn given_fields(
+        &self,
+        component: &str,
+        given: &[(String, String)],
+        ns: Option<&str>,
+        item: &RawItem,
+    ) -> RtResult<ComponentValue> {
+        let mut cv = ComponentValue {
+            name: component.to_string(),
+            fields: vec![],
+        };
         if component == "blocks" {
-            let values = item.tokens[1..].iter().map(|t| Value::Name(t.text.clone())).collect();
+            let values = item.tokens[1..]
+                .iter()
+                .map(|t| Value::Name(t.text.clone()))
+                .collect();
             cv.fields.push(("values".into(), Value::List(values)));
             return Ok(cv);
         }
         for (f, text) in given {
             let ty = self.field_ty(component, f);
             // a collection's initial content is a draw, kept as written
-            let v = if matches!(ty, Ty::Collection(_)) { Value::Text(text.clone()) } else { self.data_value(&ty, text, ns)? };
+            let v = if matches!(ty, Ty::Collection(_)) {
+                Value::Text(text.clone())
+            } else {
+                self.data_value(&ty, text, ns)?
+            };
             cv.fields.push((f.clone(), v));
         }
         Ok(cv)
@@ -428,12 +547,20 @@ impl<'m> World<'m> {
     /// `shuffled` deck reshuffling its discards when the pile runs out
     /// (D 6.2).
     pub fn draw_deck(&mut self, deck: &str, n: Option<usize>) -> RtResult<Vec<Card>> {
-        let shuffled = self.m.defs.get(deck).and_then(Def::block).is_some_and(|b| b.has_arg("shuffled"));
+        let shuffled = self
+            .m
+            .defs
+            .get(deck)
+            .and_then(Def::block)
+            .is_some_and(|b| b.has_arg("shuffled"));
         let mut out = Vec::new();
         let all = n.is_none();
         let want = n.unwrap_or(usize::MAX);
         while out.len() < want {
-            let state = self.s.deck_mut(deck).ok_or_else(|| format!("no deck `{deck}`"))?;
+            let state = self
+                .s
+                .deck_mut(deck)
+                .ok_or_else(|| format!("no deck `{deck}`"))?;
             if state.draw.is_empty() {
                 if all || !shuffled || state.discard.is_empty() {
                     break;
@@ -453,8 +580,15 @@ impl<'m> World<'m> {
 
     /// Rolls a table and gives the row's cards (D 6.5).
     pub fn draw_table(&mut self, table: &str) -> RtResult<Vec<Card>> {
-        let def = self.m.defs.get(table).ok_or_else(|| format!("no table `{table}`"))?;
-        let b = def.block().ok_or_else(|| format!("`{table}` is not a data table"))?.clone();
+        let def = self
+            .m
+            .defs
+            .get(table)
+            .ok_or_else(|| format!("no table `{table}`"))?;
+        let b = def
+            .block()
+            .ok_or_else(|| format!("`{table}` is not a data table"))?
+            .clone();
         let ns = b.namespace.clone();
         let dice = b.args.first().map(|t| t.text.clone()).unwrap_or_default();
         let roll = match number_value(&dice) {
@@ -477,8 +611,14 @@ impl<'m> World<'m> {
 
     /// Spawns a card: its count of separate instances, a nested deck or
     /// table drawn (D 6.2, M 3.2). `place` gives each instance its place.
-    pub fn spawn_card(&mut self, card: &Card, place: &dyn Fn(&State) -> Place) -> RtResult<Vec<EntityId>> {
-        let Some(target) = &card.entity else { return Ok(vec![]) };
+    pub fn spawn_card(
+        &mut self,
+        card: &Card,
+        place: &dyn Fn(&State) -> Place,
+    ) -> RtResult<Vec<EntityId>> {
+        let Some(target) = &card.entity else {
+            return Ok(vec![]);
+        };
         let count = match card.count.as_deref() {
             None => 1,
             Some(Value::All) => usize::MAX,
@@ -531,11 +671,19 @@ impl<'m> World<'m> {
     /// child's row replaces the parent's for the same component, and
     /// `drop` removes it (D 5.2).
     fn entity_rows(&self, full: &str) -> RtResult<Vec<(String, RawItem)>> {
-        let def = self.m.defs.get(full).ok_or_else(|| format!("no entity `{full}`"))?;
-        let b = def.block().ok_or_else(|| format!("`{full}` is not a data entity"))?;
+        let def = self
+            .m
+            .defs
+            .get(full)
+            .ok_or_else(|| format!("no entity `{full}`"))?;
+        let b = def
+            .block()
+            .ok_or_else(|| format!("`{full}` is not a data entity"))?;
         let mut rows = match b.arg_after("extends") {
             Some(parent) => {
-                let p = self.m.resolve_kind(b.namespace.as_deref(), parent, &[Kind::Entity])?;
+                let p = self
+                    .m
+                    .resolve_kind(b.namespace.as_deref(), parent, &[Kind::Entity])?;
                 if p.full == full {
                     return Err(format!("`{full}` extends itself"));
                 }
@@ -543,13 +691,18 @@ impl<'m> World<'m> {
             }
             None => vec![],
         };
-        let v = Values { m: self.m, ns: b.namespace.as_deref() };
+        let v = Values {
+            m: self.m,
+            ns: b.namespace.as_deref(),
+        };
         for item in &b.items {
             let (marker, row) = item.marker();
             let comp = if names::is_vocabulary(row.key()) {
                 row.key().to_string()
             } else {
-                v.row(&row).map(|r| r.component).unwrap_or_else(|_| row.key().to_string())
+                v.row(&row)
+                    .map(|r| r.component)
+                    .unwrap_or_else(|_| row.key().to_string())
             };
             match marker {
                 Modifier::Drop => rows.retain(|(c, _)| c != &comp),
@@ -564,14 +717,25 @@ impl<'m> World<'m> {
 
     /// Creates an instance of entity `full` with card overrides at `place`
     /// (M 3.2 steps 1–8; step 7, `created`, is queued).
-    pub fn spawn(&mut self, full: &str, overrides: &[(String, Value)], place: Place) -> RtResult<EntityId> {
+    pub fn spawn(
+        &mut self,
+        full: &str,
+        overrides: &[(String, Value)],
+        place: Place,
+    ) -> RtResult<EntityId> {
         // 1. components through the inheritance chain
         let rows = self.entity_rows(full)?;
         let mut comps = Vec::new();
         for (comp, item) in &rows {
             let ns = item.namespace.as_deref();
-            let row = Values { m: self.m, ns }.row(item).map_err(|e| format!("{}:{}: {e}", item.file, item.line))?;
-            comps.push((comp.clone(), self.given_fields(comp, &row.values[..row.given], ns, item)?, item.namespace.clone()));
+            let row = Values { m: self.m, ns }
+                .row(item)
+                .map_err(|e| format!("{}:{}: {e}", item.file, item.line))?;
+            comps.push((
+                comp.clone(),
+                self.given_fields(comp, &row.values[..row.given], ns, item)?,
+                item.namespace.clone(),
+            ));
         }
         // 2. overrides
         for (comp, value) in overrides {
@@ -579,8 +743,15 @@ impl<'m> World<'m> {
                 Value::Component(cv) => cv.clone(),
                 // a one-field component's value given directly (RS 2.8)
                 v => {
-                    let field = self.field_defs(comp).first().map(|f| f.name.clone()).unwrap_or_default();
-                    ComponentValue { name: comp.clone(), fields: vec![(field, v.clone())] }
+                    let field = self
+                        .field_defs(comp)
+                        .first()
+                        .map(|f| f.name.clone())
+                        .unwrap_or_default();
+                    ComponentValue {
+                        name: comp.clone(),
+                        fields: vec![(field, v.clone())],
+                    }
                 }
             };
             match comps.iter_mut().find(|(c, _, _)| c == comp) {
@@ -660,26 +831,54 @@ impl<'m> World<'m> {
 
     /// `movement.speed`, 10 without it (M 6.1.3).
     pub fn speed(&self, e: EntityId) -> i64 {
-        self.s.get(e).get("movement").and_then(|m| m.get("speed")).and_then(Value::as_number).unwrap_or(10)
+        self.s
+            .get(e)
+            .get("movement")
+            .and_then(|m| m.get("speed"))
+            .and_then(Value::as_number)
+            .unwrap_or(10)
     }
 
     /// Fills a collection field with its initial content: a draw from a
     /// deck or table, or an entity card (D 5.4).
-    fn fill(&mut self, holder: EntityId, comp: &str, field: &str, draw: &str, ns: Option<&str>) -> RtResult<()> {
+    fn fill(
+        &mut self,
+        holder: EntityId,
+        comp: &str,
+        field: &str,
+        draw: &str,
+        ns: Option<&str>,
+    ) -> RtResult<()> {
         let words = toks(draw);
         if words.is_empty() {
             return Ok(());
         }
         let card = self.card(&words, ns)?;
         let (c, f) = (comp.to_string(), field.to_string());
-        let size = self.field_defs(comp).into_iter().find(|fd| fd.name == field).and_then(|fd| fd.ty.split_whitespace().nth(1).and_then(|n| n.parse::<usize>().ok()));
-        let members = self.spawn_card(&card, &|s: &State| Place::In { holder, component: c.clone(), field: f.clone(), slot: s.free_slot(holder, &c, &f) })?;
+        let size = self
+            .field_defs(comp)
+            .into_iter()
+            .find(|fd| fd.name == field)
+            .and_then(|fd| {
+                fd.ty
+                    .split_whitespace()
+                    .nth(1)
+                    .and_then(|n| n.parse::<usize>().ok())
+            });
+        let members = self.spawn_card(&card, &|s: &State| Place::In {
+            holder,
+            component: c.clone(),
+            field: f.clone(),
+            slot: s.free_slot(holder, &c, &f),
+        })?;
         if let Some(n) = size {
             for extra in members.iter().skip(n) {
                 self.s.get_mut(*extra).alive = false;
                 self.s.get_mut(*extra).place = Place::Nowhere;
                 self.created.retain(|x| x != extra);
-                self.warnings.push(format!("collection `{comp}.{field}` is full ({n} slots); a member was left out (D 5.4)"));
+                self.warnings.push(format!(
+                    "collection `{comp}.{field}` is full ({n} slots); a member was left out (D 5.4)"
+                ));
             }
         }
         Ok(())
@@ -692,20 +891,45 @@ impl<'m> World<'m> {
         if let Some(id) = self.s.map_id(full) {
             return Ok(id);
         }
-        let def = self.m.defs.get(full).ok_or_else(|| format!("no map `{full}`"))?;
-        let b = def.block().ok_or_else(|| format!("map `{full}` is generated; generators are not supported yet"))?.clone();
+        let def = self
+            .m
+            .defs
+            .get(full)
+            .ok_or_else(|| format!("no map `{full}`"))?;
+        let b = def
+            .block()
+            .ok_or_else(|| format!("map `{full}` is generated; generators are not supported yet"))?
+            .clone();
         let (drawing, mut legend, at_rows) = self.map_parts(&b)?;
         if let Some(base) = b.arg_after("extends") {
-            let base = self.m.resolve_kind(b.namespace.as_deref(), base, &[Kind::Map])?;
+            let base = self
+                .m
+                .resolve_kind(b.namespace.as_deref(), base, &[Kind::Map])?;
             let (_, base_legend, _) = self.map_parts(base.block().unwrap())?;
             let own: Vec<char> = legend.iter().map(|(c, _)| *c).collect();
-            legend = base_legend.into_iter().filter(|(c, _)| !own.contains(c)).chain(legend).collect();
+            legend = base_legend
+                .into_iter()
+                .filter(|(c, _)| !own.contains(c))
+                .chain(legend)
+                .collect();
         }
-        let size = b.arg_after("size").and_then(|s| s.split_once('x')).and_then(|(w, h)| Some((w.parse::<i32>().ok()?, h.parse::<i32>().ok()?)));
-        let (w, h) = size.unwrap_or((drawing.iter().map(|r| r.chars().count()).max().unwrap_or(0) as i32, drawing.len() as i32));
+        let size = b
+            .arg_after("size")
+            .and_then(|s| s.split_once('x'))
+            .and_then(|(w, h)| Some((w.parse::<i32>().ok()?, h.parse::<i32>().ok()?)));
+        let (w, h) = size.unwrap_or((
+            drawing.iter().map(|r| r.chars().count()).max().unwrap_or(0) as i32,
+            drawing.len() as i32,
+        ));
         let layers = self.layers();
         let default_layer = self.default_layer();
-        let mut map = MapState::new(full, w, h, layers.iter().map(|(n, _, _)| n.clone()).collect(), self.s.game.time);
+        let mut map = MapState::new(
+            full,
+            w,
+            h,
+            layers.iter().map(|(n, _, _)| n.clone()).collect(),
+            self.s.game.time,
+        );
         map.transient = b.has_arg("transient");
         // layer fills (D 7.2)
         for (i, (_, _, fill)) in layers.iter().enumerate() {
@@ -719,7 +943,10 @@ impl<'m> World<'m> {
         }
         for item in b.sub("vars") {
             let ty = literal_ty(item.rest(1));
-            map.vars.push((item.key().to_string(), self.data_value(&ty, item.rest(1), item.namespace.as_deref())?));
+            map.vars.push((
+                item.key().to_string(),
+                self.data_value(&ty, item.rest(1), item.namespace.as_deref())?,
+            ));
         }
         self.s.maps.push(map);
         let id = self.s.maps.len() - 1;
@@ -728,14 +955,27 @@ impl<'m> World<'m> {
         for (y, row) in drawing.iter().enumerate() {
             for (x, c) in row.chars().enumerate() {
                 if let Some((_, rest)) = legend.iter().find(|(lc, _)| *lc == c) {
-                    let p = Pos { map: id, x: x as i32, y: y as i32 };
+                    let p = Pos {
+                        map: id,
+                        x: x as i32,
+                        y: y as i32,
+                    };
                     self.place_row(p, rest, default_layer, &mut spawns)?;
                 }
             }
         }
         for item in &at_rows {
-            let (x, y) = item.key().split_once(',').and_then(|(x, y)| Some((x.parse::<i32>().ok()?, y.parse::<i32>().ok()?))).ok_or("bad `at:` row")?;
-            self.place_row(Pos { map: id, x, y }, &item.shift(1), default_layer, &mut spawns)?;
+            let (x, y) = item
+                .key()
+                .split_once(',')
+                .and_then(|(x, y)| Some((x.parse::<i32>().ok()?, y.parse::<i32>().ok()?)))
+                .ok_or("bad `at:` row")?;
+            self.place_row(
+                Pos { map: id, x, y },
+                &item.shift(1),
+                default_layer,
+                &mut spawns,
+            )?;
         }
         spawns.sort_by_key(|(p, _)| (p.y, p.x));
         for (p, with) in spawns {
@@ -754,7 +994,11 @@ impl<'m> World<'m> {
             legend.push((c, rest));
         }
         if !legend.iter().any(|(c, _)| *c == ' ') {
-            legend.push((' ', RawItem::new(&b.file, b.line, b.namespace.clone(), "none").map_err(|d| d.message)?));
+            legend.push((
+                ' ',
+                RawItem::new(&b.file, b.line, b.namespace.clone(), "none")
+                    .map_err(|d| d.message)?,
+            ));
         }
         Ok((b.drawing.clone(), legend, b.sub("at").cloned().collect()))
     }
@@ -769,8 +1013,17 @@ impl<'m> World<'m> {
         rows.iter()
             .map(|i| {
                 let ns = i.namespace.as_deref();
-                let fill = i.tokens.iter().position(|t| t.is("fill")).and_then(|k| i.word(k + 1)).map(|t| self.full_name(t, ns));
-                (names::qualify(ns, i.key()), i.tokens.iter().any(|t| t.is("default")), fill)
+                let fill = i
+                    .tokens
+                    .iter()
+                    .position(|t| t.is("fill"))
+                    .and_then(|k| i.word(k + 1))
+                    .map(|t| self.full_name(t, ns));
+                (
+                    names::qualify(ns, i.key()),
+                    i.tokens.iter().any(|t| t.is("default")),
+                    fill,
+                )
             })
             .collect()
     }
@@ -781,7 +1034,13 @@ impl<'m> World<'m> {
 
     /// Applies a legend or `at:` row to a cell: tiles by layer, label, wire,
     /// and `with` entities to spawn after the tiles (D 8.2, D 8.9).
-    fn place_row(&mut self, p: Pos, rest: &RawItem, default_layer: usize, spawns: &mut Vec<(Pos, RawItem)>) -> RtResult<()> {
+    fn place_row(
+        &mut self,
+        p: Pos,
+        rest: &RawItem,
+        default_layer: usize,
+        spawns: &mut Vec<(Pos, RawItem)>,
+    ) -> RtResult<()> {
         let ns = rest.namespace.clone();
         let words: Vec<&str> = rest.tokens.iter().map(|t| t.text.as_str()).collect();
         let kw = |w: &str| ["with", "as", "wire"].contains(&w);
@@ -797,14 +1056,17 @@ impl<'m> World<'m> {
         while i + 1 < tiles.len() {
             let layer = self.full_name(tiles[i], ns.as_deref());
             if let Some(l) = layer_names.iter().position(|n| *n == layer) {
-                let t = (tiles[i + 1] != "none").then(|| self.full_name(tiles[i + 1], ns.as_deref()));
+                let t =
+                    (tiles[i + 1] != "none").then(|| self.full_name(tiles[i + 1], ns.as_deref()));
                 self.s.maps[p.map].set_tile(l, p.x, p.y, t);
             }
             i += 2;
         }
         let mut k = tile_end;
         while k < words.len() {
-            let end = (k + 1..words.len()).find(|&j| kw(words[j])).unwrap_or(words.len());
+            let end = (k + 1..words.len())
+                .find(|&j| kw(words[j]))
+                .unwrap_or(words.len());
             match words[k] {
                 "with" => spawns.push((p, rest.shift(k + 1).clone_until(end - k - 1))),
                 "as" => {
@@ -839,13 +1101,29 @@ impl<'m> World<'m> {
 
     /// `new_game_seats` with the profile file's components (M 5.1 step 2);
     /// `None` is the `profile` blocks' start values.
-    pub fn new_game_with(m: &'m Model, seed: u64, seats: Option<u8>, profile: Option<&[ComponentValue]>) -> RtResult<World<'m>> {
+    pub fn new_game_with(
+        m: &'m Model,
+        seed: u64,
+        seats: Option<u8>,
+        profile: Option<&[ComponentValue]>,
+    ) -> RtResult<World<'m>> {
         let g = m.named_game().ok_or("no named `game` block")?.clone();
-        let field = |name: &str| g.items.iter().find(|i| i.key() == name).map(|i| i.rest(1).to_string());
+        let field = |name: &str| {
+            g.items
+                .iter()
+                .find(|i| i.key() == name)
+                .map(|i| i.rest(1).to_string())
+        };
         // 1. the seed
-        let seed = field("seed").and_then(|s| s.parse::<i64>().ok()).map(|s| s as u64).unwrap_or(seed);
+        let seed = field("seed")
+            .and_then(|s| s.parse::<i64>().ok())
+            .map(|s| s as u64)
+            .unwrap_or(seed);
         let mut w = World::new(m, seed);
-        let (lo, hi) = field("seats").as_deref().and_then(seat_range).unwrap_or((1, 1));
+        let (lo, hi) = field("seats")
+            .as_deref()
+            .and_then(seat_range)
+            .unwrap_or((1, 1));
         // the checker keeps 1 <= lo <= hi <= 8 (D 3.3); a model that skipped
         // it gets its bounds in order, starting from seat 1 at least
         let (lo, hi) = (lo.min(hi).max(1), lo.max(hi).max(1));
@@ -855,17 +1133,33 @@ impl<'m> World<'m> {
         w.s.party_each = field("party").as_deref() == Some("each");
         w.s.leash = field("leash").map_or(hi > 1, |l| l == "on");
         w.s.seat_range = (lo, hi);
-        w.s.game.call_depth = field("call_depth").and_then(|s| s.parse().ok()).unwrap_or(256);
-        w.s.game.loop_steps = field("loop_steps").and_then(|s| s.parse().ok()).unwrap_or(1_000_000);
+        w.s.game.call_depth = field("call_depth")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(256);
+        w.s.game.loop_steps = field("loop_steps")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1_000_000);
         // 2. the profile's snapshot: the data's components, with the file's
         // values for the fields both have (D 3.5)
         w.s.profile = w.profile_view(profile.unwrap_or_default())?;
         w.profile_start = w.s.profile.clone();
         // 3. decks: written order, `shuffled` ones shuffled by full name
-        let decks: Vec<(String, RawBlock)> = m.defs.values().filter(|d| d.kind == Kind::Deck).filter_map(|d| d.block().map(|b| (d.full.clone(), b.clone()))).collect();
+        let decks: Vec<(String, RawBlock)> = m
+            .defs
+            .values()
+            .filter(|d| d.kind == Kind::Deck)
+            .filter_map(|d| d.block().map(|b| (d.full.clone(), b.clone())))
+            .collect();
         for (name, b) in decks {
-            let cards = b.items.iter().map(|i| w.card(&i.tokens, b.namespace.as_deref())).collect::<RtResult<Vec<_>>>()?;
-            let mut state = DeckState { draw: cards, discard: vec![] };
+            let cards = b
+                .items
+                .iter()
+                .map(|i| w.card(&i.tokens, b.namespace.as_deref()))
+                .collect::<RtResult<Vec<_>>>()?;
+            let mut state = DeckState {
+                draw: cards,
+                discard: vec![],
+            };
             if b.has_arg("shuffled") {
                 w.rng.shuffle(&mut state.draw);
             }
@@ -888,8 +1182,19 @@ impl<'m> World<'m> {
                         cv.set(&f.name, v);
                     }
                 }
-                let collections: Vec<(String, String)> =
-                    cv.fields.iter().filter_map(|(f, v)| if let Value::Text(t) = v && matches!(w.field_ty(&row.component, f), Ty::Collection(_)) { Some((f.clone(), t.clone())) } else { None }).collect();
+                let collections: Vec<(String, String)> = cv
+                    .fields
+                    .iter()
+                    .filter_map(|(f, v)| {
+                        if let Value::Text(t) = v
+                            && matches!(w.field_ty(&row.component, f), Ty::Collection(_))
+                        {
+                            Some((f.clone(), t.clone()))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
                 for (f, _) in &collections {
                     cv.set(f, Value::Collection(vec![]));
                 }
@@ -914,7 +1219,10 @@ impl<'m> World<'m> {
                     Kind::Deck => w.draw_deck(&start_def.full, Some(1))?,
                     _ => w.draw_table(&card.entity.clone().unwrap_or_default())?,
                 };
-                cards.first().and_then(|c| c.entity.clone()).ok_or("the start draw gave no map")?
+                cards
+                    .first()
+                    .and_then(|c| c.entity.clone())
+                    .ok_or("the start draw gave no map")?
             }
             k => return Err(format!("`start` is a {k}")),
         };
@@ -925,7 +1233,9 @@ impl<'m> World<'m> {
         let at = field("at").unwrap_or_else(|| "START".into());
         w.s.game.at = w.search(map, &at, ns)?;
         if w.s.game.at.is_empty() {
-            return Err(format!("the start search `at {at}` finds no cell on map `{start_map}` (D 3.3)"));
+            return Err(format!(
+                "the start search `at {at}` finds no cell on map `{start_map}` (D 3.3)"
+            ));
         }
         Ok(w)
     }
@@ -935,21 +1245,34 @@ impl<'m> World<'m> {
         let words = toks(target);
         let first = words.first().map(|t| t.text.as_str()).unwrap_or("");
         if words.len() > 1 {
-            return Err(format!("`at {target}`: `near` and `from` searches are not supported yet"));
+            return Err(format!(
+                "`at {target}`: `near` and `from` searches are not supported yet"
+            ));
         }
         let m = &self.s.maps[map];
-        if let Some((x, y)) = first.split_once(',').and_then(|(x, y)| Some((x.parse().ok()?, y.parse().ok()?))) {
+        if let Some((x, y)) = first
+            .split_once(',')
+            .and_then(|(x, y)| Some((x.parse().ok()?, y.parse().ok()?)))
+        {
             return Ok(Area::one(Pos { map, x, y }));
         }
         let label = m.label(first);
         if !label.is_empty() {
-            return Ok(Area::new(label.iter().map(|(x, y)| Pos { map, x: *x, y: *y }).collect()));
+            return Ok(Area::new(
+                label
+                    .iter()
+                    .map(|(x, y)| Pos { map, x: *x, y: *y })
+                    .collect(),
+            ));
         }
         let tile = self.full_name(first, ns);
         let mut cells = Vec::new();
         for y in 0..m.height {
             for x in 0..m.width {
-                if (0..m.layers.len()).any(|l| m.tile(l, x, y).is_some_and(|t| t == tile || t.starts_with(&format!("{tile}.")))) {
+                if (0..m.layers.len()).any(|l| {
+                    m.tile(l, x, y)
+                        .is_some_and(|t| t == tile || t.starts_with(&format!("{tile}.")))
+                }) {
                     cells.push(Pos { map, x, y });
                 }
             }
@@ -971,7 +1294,11 @@ impl World<'_> {
     /// screen, so a game runs the same at any window size (M 4). An axis
     /// without a written cell count is the active map's own size.
     pub fn view_dims(&self) -> (i32, i32) {
-        let map = self.s.active_map().map(|m| (self.s.maps[m].width, self.s.maps[m].height)).unwrap_or((0, 0));
+        let map = self
+            .s
+            .active_map()
+            .map(|m| (self.s.maps[m].width, self.s.maps[m].height))
+            .unwrap_or((0, 0));
         let (w, h) = self.map_area.cells();
         (w.unwrap_or(map.0), h.unwrap_or(map.1))
     }
@@ -993,7 +1320,14 @@ pub fn number_value(s: &str) -> Option<Value> {
     }
     if is_range(s) {
         let (a, b) = s.split_once("..")?;
-        return Some(Value::Range(a.parse().ok()?, if b.is_empty() { None } else { Some(b.parse().ok()?) }));
+        return Some(Value::Range(
+            a.parse().ok()?,
+            if b.is_empty() {
+                None
+            } else {
+                Some(b.parse().ok()?)
+            },
+        ));
     }
     if is_dice(s) {
         let (body, bonus) = match s.find(['+', '-']) {
@@ -1001,7 +1335,11 @@ pub fn number_value(s: &str) -> Option<Value> {
             _ => (s, 0),
         };
         let (n, sides) = body.split_once('d')?;
-        return Some(Value::Dice { n: if n.is_empty() { 1 } else { n.parse().ok()? }, sides: sides.parse().ok()?, bonus });
+        return Some(Value::Dice {
+            n: if n.is_empty() { 1 } else { n.parse().ok()? },
+            sides: sides.parse().ok()?,
+            bonus,
+        });
     }
     None
 }
@@ -1027,6 +1365,7 @@ impl CloneUntil for RawItem {
     fn clone_until(&self, n: usize) -> RawItem {
         let n = n.min(self.tokens.len());
         let text = self.span(0, n).to_string();
-        RawItem::new(&self.file, self.line, self.namespace.clone(), &text).unwrap_or_else(|_| self.clone())
+        RawItem::new(&self.file, self.line, self.namespace.clone(), &text)
+            .unwrap_or_else(|_| self.clone())
     }
 }

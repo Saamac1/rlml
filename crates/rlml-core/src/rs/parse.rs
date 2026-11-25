@@ -10,10 +10,60 @@ use crate::syntax::RawCode;
 
 /// Reserved words (RS 2.4) that can never start an expression.
 const KEYWORDS: &[&str] = &[
-    "component", "event", "on", "before", "after", "as", "priority", "when", "hide", "disabled", "fn", "present", "query", "command",
-    "cost", "aim", "generator", "transient", "generate", "size", "scene", "timeline", "background", "realtime", "track", "loop", "mark",
-    "always", "if", "elif", "else", "for", "in", "where", "repeat", "while", "break", "match", "choice", "emit", "wait", "confirm",
-    "open", "return", "cancel", "has", "no", "is", "and", "or", "not", "namespace", "override", "extends",
+    "component",
+    "event",
+    "on",
+    "before",
+    "after",
+    "as",
+    "priority",
+    "when",
+    "hide",
+    "disabled",
+    "fn",
+    "present",
+    "query",
+    "command",
+    "cost",
+    "aim",
+    "generator",
+    "transient",
+    "generate",
+    "size",
+    "scene",
+    "timeline",
+    "background",
+    "realtime",
+    "track",
+    "loop",
+    "mark",
+    "always",
+    "if",
+    "elif",
+    "else",
+    "for",
+    "in",
+    "where",
+    "repeat",
+    "while",
+    "break",
+    "match",
+    "choice",
+    "emit",
+    "wait",
+    "confirm",
+    "open",
+    "return",
+    "cancel",
+    "has",
+    "no",
+    "is",
+    "and",
+    "or",
+    "not",
+    "namespace",
+    "override",
+    "extends",
 ];
 
 /// Parses a code block into declarations.
@@ -22,7 +72,11 @@ pub fn parse(code: &RawCode) -> (Vec<Item>, Vec<Diagnostic>) {
     if !errors.is_empty() {
         return (vec![], errors);
     }
-    let mut p = Parser { toks, i: 0, file: code.file.clone() };
+    let mut p = Parser {
+        toks,
+        i: 0,
+        file: code.file.clone(),
+    };
     let mut items = Vec::new();
     while !p.at(&Tok::Eof) {
         if p.eat(&Tok::Newline) {
@@ -47,14 +101,20 @@ pub fn parse_snippet(code: &RawCode) -> Vec<Diagnostic> {
     if !errors.is_empty() {
         return errors;
     }
-    let mut p = Parser { toks, i: 0, file: code.file.clone() };
+    let mut p = Parser {
+        toks,
+        i: 0,
+        file: code.file.clone(),
+    };
     while !p.at(&Tok::Eof) {
         if p.eat(&Tok::Newline) {
             continue;
         }
         let start = p.i;
-        let declaration = matches!(&p.peek().tok, Tok::Word(w) if DECLARATIONS.contains(&w.as_str()));
-        let row = matches!(p.peek().tok, Tok::Time(_) | Tok::Op("+")) || (matches!(p.peek().tok, Tok::Int(_)) && !matches!(p.peek_at(1), Tok::Op(_)));
+        let declaration =
+            matches!(&p.peek().tok, Tok::Word(w) if DECLARATIONS.contains(&w.as_str()));
+        let row = matches!(p.peek().tok, Tok::Time(_) | Tok::Op("+"))
+            || (matches!(p.peek().tok, Tok::Int(_)) && !matches!(p.peek_at(1), Tok::Op(_)));
         let res = if declaration {
             p.item().map(|_| ())
         } else if row {
@@ -68,7 +128,11 @@ pub fn parse_snippet(code: &RawCode) -> Vec<Diagnostic> {
                     Ok(())
                 }
             })
-        } else if p.starts_operand() && !matches!(p.peek_at(1), Tok::Op("=" | "+=" | "-=")) && !matches!(&p.peek().tok, Tok::Word(w) if ["for", "while", "match", "if"].contains(&w.as_str())) && !matches!(p.peek().tok, Tok::Name(_)) {
+        } else if p.starts_operand()
+            && !matches!(p.peek_at(1), Tok::Op("=" | "+=" | "-="))
+            && !matches!(&p.peek().tok, Tok::Word(w) if ["for", "while", "match", "if"].contains(&w.as_str()))
+            && !matches!(p.peek().tok, Tok::Name(_))
+        {
             // a bare expression
             p.expr().and_then(|_| p.end_line())
         } else {
@@ -83,16 +147,40 @@ pub fn parse_snippet(code: &RawCode) -> Vec<Diagnostic> {
 }
 
 /// Words that start a top-level declaration.
-const DECLARATIONS: &[&str] = &["override", "present", "component", "event", "on", "before", "after", "fn", "query", "command", "ai", "generator", "map", "scene"];
+const DECLARATIONS: &[&str] = &[
+    "override",
+    "present",
+    "component",
+    "event",
+    "on",
+    "before",
+    "after",
+    "fn",
+    "query",
+    "command",
+    "ai",
+    "generator",
+    "map",
+    "scene",
+];
 
 /// Parses one expression, for tests and tools.
 pub fn parse_expr(src: &str) -> Result<Expr, Diagnostic> {
-    let code = RawCode { file: "expr".into(), line: 1, namespace: None, lines: vec![src.to_string()] };
+    let code = RawCode {
+        file: "expr".into(),
+        line: 1,
+        namespace: None,
+        lines: vec![src.to_string()],
+    };
     let (toks, errors) = lex(&code);
     if let Some(e) = errors.into_iter().next() {
         return Err(e);
     }
-    let mut p = Parser { toks, i: 0, file: code.file };
+    let mut p = Parser {
+        toks,
+        i: 0,
+        file: code.file,
+    };
     let e = p.expr()?;
     p.expect(&Tok::Newline, "the end of the expression")?;
     Ok(e)
@@ -121,7 +209,10 @@ impl Parser {
 
     fn pos(&self) -> Pos {
         let t = self.peek();
-        Pos { line: t.line, col: t.col }
+        Pos {
+            line: t.line,
+            col: t.col,
+        }
     }
 
     fn at(&self, t: &Tok) -> bool {
@@ -168,7 +259,11 @@ impl Parser {
 
     fn err(&self, msg: impl Into<String>) -> Diagnostic {
         let t = self.peek();
-        Diagnostic::error(&self.file, t.line, format!("column {}: {}", t.col, msg.into()))
+        Diagnostic::error(
+            &self.file,
+            t.line,
+            format!("column {}: {}", t.col, msg.into()),
+        )
     }
 
     fn found(&self) -> String {
@@ -181,7 +276,11 @@ impl Parser {
     }
 
     fn expect(&mut self, t: &Tok, what: &str) -> R<()> {
-        if self.eat(t) { Ok(()) } else { Err(self.err(format!("expected {what}, found {}", self.found()))) }
+        if self.eat(t) {
+            Ok(())
+        } else {
+            Err(self.err(format!("expected {what}, found {}", self.found())))
+        }
     }
 
     fn expect_op(&mut self, s: &'static str) -> R<()> {
@@ -228,7 +327,10 @@ impl Parser {
     /// `NAME {. NAME}`.
     fn qname(&mut self) -> R<String> {
         let Tok::Name(first) = self.peek().tok.clone() else {
-            return Err(self.err(format!("expected an upper-case NAME, found {}", self.found())));
+            return Err(self.err(format!(
+                "expected an upper-case NAME, found {}",
+                self.found()
+            )));
         };
         self.bump();
         let mut name = first;
@@ -249,7 +351,9 @@ impl Parser {
                 self.bump();
                 Ok(w)
             }
-            Tok::Word(w) => Err(self.err(format!("`{w}` is a reserved word and cannot be {what} (RS 2.4)"))),
+            Tok::Word(w) => Err(self.err(format!(
+                "`{w}` is a reserved word and cannot be {what} (RS 2.4)"
+            ))),
             _ => Err(self.err(format!("expected {what}, found {}", self.found()))),
         }
     }
@@ -275,7 +379,11 @@ impl Parser {
             Tok::Name(_) => self.qname()?,
             _ => return Err(self.err(format!("expected a type, found {}", self.found()))),
         };
-        let mut t = Type { base: base.clone(), args: vec![], extra: vec![] };
+        let mut t = Type {
+            base: base.clone(),
+            args: vec![],
+            extra: vec![],
+        };
         let word = |p: &mut Parser, w: &str, t: &mut Type| {
             if p.eat_word(w) {
                 t.extra.push(w.to_string());
@@ -320,7 +428,10 @@ impl Parser {
             "dict" => {
                 let key = self.ty()?;
                 if !["entity", "name", "number"].contains(&key.base.as_str()) {
-                    return Err(self.err(format!("a dictionary key is entity, name or number, not `{}`", key.base)));
+                    return Err(self.err(format!(
+                        "a dictionary key is entity, name or number, not `{}`",
+                        key.base
+                    )));
                 }
                 t.args.push(key);
                 t.args.push(self.ty()?);
@@ -346,9 +457,19 @@ impl Parser {
             };
             self.expect_op(":")?;
             let ty = self.ty()?;
-            let default = if self.eat_op("=") { Some(self.expr()?) } else { None };
+            let default = if self.eat_op("=") {
+                Some(self.expr()?)
+            } else {
+                None
+            };
             let source = self.source()?;
-            out.push(Param { name, ty, default, source, pos });
+            out.push(Param {
+                name,
+                ty,
+                default,
+                source,
+                pos,
+            });
             if !self.eat_op(",") {
                 break;
             }
@@ -363,10 +484,18 @@ impl Parser {
             Source::From(self.expr()?)
         } else if self.eat_word("aim") {
             let range = self.expr()?;
-            let at = if self.eat_word("at") { Some(self.expr()?) } else { None };
+            let at = if self.eat_word("at") {
+                Some(self.expr()?)
+            } else {
+                None
+            };
             Source::Aim { range, at }
         } else if self.eat_word("ask") {
-            Source::Ask(if self.at_op(",") || self.at_op(")") { None } else { Some(self.expr()?) })
+            Source::Ask(if self.at_op(",") || self.at_op(")") {
+                None
+            } else {
+                Some(self.expr()?)
+            })
         } else if self.eat_word("count") {
             Source::Count
         } else {
@@ -394,14 +523,21 @@ impl Parser {
         let kind = match kw.as_str() {
             "component" => {
                 name = self.qname()?;
-                let fields = if self.at_op("(") { self.params()? } else { vec![] };
+                let fields = if self.at_op("(") {
+                    self.params()?
+                } else {
+                    vec![]
+                };
                 let mut handlers = Vec::new();
                 if self.eat_op(":") {
                     self.expect(&Tok::Newline, "the end of the line")?;
                     self.expect(&Tok::Indent, "the component's handlers")?;
                     while !self.eat(&Tok::Dedent) {
                         let Tok::Word(phase) = self.peek().tok.clone() else {
-                            return Err(self.err(format!("expected a handler (`on`, `before` or `after`), found {}", self.found())));
+                            return Err(self.err(format!(
+                                "expected a handler (`on`, `before` or `after`), found {}",
+                                self.found()
+                            )));
                         };
                         self.bump();
                         handlers.push(self.handler(&phase)?);
@@ -425,32 +561,55 @@ impl Parser {
             "fn" | "query" => {
                 name = self.qname()?;
                 let params = self.params()?;
-                let ret = if self.eat_op("->") { Some(self.return_type()?) } else { None };
+                let ret = if self.eat_op("->") {
+                    Some(self.return_type()?)
+                } else {
+                    None
+                };
                 if kw == "query" && ret.is_none() {
                     return Err(self.err("a `query` needs a return type: `-> type` (RS 5.1)"));
                 }
                 let body = self.block()?;
-                ItemKind::Function { present, query: kw == "query", params, ret, body }
+                ItemKind::Function {
+                    present,
+                    query: kw == "query",
+                    params,
+                    ret,
+                    body,
+                }
             }
             "command" => {
                 name = self.qname()?;
                 if self.eat_op("=") {
                     let call = self.expr()?;
                     if !matches!(call.kind, ExprKind::Call(..)) {
-                        return Err(self.err("`command NAME =` takes a call, such as `MOVE(north)`"));
+                        return Err(
+                            self.err("`command NAME =` takes a call, such as `MOVE(north)`")
+                        );
                     }
                     self.end_line()?;
                     ItemKind::CommandAlias(call)
                 } else {
                     let params = self.params()?;
-                    let cost = if self.eat_word("cost") { Some(self.int()?) } else { None };
+                    let cost = if self.eat_word("cost") {
+                        Some(self.int()?)
+                    } else {
+                        None
+                    };
                     let noverb = self.eat_word("noverb");
-                    ItemKind::Command { params, cost, noverb, body: self.block()? }
+                    ItemKind::Command {
+                        params,
+                        cost,
+                        noverb,
+                        body: self.block()?,
+                    }
                 }
             }
             "ai" => {
                 name = self.qname()?;
-                ItemKind::Ai { body: self.block()? }
+                ItemKind::Ai {
+                    body: self.block()?,
+                }
             }
             "generator" => {
                 name = self.qname()?;
@@ -463,7 +622,11 @@ impl Parser {
                 } else {
                     None
                 };
-                ItemKind::Generator { params, size, body: self.block()? }
+                ItemKind::Generator {
+                    params,
+                    size,
+                    body: self.block()?,
+                }
             }
             "map" => {
                 name = self.qname()?;
@@ -482,7 +645,12 @@ impl Parser {
                 self.expect_word("generate")?;
                 let generate = self.expr()?;
                 self.end_line()?;
-                ItemKind::Map { transient, wrap, nosave, generate }
+                ItemKind::Map {
+                    transient,
+                    wrap,
+                    nosave,
+                    generate,
+                }
             }
             "scene" => {
                 name = self.qname()?;
@@ -492,14 +660,31 @@ impl Parser {
                     let realtime = background && self.eat_word("realtime");
                     self.expect_op(":")?;
                     self.expect(&Tok::Newline, "the end of the line")?;
-                    ItemKind::Timeline { params, timeline: self.timeline(background, realtime)? }
+                    ItemKind::Timeline {
+                        params,
+                        timeline: self.timeline(background, realtime)?,
+                    }
                 } else {
-                    ItemKind::Scene { params, body: self.block()? }
+                    ItemKind::Scene {
+                        params,
+                        body: self.block()?,
+                    }
                 }
             }
-            w => return Err(Diagnostic::error(&self.file, pos.line, format!("column {}: expected a declaration, found `{w}`", pos.col))),
+            w => {
+                return Err(Diagnostic::error(
+                    &self.file,
+                    pos.line,
+                    format!("column {}: expected a declaration, found `{w}`", pos.col),
+                ));
+            }
         };
-        Ok(Item { name, overrides, kind, pos })
+        Ok(Item {
+            name,
+            overrides,
+            kind,
+            pos,
+        })
     }
 
     fn return_type(&mut self) -> R<ReturnType> {
@@ -537,18 +722,43 @@ impl Parser {
                     self.bump();
                     names.push(w);
                 }
-                _ => return Err(self.err(format!("expected a parameter name, found {}", self.found()))),
+                _ => {
+                    return Err(
+                        self.err(format!("expected a parameter name, found {}", self.found()))
+                    );
+                }
             }
             if !self.eat_op(",") {
                 break;
             }
         }
         self.expect_op(")")?;
-        let name = if self.eat_word("as") { Some(self.qname()?) } else { None };
-        let priority = if self.eat_word("priority") { self.int()? } else { 0 };
-        let when = if self.eat_word("when") { Some(self.expr()?) } else { None };
+        let name = if self.eat_word("as") {
+            Some(self.qname()?)
+        } else {
+            None
+        };
+        let priority = if self.eat_word("priority") {
+            self.int()?
+        } else {
+            0
+        };
+        let when = if self.eat_word("when") {
+            Some(self.expr()?)
+        } else {
+            None
+        };
         let body = self.block()?;
-        Ok(Handler { phase, event, names, name, priority, when, body, pos })
+        Ok(Handler {
+            phase,
+            event,
+            names,
+            name,
+            priority,
+            when,
+            body,
+            pos,
+        })
     }
 
     fn end_line(&mut self) -> R<()> {
@@ -599,17 +809,27 @@ impl Parser {
                     let var = self.local("a loop variable")?;
                     self.expect_word("in")?;
                     let iter = self.expr()?;
-                    StmtKind::For { var, iter, body: self.block()? }
+                    StmtKind::For {
+                        var,
+                        iter,
+                        body: self.block()?,
+                    }
                 }
                 "repeat" => {
                     self.bump();
                     let count = self.expr()?;
-                    StmtKind::Repeat { count, body: self.block()? }
+                    StmtKind::Repeat {
+                        count,
+                        body: self.block()?,
+                    }
                 }
                 "while" => {
                     self.bump();
                     let cond = self.expr()?;
-                    StmtKind::While { cond, body: self.block()? }
+                    StmtKind::While {
+                        cond,
+                        body: self.block()?,
+                    }
                 }
                 "break" => {
                     self.bump();
@@ -623,7 +843,11 @@ impl Parser {
                 }
                 "return" => {
                     self.bump();
-                    let value = if self.at(&Tok::Newline) { None } else { Some(self.expr()?) };
+                    let value = if self.at(&Tok::Newline) {
+                        None
+                    } else {
+                        Some(self.expr()?)
+                    };
                     self.end_line()?;
                     StmtKind::Return(value)
                 }
@@ -635,7 +859,11 @@ impl Parser {
                     self.expect(&Tok::Indent, "the cases")?;
                     let mut cases = Vec::new();
                     while !self.eat(&Tok::Dedent) {
-                        let case = if self.eat_word("else") { None } else { Some(self.expr()?) };
+                        let case = if self.eat_word("else") {
+                            None
+                        } else {
+                            Some(self.expr()?)
+                        };
                         cases.push((case, self.block()?));
                     }
                     StmtKind::Match { subject, cases }
@@ -687,18 +915,29 @@ impl Parser {
             AssignOp::Sub
         } else {
             if !matches!(target.kind, ExprKind::Call(..)) {
-                return Err(self.err(format!("a statement is a call or an assignment; `{target}` is neither")));
+                return Err(self.err(format!(
+                    "a statement is a call or an assignment; `{target}` is neither"
+                )));
             }
             self.end_line()?;
             return Ok(StmtKind::Call(target));
         };
-        if !matches!(target.kind, ExprKind::Word(_) | ExprKind::Field(..) | ExprKind::Subscript(..)) {
-            return Err(Diagnostic::error(&self.file, target.pos.line, format!("column {}: cannot assign to `{target}`", target.pos.col)));
+        if !matches!(
+            target.kind,
+            ExprKind::Word(_) | ExprKind::Field(..) | ExprKind::Subscript(..)
+        ) {
+            return Err(Diagnostic::error(
+                &self.file,
+                target.pos.line,
+                format!("column {}: cannot assign to `{target}`", target.pos.col),
+            ));
         }
         if let ExprKind::Word(w) = &target.kind
             && KEYWORDS.contains(&w.as_str())
         {
-            return Err(self.err(format!("`{w}` is a reserved word and cannot be a local name (RS 2.4)")));
+            return Err(self.err(format!(
+                "`{w}` is a reserved word and cannot be a local name (RS 2.4)"
+            )));
         }
         // `name = wait number(…)` and `name = open MENU(…)` (RS 12.2)
         if op == AssignOp::Set
@@ -708,14 +947,21 @@ impl Parser {
                 let arg = self.wait_arg()?;
                 self.end_line()?;
                 return match arg {
-                    WaitArg::Input { kind, arg } => Ok(StmtKind::WaitInput { name: name.clone(), kind, arg }),
+                    WaitArg::Input { kind, arg } => Ok(StmtKind::WaitInput {
+                        name: name.clone(),
+                        kind,
+                        arg,
+                    }),
                     _ => Err(self.err("only `wait number(…)` and `wait text(…)` give a value")),
                 };
             }
             if self.eat_word("open") {
                 let call = self.expr()?;
                 self.end_line()?;
-                return Ok(StmtKind::OpenValue { name: name.clone(), call });
+                return Ok(StmtKind::OpenValue {
+                    name: name.clone(),
+                    call,
+                });
             }
         }
         let value = self.expr()?;
@@ -728,7 +974,11 @@ impl Parser {
         if matches!(e.kind, ExprKind::Call(..)) {
             Ok(e)
         } else {
-            Err(Diagnostic::error(&self.file, e.pos.line, format!("column {}: {what} takes a call, not `{e}`", e.pos.col)))
+            Err(Diagnostic::error(
+                &self.file,
+                e.pos.line,
+                format!("column {}: {what} takes a call, not `{e}`", e.pos.col),
+            ))
         }
     }
 
@@ -746,7 +996,10 @@ impl Parser {
                 self.bump();
                 let arg = self.expr()?;
                 self.expect_op(")")?;
-                return Ok(WaitArg::Input { kind: kind.into(), arg });
+                return Ok(WaitArg::Input {
+                    kind: kind.into(),
+                    arg,
+                });
             }
         }
         Ok(WaitArg::Time(self.expr()?))
@@ -756,7 +1009,11 @@ impl Parser {
     fn option(&mut self) -> R<ChoiceOption> {
         let pos = self.pos();
         let name = self.qname()?;
-        let args = if self.eat_op("(") { self.args()? } else { vec![] };
+        let args = if self.eat_op("(") {
+            self.args()?
+        } else {
+            vec![]
+        };
         let hide = if self.eat_word("hide") {
             self.expect_word("when")?;
             Some(self.expr()?)
@@ -772,29 +1029,58 @@ impl Parser {
         let body = if self.eat_word("adjust") {
             let target = self.postfix()?;
             let range = self.range()?;
-            let pool = if self.eat_word("pool") { Some(self.postfix()?) } else { None };
+            let pool = if self.eat_word("pool") {
+                Some(self.postfix()?)
+            } else {
+                None
+            };
             self.end_line()?;
-            OptionBody::Adjust { target, range, pool }
+            OptionBody::Adjust {
+                target,
+                range,
+                pool,
+            }
         } else {
             OptionBody::Block(self.block()?)
         };
-        Ok(ChoiceOption { name, args, hide, disabled, body, pos })
+        Ok(ChoiceOption {
+            name,
+            args,
+            hide,
+            disabled,
+            body,
+            pos,
+        })
     }
 
     // ---- timelines (RS 12.4) ----
 
     fn timeline(&mut self, background: bool, realtime: bool) -> R<Timeline> {
-        let mut t = Timeline { background, realtime, tracks: vec![], rows: vec![] };
+        let mut t = Timeline {
+            background,
+            realtime,
+            tracks: vec![],
+            rows: vec![],
+        };
         self.expect(&Tok::Indent, "the timeline's rows")?;
         while !self.eat(&Tok::Dedent) {
             if self.at_word("track") {
                 let pos = self.pos();
                 self.bump();
                 let name = self.qname()?;
-                let looped = if self.eat_word("loop") { Some(self.span()?) } else { None };
+                let looped = if self.eat_word("loop") {
+                    Some(self.span()?)
+                } else {
+                    None
+                };
                 self.expect_op(":")?;
                 self.end_line()?;
-                t.tracks.push(Track { name, looped, rows: self.rows()?, pos });
+                t.tracks.push(Track {
+                    name,
+                    looped,
+                    rows: self.rows()?,
+                    pos,
+                });
             } else {
                 t.rows.push(self.row()?);
             }
@@ -818,7 +1104,16 @@ impl Parser {
         let kind = match t.tok {
             Tok::Time(ms) => ExprKind::Time(ms, t.text),
             Tok::Int(n) => ExprKind::Int(n),
-            _ => return Err(Diagnostic::error(&self.file, t.line, format!("column {}: expected a time such as `500ms` or a number of rounds", t.col))),
+            _ => {
+                return Err(Diagnostic::error(
+                    &self.file,
+                    t.line,
+                    format!(
+                        "column {}: expected a time such as `500ms` or a number of rounds",
+                        t.col
+                    ),
+                ));
+            }
         };
         Ok(Expr { kind, pos })
     }
@@ -855,12 +1150,18 @@ impl Parser {
         let pos = self.pos();
         let time = self.time()?;
         if self.eat_word("mark") {
-            let Some(time) = time else { return Err(self.err("`mark` needs a time before it")) };
+            let Some(time) = time else {
+                return Err(self.err("`mark` needs a time before it"));
+            };
             let name = self.qname()?;
             self.end_line()?;
             return Ok(Row::Mark { time, name, pos });
         }
-        let span = if time.is_some() && self.at_span() { Some(self.span()?) } else { None };
+        let span = if time.is_some() && self.at_span() {
+            Some(self.span()?)
+        } else {
+            None
+        };
         let always = self.eat_word("always");
         let mut when = None;
         if self.eat_word("when") {
@@ -876,13 +1177,30 @@ impl Parser {
                 } else {
                     vec![]
                 };
-                return Ok(Row::When { time, cond, rows, otherwise, pos });
+                return Ok(Row::When {
+                    time,
+                    cond,
+                    rows,
+                    otherwise,
+                    pos,
+                });
             }
             when = Some(cond);
         }
-        let action = if self.eat_word("wait") { Action::Wait(self.wait_arg()?) } else { Action::Call(self.call("a timeline row")?) };
+        let action = if self.eat_word("wait") {
+            Action::Wait(self.wait_arg()?)
+        } else {
+            Action::Call(self.call("a timeline row")?)
+        };
         self.end_line()?;
-        Ok(Row::Action { time, span, always, when, action, pos })
+        Ok(Row::Action {
+            time,
+            span,
+            always,
+            when,
+            action,
+            pos,
+        })
     }
 
     // ---- expressions (RS 12.3) ----
@@ -891,7 +1209,10 @@ impl Parser {
         let mut e = self.or()?;
         while self.eat_word("where") {
             let cond = self.or()?;
-            e = Expr { pos: e.pos, kind: ExprKind::Where(Box::new(e), Box::new(cond)) };
+            e = Expr {
+                pos: e.pos,
+                kind: ExprKind::Where(Box::new(e), Box::new(cond)),
+            };
         }
         Ok(e)
     }
@@ -900,7 +1221,10 @@ impl Parser {
         let mut e = self.and()?;
         while self.eat_word("or") {
             let b = self.and()?;
-            e = Expr { pos: e.pos, kind: ExprKind::Binary(BinOp::Or, Box::new(e), Box::new(b)) };
+            e = Expr {
+                pos: e.pos,
+                kind: ExprKind::Binary(BinOp::Or, Box::new(e), Box::new(b)),
+            };
         }
         Ok(e)
     }
@@ -909,7 +1233,10 @@ impl Parser {
         let mut e = self.not()?;
         while self.eat_word("and") {
             let b = self.not()?;
-            e = Expr { pos: e.pos, kind: ExprKind::Binary(BinOp::And, Box::new(e), Box::new(b)) };
+            e = Expr {
+                pos: e.pos,
+                kind: ExprKind::Binary(BinOp::And, Box::new(e), Box::new(b)),
+            };
         }
         Ok(e)
     }
@@ -918,7 +1245,10 @@ impl Parser {
         let pos = self.pos();
         if self.eat_word("not") {
             let e = self.test()?;
-            return Ok(Expr { pos, kind: ExprKind::Not(Box::new(e)) });
+            return Ok(Expr {
+                pos,
+                kind: ExprKind::Not(Box::new(e)),
+            });
         }
         self.test()
     }
@@ -926,11 +1256,21 @@ impl Parser {
     fn test(&mut self) -> R<Expr> {
         let a = self.range()?;
         let pos = a.pos;
-        let cmp = [("==", BinOp::Eq), ("!=", BinOp::Ne), ("<=", BinOp::Le), (">=", BinOp::Ge), ("<", BinOp::Lt), (">", BinOp::Gt)];
+        let cmp = [
+            ("==", BinOp::Eq),
+            ("!=", BinOp::Ne),
+            ("<=", BinOp::Le),
+            (">=", BinOp::Ge),
+            ("<", BinOp::Lt),
+            (">", BinOp::Gt),
+        ];
         for (s, o) in cmp {
             if self.eat_op(s) {
                 let b = self.range()?;
-                return Ok(Expr { pos, kind: ExprKind::Binary(o, Box::new(a), Box::new(b)) });
+                return Ok(Expr {
+                    pos,
+                    kind: ExprKind::Binary(o, Box::new(a), Box::new(b)),
+                });
             }
         }
         if self.eat_word("has") {
@@ -941,17 +1281,34 @@ impl Parser {
                     w
                 }
                 Tok::Name(_) => self.qname()?,
-                _ => return Err(self.err(format!("`has` takes a component, found {}", self.found()))),
+                _ => {
+                    return Err(
+                        self.err(format!("`has` takes a component, found {}", self.found()))
+                    );
+                }
             };
-            return Ok(Expr { pos, kind: ExprKind::Has { subject: Box::new(a), no, component } });
+            return Ok(Expr {
+                pos,
+                kind: ExprKind::Has {
+                    subject: Box::new(a),
+                    no,
+                    component,
+                },
+            });
         }
         if self.eat_word("is") {
             let b = self.postfix()?;
-            return Ok(Expr { pos, kind: ExprKind::Is(Box::new(a), Box::new(b)) });
+            return Ok(Expr {
+                pos,
+                kind: ExprKind::Is(Box::new(a), Box::new(b)),
+            });
         }
         if self.eat_word("in") {
             let b = self.range()?;
-            return Ok(Expr { pos, kind: ExprKind::In(Box::new(a), Box::new(b)) });
+            return Ok(Expr {
+                pos,
+                kind: ExprKind::In(Box::new(a), Box::new(b)),
+            });
         }
         Ok(a)
     }
@@ -970,8 +1327,15 @@ impl Parser {
         let a = self.sum()?;
         if self.eat_op("..") {
             let pos = a.pos;
-            let b = if self.starts_operand() { Some(Box::new(self.sum()?)) } else { None };
-            return Ok(Expr { pos, kind: ExprKind::Range(Box::new(a), b) });
+            let b = if self.starts_operand() {
+                Some(Box::new(self.sum()?))
+            } else {
+                None
+            };
+            return Ok(Expr {
+                pos,
+                kind: ExprKind::Range(Box::new(a), b),
+            });
         }
         Ok(a)
     }
@@ -987,7 +1351,10 @@ impl Parser {
                 return Ok(e);
             };
             let b = self.term()?;
-            e = Expr { pos: e.pos, kind: ExprKind::Binary(o, Box::new(e), Box::new(b)) };
+            e = Expr {
+                pos: e.pos,
+                kind: ExprKind::Binary(o, Box::new(e), Box::new(b)),
+            };
         }
     }
 
@@ -1004,7 +1371,10 @@ impl Parser {
                 return Ok(e);
             };
             let b = self.unary()?;
-            e = Expr { pos: e.pos, kind: ExprKind::Binary(o, Box::new(e), Box::new(b)) };
+            e = Expr {
+                pos: e.pos,
+                kind: ExprKind::Binary(o, Box::new(e), Box::new(b)),
+            };
         }
     }
 
@@ -1012,7 +1382,10 @@ impl Parser {
         let pos = self.pos();
         if self.eat_op("-") {
             let e = self.postfix()?;
-            return Ok(Expr { pos, kind: ExprKind::Neg(Box::new(e)) });
+            return Ok(Expr {
+                pos,
+                kind: ExprKind::Neg(Box::new(e)),
+            });
         }
         self.postfix()
     }
@@ -1025,30 +1398,47 @@ impl Parser {
                     Tok::Word(w) => {
                         self.bump();
                         self.bump();
-                        e = Expr { pos: e.pos, kind: ExprKind::Field(Box::new(e), w) };
+                        e = Expr {
+                            pos: e.pos,
+                            kind: ExprKind::Field(Box::new(e), w),
+                        };
                     }
                     Tok::Name(n) => {
                         self.bump();
                         self.bump();
-                        e = Expr { pos: e.pos, kind: ExprKind::Field(Box::new(e), n) };
+                        e = Expr {
+                            pos: e.pos,
+                            kind: ExprKind::Field(Box::new(e), n),
+                        };
                     }
                     Tok::Int(i) => {
                         self.bump();
                         self.bump();
-                        e = Expr { pos: e.pos, kind: ExprKind::TileIndex(Box::new(e), i) };
+                        e = Expr {
+                            pos: e.pos,
+                            kind: ExprKind::TileIndex(Box::new(e), i),
+                        };
                     }
                     _ => return Ok(e),
                 }
             } else if self.eat_op("(") {
                 let args = self.args()?;
-                e = Expr { pos: e.pos, kind: ExprKind::Call(Box::new(e), args) };
+                e = Expr {
+                    pos: e.pos,
+                    kind: ExprKind::Call(Box::new(e), args),
+                };
             } else if self.eat_op("[") {
                 let i = self.expr()?;
                 self.expect_op("]")?;
-                e = Expr { pos: e.pos, kind: ExprKind::Subscript(Box::new(e), Box::new(i)) };
+                e = Expr {
+                    pos: e.pos,
+                    kind: ExprKind::Subscript(Box::new(e), Box::new(i)),
+                };
             } else if let Tok::Wild | Tok::WildDeep = self.peek().tok {
                 // a wildcard after a field path: `map.LOOT.*` is not valid
-                return Err(self.err("a wildcard follows an upper-case name directly, such as `ITEM.*`"));
+                return Err(
+                    self.err("a wildcard follows an upper-case name directly, such as `ITEM.*`")
+                );
             } else {
                 return Ok(e);
             }
@@ -1069,7 +1459,14 @@ impl Parser {
             };
             let value = self.expr()?;
             if name.is_none() && out.iter().any(|a: &Arg| a.name.is_some()) {
-                return Err(Diagnostic::error(&self.file, value.pos.line, format!("column {}: positional arguments come before named ones (RS 2.5)", value.pos.col)));
+                return Err(Diagnostic::error(
+                    &self.file,
+                    value.pos.line,
+                    format!(
+                        "column {}: positional arguments come before named ones (RS 2.5)",
+                        value.pos.col
+                    ),
+                ));
             }
             out.push(Arg { name, value });
             if !self.eat_op(",") {
@@ -1115,7 +1512,9 @@ impl Parser {
                     "false" => ExprKind::Bool(false),
                     "none" => ExprKind::None,
                     "all" => ExprKind::All,
-                    k if KEYWORDS.contains(&k) => return Err(self.err(format!("expected a value, found the keyword `{k}`"))),
+                    k if KEYWORDS.contains(&k) => {
+                        return Err(self.err(format!("expected a value, found the keyword `{k}`")));
+                    }
                     _ => ExprKind::Word(w),
                 };
                 self.bump();
@@ -1159,12 +1558,29 @@ impl Parser {
     fn name_atom(&mut self, root: bool, pos: Pos) -> R<Expr> {
         let name = self.qname()?;
         if self.eat(&Tok::Wild) {
-            return Ok(Expr { pos, kind: ExprKind::Wild { name, root, deep: false } });
+            return Ok(Expr {
+                pos,
+                kind: ExprKind::Wild {
+                    name,
+                    root,
+                    deep: false,
+                },
+            });
         }
         if self.eat(&Tok::WildDeep) {
-            return Ok(Expr { pos, kind: ExprKind::Wild { name, root, deep: true } });
+            return Ok(Expr {
+                pos,
+                kind: ExprKind::Wild {
+                    name,
+                    root,
+                    deep: true,
+                },
+            });
         }
-        Ok(Expr { pos, kind: ExprKind::Name { name, root } })
+        Ok(Expr {
+            pos,
+            kind: ExprKind::Name { name, root },
+        })
     }
 }
 
@@ -1173,18 +1589,30 @@ mod tests {
     use super::*;
 
     fn e(src: &str) -> String {
-        parse_expr(src).unwrap_or_else(|d| panic!("{src}: {d}")).to_string()
+        parse_expr(src)
+            .unwrap_or_else(|d| panic!("{src}: {d}"))
+            .to_string()
     }
 
     fn items(src: &str) -> Vec<Item> {
-        let code = RawCode { file: "t".into(), line: 1, namespace: None, lines: src.lines().map(String::from).collect() };
+        let code = RawCode {
+            file: "t".into(),
+            line: 1,
+            namespace: None,
+            lines: src.lines().map(String::from).collect(),
+        };
         let (items, errors) = parse(&code);
         assert!(errors.is_empty(), "{errors:#?}");
         items
     }
 
     fn errs(src: &str) -> Vec<String> {
-        let code = RawCode { file: "t".into(), line: 1, namespace: None, lines: src.lines().map(String::from).collect() };
+        let code = RawCode {
+            file: "t".into(),
+            line: 1,
+            namespace: None,
+            lines: src.lines().map(String::from).collect(),
+        };
         parse(&code).1.into_iter().map(|d| d.to_string()).collect()
     }
 
@@ -1196,33 +1624,71 @@ mod tests {
         assert_eq!(e("-1..3"), "(-1..3)");
         assert_eq!(e("0..n - 1"), "(0..(n - 1))");
         assert_eq!(e("d in 5.."), "(d in (5..))");
-        assert_eq!(e("not target in adjacent(actor)"), "(not (target in adjacent(actor)))");
+        assert_eq!(
+            e("not target in adjacent(actor)"),
+            "(not (target in adjacent(actor)))"
+        );
         assert_eq!(e("a where x where y"), "((a where x) where y)");
         assert_eq!(e("TOLERANCE - max(d, -d)"), "(TOLERANCE - max(d, -d))");
     }
 
     #[test]
     fn tests_and_postfix() {
-        assert_eq!(e("e has no FACTION or game has no FACTIONS"), "((e has no FACTION) or (game has no FACTIONS))");
+        assert_eq!(
+            e("e has no FACTION or game has no FACTIONS"),
+            "((e has no FACTION) or (game has no FACTIONS))"
+        );
         assert_eq!(e("self has ai"), "(self has ai)");
         assert_eq!(e("it is e.FACTION.group"), "(it is e.FACTION.group)");
-        assert_eq!(e("ga.STANCE.toward[b.FACTION.group]"), "ga.STANCE.toward[b.FACTION.group]");
-        assert_eq!(e("(entities(in: to) where it != who).first"), "(entities(in: to) where (it != who)).first");
-        assert_eq!(e("LOOT.RARE.copy().shuffle().draw(3)"), "LOOT.RARE.copy().shuffle().draw(3)");
+        assert_eq!(
+            e("ga.STANCE.toward[b.FACTION.group]"),
+            "ga.STANCE.toward[b.FACTION.group]"
+        );
+        assert_eq!(
+            e("(entities(in: to) where it != who).first"),
+            "(entities(in: to) where (it != who)).first"
+        );
+        assert_eq!(
+            e("LOOT.RARE.copy().shuffle().draw(3)"),
+            "LOOT.RARE.copy().shuffle().draw(3)"
+        );
         assert_eq!(e("ITEM.*.pick(18)"), "ITEM.*.pick(18)");
         assert_eq!(e("GLYPH.NKI.1..20"), "(GLYPH.NKI.1..20)");
         assert_eq!(e(".LOOT"), ".LOOT");
         assert_eq!(e("RING_MAIL(ENCHANT: 2)"), "RING_MAIL(ENCHANT: 2)");
-        assert_eq!(e("[a, 1d20, 30ms, 50%, \"x\", {}]"), "[a, 1d20, 30ms, 50%, \"x\", {}]");
+        assert_eq!(
+            e("[a, 1d20, 30ms, 50%, \"x\", {}]"),
+            "[a, 1d20, 30ms, 50%, \"x\", {}]"
+        );
         assert_eq!(e("GATE.open"), "GATE.open");
     }
 
     #[test]
     fn expression_errors() {
-        assert!(parse_expr("a +").unwrap_err().message.contains("expected a value"));
-        assert!(parse_expr("f(x: 1, 2)").unwrap_err().message.contains("positional arguments come before"));
-        assert!(parse_expr("{a}").unwrap_err().message.contains("empty dictionary"));
-        assert!(parse_expr("if").unwrap_err().message.contains("keyword `if`"));
+        assert!(
+            parse_expr("a +")
+                .unwrap_err()
+                .message
+                .contains("expected a value")
+        );
+        assert!(
+            parse_expr("f(x: 1, 2)")
+                .unwrap_err()
+                .message
+                .contains("positional arguments come before")
+        );
+        assert!(
+            parse_expr("{a}")
+                .unwrap_err()
+                .message
+                .contains("empty dictionary")
+        );
+        assert!(
+            parse_expr("if")
+                .unwrap_err()
+                .message
+                .contains("keyword `if`")
+        );
     }
 
     #[test]
@@ -1237,10 +1703,25 @@ mod tests {
              generator CAVE(depth: number) size 80x40:\n    carve(tiles(), WALL)\n",
         );
         let names: Vec<&str> = it.iter().map(|i| i.name.as_str()).collect();
-        assert_eq!(names, ["HIT", "FOLLOW", "MOVE.NORTH", "CAN_STEP", "ROOMS", "DUNGEON", "CAVE"]);
-        let ItemKind::Event { params } = &it[0].kind else { panic!() };
+        assert_eq!(
+            names,
+            [
+                "HIT",
+                "FOLLOW",
+                "MOVE.NORTH",
+                "CAN_STEP",
+                "ROOMS",
+                "DUNGEON",
+                "CAVE"
+            ]
+        );
+        let ItemKind::Event { params } = &it[0].kind else {
+            panic!()
+        };
         assert_eq!(params[3].default.as_ref().unwrap().to_string(), "none");
-        let ItemKind::Function { ret: Some(r), .. } = &it[4].kind else { panic!() };
+        let ItemKind::Function { ret: Some(r), .. } = &it[4].kind else {
+            panic!()
+        };
         assert_eq!(r.to_string(), "list area");
     }
 
@@ -1249,10 +1730,17 @@ mod tests {
         let it = items(
             "command FEED(item: entity from actor.PACK.items where it has FOOD, target: pos aim 1 at entities(in: adjacent(actor))) cost 120:\n    destroy(item)\n",
         );
-        let ItemKind::Command { params, cost, .. } = &it[0].kind else { panic!() };
+        let ItemKind::Command { params, cost, .. } = &it[0].kind else {
+            panic!()
+        };
         assert_eq!(*cost, Some(120));
-        assert!(matches!(&params[0].source, Some(Source::From(e)) if e.to_string() == "(actor.PACK.items where (it has FOOD))"));
-        assert!(matches!(&params[1].source, Some(Source::Aim { at: Some(_), .. })));
+        assert!(
+            matches!(&params[0].source, Some(Source::From(e)) if e.to_string() == "(actor.PACK.items where (it has FOOD))")
+        );
+        assert!(matches!(
+            &params[1].source,
+            Some(Source::Aim { at: Some(_), .. })
+        ));
     }
 
     #[test]
@@ -1262,11 +1750,29 @@ mod tests {
              on arrive(who, map, p) as ADJACENCY_ARRIVE:\n    MEET(who, NEIGHBOURS(who, p))\n\
              component POISONED(turns: number = 5, damage: dice = 1d2):\n    on turn():\n        turns -= 1\n",
         );
-        let ItemKind::Handler(h) = &it[0].kind else { panic!() };
-        assert_eq!((h.event.as_str(), h.name.as_deref(), h.priority, h.names.len()), ("HIT", Some("HIT_MESSAGE"), -10, 3));
-        let ItemKind::Handler(h) = &it[1].kind else { panic!() };
-        assert_eq!(h.names, ["who", "map", "p"], "context names as event parameters");
-        let ItemKind::Component { handlers, .. } = &it[2].kind else { panic!() };
+        let ItemKind::Handler(h) = &it[0].kind else {
+            panic!()
+        };
+        assert_eq!(
+            (
+                h.event.as_str(),
+                h.name.as_deref(),
+                h.priority,
+                h.names.len()
+            ),
+            ("HIT", Some("HIT_MESSAGE"), -10, 3)
+        );
+        let ItemKind::Handler(h) = &it[1].kind else {
+            panic!()
+        };
+        assert_eq!(
+            h.names,
+            ["who", "map", "p"],
+            "context names as event parameters"
+        );
+        let ItemKind::Component { handlers, .. } = &it[2].kind else {
+            panic!()
+        };
         assert_eq!(handlers[0].event, "turn");
     }
 
@@ -1275,12 +1781,21 @@ mod tests {
         let it = items(
             "scene CREATE(hero: entity):\n    hero_name = wait text(16)\n    points = 30\n    choice:\n        STRENGTH adjust hero.STATS.strength 10..25 pool points\n        DONE disabled when points > 0:\n            return\n    match points:\n        0:\n            wait confirm\n        10..:\n            x = open SHOP.BUY(wares: w)\n        else:\n            cancel\n    for k in d:\n        if k == 1:\n            break\n        elif k < 0:\n            emit HIT(k, none, 1)\n        else:\n            l[k] += 2\n",
         );
-        let ItemKind::Scene { body, .. } = &it[0].kind else { panic!() };
+        let ItemKind::Scene { body, .. } = &it[0].kind else {
+            panic!()
+        };
         assert!(matches!(body[0].kind, StmtKind::WaitInput { .. }));
-        let StmtKind::Choice(opts) = &body[2].kind else { panic!() };
-        assert!(matches!(&opts[0].body, OptionBody::Adjust { pool: Some(_), .. }));
+        let StmtKind::Choice(opts) = &body[2].kind else {
+            panic!()
+        };
+        assert!(matches!(
+            &opts[0].body,
+            OptionBody::Adjust { pool: Some(_), .. }
+        ));
         assert!(opts[1].disabled.is_some());
-        let StmtKind::Match { cases, .. } = &body[3].kind else { panic!() };
+        let StmtKind::Match { cases, .. } = &body[3].kind else {
+            panic!()
+        };
         assert_eq!(cases.len(), 3);
         assert!(matches!(body[4].kind, StmtKind::For { .. }));
     }
@@ -1291,20 +1806,49 @@ mod tests {
             "scene GATE_OPENS(lever: entity) timeline:\n    0000ms        play(SFX.LEVER, at: lever)\n    0500ms 1000ms shake(camera, strength: 2)\n    2000ms        mark OPEN\n    OPEN          when game.KING_QUEST == 1: say(GATE.FOR_THE_KING)\n    OPEN+1s       say(GATE.OPENED)\n    +200ms 0500ms pan(camera, to: player)\n\
              scene PATROL(guard: entity) timeline background:\n    track ROUTE loop 12:\n        00 02 move(guard, to: label(POST_A))\n        10    log(GUARD.ALL_CLEAR, speaker: guard)\n",
         );
-        let ItemKind::Timeline { timeline, .. } = &it[0].kind else { panic!() };
+        let ItemKind::Timeline { timeline, .. } = &it[0].kind else {
+            panic!()
+        };
         assert_eq!(timeline.rows.len(), 6);
         assert!(matches!(&timeline.rows[2], Row::Mark { name, .. } if name == "OPEN"));
-        assert!(matches!(&timeline.rows[3], Row::Action { when: Some(_), time: Some(Time::Mark { offset: None, .. }), .. }));
-        assert!(matches!(&timeline.rows[4], Row::Action { time: Some(Time::Mark { offset: Some((true, _)), .. }), .. }));
-        assert!(matches!(&timeline.rows[5], Row::Action { time: Some(Time::After(_)), span: Some(_), .. }));
-        let ItemKind::Timeline { timeline, .. } = &it[1].kind else { panic!() };
+        assert!(matches!(
+            &timeline.rows[3],
+            Row::Action {
+                when: Some(_),
+                time: Some(Time::Mark { offset: None, .. }),
+                ..
+            }
+        ));
+        assert!(matches!(
+            &timeline.rows[4],
+            Row::Action {
+                time: Some(Time::Mark {
+                    offset: Some((true, _)),
+                    ..
+                }),
+                ..
+            }
+        ));
+        assert!(matches!(
+            &timeline.rows[5],
+            Row::Action {
+                time: Some(Time::After(_)),
+                span: Some(_),
+                ..
+            }
+        ));
+        let ItemKind::Timeline { timeline, .. } = &it[1].kind else {
+            panic!()
+        };
         assert!(timeline.background && !timeline.realtime);
         assert_eq!(timeline.tracks[0].rows.len(), 2);
     }
 
     #[test]
     fn errors_and_recovery() {
-        let e = errs("fn A():\n    x = \n    y = 1\nfn B(:\n    return\nquery C(x: number):\n    return x\nai D:\n    return WAIT()\n");
+        let e = errs(
+            "fn A():\n    x = \n    y = 1\nfn B(:\n    return\nquery C(x: number):\n    return x\nai D:\n    return WAIT()\n",
+        );
         assert_eq!(e.len(), 3, "{e:#?}");
         assert!(e[0].contains("t:2: error: column") && e[0].contains("expected a value"));
         assert!(e[1].contains("t:4"));

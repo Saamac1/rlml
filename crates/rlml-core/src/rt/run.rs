@@ -11,12 +11,12 @@
 
 use std::collections::BTreeMap;
 
-use super::eval::{BodyKind, Env, Outcome, Scope, Suspended};
 use super::checkpoint::Snapshot;
+use super::eval::{BodyKind, Env, Outcome, Scope, Suspended};
 use super::input::InputLog;
 use super::save::Save;
-use super::store::AutosaveRules;
 use super::state::{SeatId, Wake};
+use super::store::AutosaveRules;
 use super::travel::{Order, Travel, TravelFields};
 use super::value::{CommandValue, EntityId, MapId, Value};
 use super::world::{DEFAULT_COST, RtResult, World, delay};
@@ -89,7 +89,12 @@ fn engine_env(name: &str) -> Env {
 impl<'m> Runner<'m> {
     pub fn new(w: World<'m>) -> Runner<'m> {
         let fields = TravelFields::read(w.m);
-        let inputs = InputLog { seed: w.s.game.seed, seats: w.s.seats.len() as SeatId, profile: w.profile_start.clone(), ..InputLog::default() };
+        let inputs = InputLog {
+            seed: w.s.game.seed,
+            seats: w.s.seats.len() as SeatId,
+            profile: w.profile_start.clone(),
+            ..InputLog::default()
+        };
         let rules = AutosaveRules::read(w.m);
         let mut r = Runner {
             w,
@@ -187,7 +192,9 @@ impl<'m> Runner<'m> {
             if self.scene.is_some() {
                 return Ok(Status::Scene);
             }
-            let Some(map) = self.w.s.active_map() else { return Ok(Status::NoPlayer { rounds: 0 }) };
+            let Some(map) = self.w.s.active_map() else {
+                return Ok(Status::NoPlayer { rounds: 0 });
+            };
             let now = self.clock(map);
             // phase 4: the wakes of this moment, by sequence number
             if let Some(wake) = self.w.s.next_wake(map)
@@ -195,7 +202,12 @@ impl<'m> Runner<'m> {
             {
                 let e = wake.entity;
                 self.drop_changed_wait(e);
-                if let Some(n) = self.w.s.seat_of(e).filter(|_| self.w.s.get(e).alive && !self.waiting.contains_key(&e)) {
+                if let Some(n) = self
+                    .w
+                    .s
+                    .seat_of(e)
+                    .filter(|_| self.w.s.get(e).alive && !self.waiting.contains_key(&e))
+                {
                     // a member: `wake` first, then the choice (M 6.1.10)
                     if self.woke.get(&e) != Some(&wake) {
                         // entries of turns that ended elsewhere (death, a
@@ -240,13 +252,22 @@ impl<'m> Runner<'m> {
             }
             let played = self.w.s.game.turn() - start_turn;
             // rounds without a turn: no member has a wake (M 6.1.10)
-            let has_player = self.w.s.players().into_iter().any(|p| self.w.s.wake_of(p).is_some());
+            let has_player = self
+                .w
+                .s
+                .players()
+                .into_iter()
+                .any(|p| self.w.s.wake_of(p).is_some());
             if !has_player && played >= rounds {
                 return Ok(Status::NoPlayer { rounds: played });
             }
             // the next moment: the nearest wake or round boundary (M 6.1.1)
             let boundary = (self.w.s.game.time.div_euclid(120) + 1) * 120;
-            let next_wake = self.w.s.next_wake(map).map(|w| self.w.s.game.time + (w.at - now));
+            let next_wake = self
+                .w
+                .s
+                .next_wake(map)
+                .map(|w| self.w.s.game.time + (w.at - now));
             let next = next_wake.map_or(boundary, |t| t.min(boundary));
             self.w.s.game.time = next;
             if next == boundary {
@@ -263,7 +284,14 @@ impl<'m> Runner<'m> {
         touched
             .into_iter()
             .filter_map(|(c, f)| {
-                let v = self.w.s.profile.iter().find(|x| x.name == c)?.get(&f)?.clone();
+                let v = self
+                    .w
+                    .s
+                    .profile
+                    .iter()
+                    .find(|x| x.name == c)?
+                    .get(&f)?
+                    .clone();
                 Some((c, f, v))
             })
             .collect()
@@ -273,7 +301,9 @@ impl<'m> Runner<'m> {
     /// waits of all seats counted together. A wait is counted once, and
     /// travels' steps are none (M 8.1).
     fn input_point(&mut self) {
-        let Some(every) = self.rules.on_input else { return };
+        let Some(every) = self.rules.on_input else {
+            return;
+        };
         let Some(n) = self.awaiting else { return };
         let wake = self.w.s.player.and_then(|p| self.w.s.wake_of(p));
         if self.travels.contains_key(&n) || self.orders.contains_key(&n) || wake == self.counted {
@@ -296,7 +326,9 @@ impl<'m> Runner<'m> {
         {
             let name = state.command.clone();
             self.waiting.remove(&e);
-            self.w.warnings.push(format!("the waiting command `{name}` has changed or is gone: it is dropped (M 6.1.6)"));
+            self.w.warnings.push(format!(
+                "the waiting command `{name}` has changed or is gone: it is dropped (M 6.1.6)"
+            ));
         }
     }
 
@@ -304,14 +336,23 @@ impl<'m> Runner<'m> {
     /// order, then once to the general handlers with `game` as subject
     /// (M 6.1.4).
     fn round(&mut self) -> RtResult<()> {
-        let Some(map) = self.w.s.active_map() else { return Ok(()) };
-        if self.w.s.entities_on(map).iter().any(|&e| self.w.s.get(e).has("timer")) {
+        let Some(map) = self.w.s.active_map() else {
+            return Ok(());
+        };
+        if self
+            .w
+            .s
+            .entities_on(map)
+            .iter()
+            .any(|&e| self.w.s.get(e).has("timer"))
+        {
             return Err("timers are not supported yet (M 6.1.4 phase 2)".into());
         }
         let mut env = engine_env("turn");
         env.map = Some(map);
         for e in self.w.s.entities_on(map) {
-            self.w.emit_to("turn", vec![Value::Entity(e)], &env, Scope::Components)?;
+            self.w
+                .emit_to("turn", vec![Value::Entity(e)], &env, Scope::Components)?;
         }
         self.w.emit_to("turn", vec![], &env, Scope::General)?;
         self.end_action()
@@ -347,7 +388,12 @@ impl<'m> Runner<'m> {
         calls.sort_by_key(|&(n, _)| n);
         for (n, joined) in calls {
             let env = engine_env(if joined { "join" } else { "part" });
-            self.w.emit_to(if joined { "join" } else { "part" }, vec![Value::Number(n as i64)], &env, Scope::General)?;
+            self.w.emit_to(
+                if joined { "join" } else { "part" },
+                vec![Value::Number(n as i64)],
+                &env,
+                Scope::General,
+            )?;
             self.w.flush_created(&env)?;
             if !joined {
                 self.w.s.part_seat(n);
@@ -436,7 +482,13 @@ impl<'m> Runner<'m> {
         Ok(match self.waiting.remove(&e) {
             Some(state) => self.w.continue_command(e, state, true)?,
             None => {
-                let ai = self.w.s.get(e).get("ai").and_then(|c| c.get("behavior")).cloned();
+                let ai = self
+                    .w
+                    .s
+                    .get(e)
+                    .get("ai")
+                    .and_then(|c| c.get("behavior"))
+                    .cloned();
                 let choice = match ai {
                     Some(Value::Name(behavior)) => self.w.run_ai(&behavior, e)?,
                     _ => Value::None,
@@ -456,7 +508,9 @@ impl<'m> Runner<'m> {
     /// kept turn goes back to that wake's place.
     fn finish(&mut self, e: EntityId, outcome: Outcome, taken: Option<Wake>) -> RtResult<bool> {
         let player = taken.is_some();
-        let Some(at) = self.w.s.at(e) else { return Ok(true) };
+        let Some(at) = self.w.s.at(e) else {
+            return Ok(true);
+        };
         if !self.w.s.get(e).alive {
             return Ok(true);
         }
@@ -509,7 +563,10 @@ impl<'m> Runner<'m> {
 
     /// The player's command on its turn: the awaited seat's input.
     pub fn player(&mut self, cmd: &CommandValue) -> RtResult<bool> {
-        let n = self.awaiting.or_else(|| self.w.s.player.and_then(|p| self.w.s.seat_of(p))).unwrap_or(1);
+        let n = self
+            .awaiting
+            .or_else(|| self.w.s.player.and_then(|p| self.w.s.seat_of(p)))
+            .unwrap_or(1);
         self.input(n, cmd)
     }
 
@@ -533,7 +590,9 @@ impl<'m> Runner<'m> {
         if self.w.s.seat_of(p) != Some(n) {
             return Err(format!("seat {n} has no turn now"));
         }
-        let Some(wake) = self.w.s.wake_of(p) else { return Err("the player has no turn now".into()) };
+        let Some(wake) = self.w.s.wake_of(p) else {
+            return Err("the player has no turn now".into());
+        };
         let map = self.w.s.at(p).ok_or("the player is not on a map")?.map;
         if wake.at > self.clock(map) {
             return Err("it is not the player's turn".into());
@@ -546,7 +605,9 @@ impl<'m> Runner<'m> {
     pub(crate) fn run_input(&mut self, n: SeatId, cmd: &CommandValue) -> RtResult<bool> {
         self.check_input(n)?;
         let p = self.w.s.player.ok_or("no player")?;
-        let Some(wake) = self.w.s.wake_of(p) else { return Err("the player has no turn now".into()) };
+        let Some(wake) = self.w.s.wake_of(p) else {
+            return Err("the player has no turn now".into());
+        };
         self.w.s.unschedule(p);
         self.woke.remove(&p);
         self.awaiting = None;

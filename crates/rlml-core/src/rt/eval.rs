@@ -15,7 +15,9 @@ use std::sync::Arc;
 use super::path::{PathLoop, body_hash, frames_at, path_of, wait_stmt};
 use super::rng::Rng;
 use super::state::{Place, SeatId};
-use super::value::{Area, Card, CommandValue, ComponentValue, Dir, EntityId, MapId, Pos as Cell, Side, Value};
+use super::value::{
+    Area, Card, CommandValue, ComponentValue, Dir, EntityId, MapId, Pos as Cell, Side, Value,
+};
 use super::world::{DEFAULT_COST, LogEntry, Noise, RtResult, Travel, World, delay, number_value};
 use crate::model::{Def, Kind, Source as DefSource};
 use crate::names;
@@ -56,16 +58,43 @@ pub struct Env {
 
 impl Env {
     pub fn new(kind: BodyKind, name: &str, ns: Option<String>, file: &str) -> Env {
-        Env { locals: BTreeMap::new(), self_: None, holder: None, actor: None, it: vec![], kind, ns, map: None, rng: None, name: name.to_string(), file: file.to_string() }
+        Env {
+            locals: BTreeMap::new(),
+            self_: None,
+            holder: None,
+            actor: None,
+            it: vec![],
+            kind,
+            ns,
+            map: None,
+            rng: None,
+            name: name.to_string(),
+            file: file.to_string(),
+        }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Frame {
-    Block { stmts: Vec<Stmt>, i: usize },
-    For { var: String, items: Vec<Value>, k: usize, body: Vec<Stmt> },
-    While { cond: Expr, body: Vec<Stmt> },
-    Repeat { left: i64, count: i64, body: Vec<Stmt> },
+    Block {
+        stmts: Vec<Stmt>,
+        i: usize,
+    },
+    For {
+        var: String,
+        items: Vec<Value>,
+        k: usize,
+        body: Vec<Stmt>,
+    },
+    While {
+        cond: Expr,
+        body: Vec<Stmt>,
+    },
+    Repeat {
+        left: i64,
+        count: i64,
+        body: Vec<Stmt>,
+    },
 }
 
 impl Frame {
@@ -119,11 +148,19 @@ pub enum Outcome {
     Held { state: Box<Suspended> },
 }
 
-const CONTEXT: &[&str] = &["self", "holder", "actor", "it", "player", "players", "game", "map", "camera", "profile"];
+const CONTEXT: &[&str] = &[
+    "self", "holder", "actor", "it", "player", "players", "game", "map", "camera", "profile",
+];
 
 impl World<'_> {
     fn rt_err(&self, env: &Env, pos: Pos, msg: impl Into<String>) -> String {
-        format!("{}:{}: runtime error: column {}: {}", env.file, pos.line, pos.col, msg.into())
+        format!(
+            "{}:{}: runtime error: column {}: {}",
+            env.file,
+            pos.line,
+            pos.col,
+            msg.into()
+        )
     }
 
     pub(crate) fn decl_of(&self, full: &str) -> Option<(Arc<Item>, Option<String>, String)> {
@@ -150,7 +187,9 @@ impl World<'_> {
     pub fn run_frames(&mut self, frames: &mut Vec<Frame>, env: &mut Env) -> RtResult<Flow> {
         let mut steps: u64 = 0;
         loop {
-            let Some(top) = frames.last_mut() else { return Ok(Flow::Done(None)) };
+            let Some(top) = frames.last_mut() else {
+                return Ok(Flow::Done(None));
+            };
             match top {
                 Frame::Block { stmts, i } => {
                     if *i >= stmts.len() {
@@ -167,7 +206,12 @@ impl World<'_> {
                         return Ok(Flow::Pause);
                     }
                 }
-                Frame::For { var, items, k, body } => {
+                Frame::For {
+                    var,
+                    items,
+                    k,
+                    body,
+                } => {
                     if *k >= items.len() {
                         frames.pop();
                         continue;
@@ -182,7 +226,14 @@ impl World<'_> {
                     let (cond, body) = (cond.clone(), body.clone());
                     steps += 1;
                     if steps > self.s.game.loop_steps {
-                        return Err(self.rt_err(env, cond.pos, format!("the loop went over `game.loop_steps` ({})", self.s.game.loop_steps)));
+                        return Err(self.rt_err(
+                            env,
+                            cond.pos,
+                            format!(
+                                "the loop went over `game.loop_steps` ({})",
+                                self.s.game.loop_steps
+                            ),
+                        ));
                     }
                     if self.truth(&cond, env)? {
                         frames.push(Frame::Block { stmts: body, i: 0 });
@@ -205,10 +256,19 @@ impl World<'_> {
 
     /// Runs a body that cannot wait to its end.
     fn run_to_end(&mut self, body: &[Stmt], env: &mut Env) -> RtResult<Flow> {
-        let mut frames = vec![Frame::Block { stmts: body.to_vec(), i: 0 }];
+        let mut frames = vec![Frame::Block {
+            stmts: body.to_vec(),
+            i: 0,
+        }];
         match self.run_frames(&mut frames, env)? {
-            Flow::Wait(_) => Err(format!("{}: runtime error: `wait` outside a command", env.file)),
-            Flow::Pause | Flow::Sub(_) => Err(format!("{}: runtime error: `say`, `wait confirm` and `wait scene` belong in a scene", env.file)),
+            Flow::Wait(_) => Err(format!(
+                "{}: runtime error: `wait` outside a command",
+                env.file
+            )),
+            Flow::Pause | Flow::Sub(_) => Err(format!(
+                "{}: runtime error: `say`, `wait confirm` and `wait scene` belong in a scene",
+                env.file
+            )),
             f => Ok(f),
         }
     }
@@ -239,25 +299,49 @@ impl World<'_> {
             StmtKind::If { arms, otherwise } => {
                 for (c, b) in arms {
                     if self.truth(c, env)? {
-                        frames.push(Frame::Block { stmts: b.clone(), i: 0 });
+                        frames.push(Frame::Block {
+                            stmts: b.clone(),
+                            i: 0,
+                        });
                         return Ok(None);
                     }
                 }
                 if let Some(b) = otherwise {
-                    frames.push(Frame::Block { stmts: b.clone(), i: 0 });
+                    frames.push(Frame::Block {
+                        stmts: b.clone(),
+                        i: 0,
+                    });
                 }
             }
             StmtKind::For { var, iter, body } => {
                 let v = self.eval(iter, env)?;
-                let items = v.members().ok_or_else(|| self.rt_err(env, iter.pos, format!("`for` goes over a set, not a {}", v.type_name())))?;
-                frames.push(Frame::For { var: var.clone(), items, k: 0, body: body.clone() });
+                let items = v.members().ok_or_else(|| {
+                    self.rt_err(
+                        env,
+                        iter.pos,
+                        format!("`for` goes over a set, not a {}", v.type_name()),
+                    )
+                })?;
+                frames.push(Frame::For {
+                    var: var.clone(),
+                    items,
+                    k: 0,
+                    body: body.clone(),
+                });
             }
             StmtKind::Repeat { count, body } => {
                 let n = self.eval(count, env)?;
                 let n = self.number(n, env, count.pos)?;
-                frames.push(Frame::Repeat { left: n, count: n, body: body.clone() });
+                frames.push(Frame::Repeat {
+                    left: n,
+                    count: n,
+                    body: body.clone(),
+                });
             }
-            StmtKind::While { cond, body } => frames.push(Frame::While { cond: cond.clone(), body: body.clone() }),
+            StmtKind::While { cond, body } => frames.push(Frame::While {
+                cond: cond.clone(),
+                body: body.clone(),
+            }),
             StmtKind::Break => {
                 while let Some(f) = frames.pop() {
                     if f.is_loop() {
@@ -273,21 +357,33 @@ impl World<'_> {
                         Some(c) => {
                             let cv = self.eval(c, env)?;
                             match (&cv, &v) {
-                                (Value::Range(a, b), Value::Number(n)) => n >= a && b.is_none_or(|b| *n <= b),
+                                (Value::Range(a, b), Value::Number(n)) => {
+                                    n >= a && b.is_none_or(|b| *n <= b)
+                                }
                                 _ => cv == v,
                             }
                         }
                     };
                     if hit {
-                        frames.push(Frame::Block { stmts: body.clone(), i: 0 });
+                        frames.push(Frame::Block {
+                            stmts: body.clone(),
+                            i: 0,
+                        });
                         break;
                     }
                 }
             }
             StmtKind::Emit(call) => {
-                let ExprKind::Call(f, args) = &call.kind else { return Err(self.rt_err(env, s.pos, "`emit` takes an event call")) };
-                let ExprKind::Name { name, .. } = &f.kind else { return Err(self.rt_err(env, s.pos, "`emit` takes an event")) };
-                let event = self.resolve(env, name).map(|d| d.full.clone()).ok_or_else(|| self.rt_err(env, s.pos, format!("no event `{name}`")))?;
+                let ExprKind::Call(f, args) = &call.kind else {
+                    return Err(self.rt_err(env, s.pos, "`emit` takes an event call"));
+                };
+                let ExprKind::Name { name, .. } = &f.kind else {
+                    return Err(self.rt_err(env, s.pos, "`emit` takes an event"));
+                };
+                let event = self
+                    .resolve(env, name)
+                    .map(|d| d.full.clone())
+                    .ok_or_else(|| self.rt_err(env, s.pos, format!("no event `{name}`")))?;
                 let mut vals = Vec::new();
                 for a in args {
                     vals.push((a.name.clone(), self.eval(&a.value, env)?));
@@ -303,10 +399,20 @@ impl World<'_> {
             // a command's wait for a scene, a confirmation, a menu or a
             // field ends the action; the engine reads what it waits for
             // from the wait point at the action's end (M 6.1.6)
-            StmtKind::Wait(WaitArg::Confirm | WaitArg::Scene(_)) | StmtKind::Open(_) | StmtKind::OpenValue { .. } | StmtKind::WaitInput { .. } if env.kind == BodyKind::Command => {
+            StmtKind::Wait(WaitArg::Confirm | WaitArg::Scene(_))
+            | StmtKind::Open(_)
+            | StmtKind::OpenValue { .. }
+            | StmtKind::WaitInput { .. }
+                if env.kind == BodyKind::Command =>
+            {
                 return Ok(Some(Flow::Pause));
             }
-            StmtKind::Wait(WaitArg::Confirm | WaitArg::Scene(_)) | StmtKind::Open(_) | StmtKind::OpenValue { .. } | StmtKind::WaitInput { .. } if env.kind == BodyKind::Scene => {
+            StmtKind::Wait(WaitArg::Confirm | WaitArg::Scene(_))
+            | StmtKind::Open(_)
+            | StmtKind::OpenValue { .. }
+            | StmtKind::WaitInput { .. }
+                if env.kind == BodyKind::Scene =>
+            {
                 if let Some(flow) = self.wait_flow(s, env)? {
                     return Ok(Some(flow));
                 }
@@ -316,11 +422,23 @@ impl World<'_> {
             StmtKind::Choice(options) if env.kind == BodyKind::Scene => {
                 self.scene_skipping = false;
                 let items = self.choice_items(options, env)?;
-                self.pause = Some(super::world::Pause::Choice { scene: env.name.clone(), items, options: options.clone() });
+                self.pause = Some(super::world::Pause::Choice {
+                    scene: env.name.clone(),
+                    items,
+                    options: options.clone(),
+                });
                 return Ok(Some(Flow::Pause));
             }
-            StmtKind::Wait(_) | StmtKind::WaitInput { .. } | StmtKind::Open(_) | StmtKind::OpenValue { .. } | StmtKind::Choice(_) => {
-                return Err(self.rt_err(env, s.pos, "scenes, dialogs, menus and input waits are not supported yet"));
+            StmtKind::Wait(_)
+            | StmtKind::WaitInput { .. }
+            | StmtKind::Open(_)
+            | StmtKind::OpenValue { .. }
+            | StmtKind::Choice(_) => {
+                return Err(self.rt_err(
+                    env,
+                    s.pos,
+                    "scenes, dialogs, menus and input waits are not supported yet",
+                ));
             }
             StmtKind::Return(v) => {
                 let v = match v {
@@ -339,7 +457,13 @@ impl World<'_> {
 
     fn truth(&mut self, e: &Expr, env: &mut Env) -> RtResult<bool> {
         let v = self.eval(e, env)?;
-        v.as_bool().ok_or_else(|| self.rt_err(env, e.pos, format!("a condition is a bool, not a {} (`{e}`)", v.type_name())))
+        v.as_bool().ok_or_else(|| {
+            self.rt_err(
+                env,
+                e.pos,
+                format!("a condition is a bool, not a {} (`{e}`)", v.type_name()),
+            )
+        })
     }
 
     /// A number: dice and ranges are rolled where a number is read (D 5.2).
@@ -348,7 +472,11 @@ impl World<'_> {
             Value::Number(n) => Ok(n),
             Value::Dice { n, sides, bonus } => Ok(self.rng_for(env).dice(n, sides, bonus)),
             Value::Range(a, Some(b)) => Ok(self.rng_for(env).range(a, b).unwrap_or(a)),
-            v => Err(self.rt_err(env, pos, format!("a number, not a {} (`{v}`)", v.type_name()))),
+            v => Err(self.rt_err(
+                env,
+                pos,
+                format!("a number, not a {} (`{v}`)", v.type_name()),
+            )),
         }
     }
 
@@ -358,7 +486,11 @@ impl World<'_> {
         use ExprKind::*;
         Ok(match &e.kind {
             Int(n) => Value::Number(*n),
-            Dice(n, s) => Value::Dice { n: *n, sides: *s, bonus: 0 },
+            Dice(n, s) => Value::Dice {
+                n: *n,
+                sides: *s,
+                bonus: 0,
+            },
             Time(ms, _) => Value::Time(*ms),
             Percent(p) => Value::Percent(*p),
             Size(w, h) => Value::Size(*w, *h),
@@ -368,7 +500,11 @@ impl World<'_> {
             All => Value::All,
             EmptyDict => Value::Dict(vec![]),
             Name { name, root } => {
-                let written = if *root { format!(".{name}") } else { name.clone() };
+                let written = if *root {
+                    format!(".{name}")
+                } else {
+                    name.clone()
+                };
                 self.name_value(&written, env)
             }
             Word(w) => self.word(w, env, e.pos)?,
@@ -376,10 +512,18 @@ impl World<'_> {
                 let mut out: Vec<String> = Vec::new();
                 for c in names::candidates(env.ns.as_deref(), name) {
                     let prefix = format!("{c}.");
-                    let one = |k: &str| k.strip_prefix(&prefix).is_some_and(|r| *deep || !r.contains('.'));
+                    let one = |k: &str| {
+                        k.strip_prefix(&prefix)
+                            .is_some_and(|r| *deep || !r.contains('.'))
+                    };
                     out.extend(self.m.defs.keys().filter(|k| one(k)).cloned());
                     for f in &self.m.languages {
-                        out.extend(f.texts.iter().map(|t| names::qualify(f.namespace.as_deref(), t.key())).filter(|k| one(k)));
+                        out.extend(
+                            f.texts
+                                .iter()
+                                .map(|t| names::qualify(f.namespace.as_deref(), t.key()))
+                                .filter(|k| one(k)),
+                        );
                     }
                     if !out.is_empty() {
                         break;
@@ -404,19 +548,40 @@ impl World<'_> {
                     // a collection reads by place too, read-only (RS 2.6)
                     Value::List(l) | Value::Collection(l) => {
                         let k = self.number(iv, env, i.pos)?;
-                        usize::try_from(k).ok().and_then(|k| l.get(k).cloned()).unwrap_or(Value::None)
+                        usize::try_from(k)
+                            .ok()
+                            .and_then(|k| l.get(k).cloned())
+                            .unwrap_or(Value::None)
                     }
-                    Value::Dict(d) => d.into_iter().find(|(k, _)| *k == iv).map(|(_, v)| v).unwrap_or(Value::None),
-                    v => return Err(self.rt_err(env, e.pos, format!("`[…]` reads a list or dictionary, not a {}", v.type_name()))),
+                    Value::Dict(d) => d
+                        .into_iter()
+                        .find(|(k, _)| *k == iv)
+                        .map(|(_, v)| v)
+                        .unwrap_or(Value::None),
+                    v => {
+                        return Err(self.rt_err(
+                            env,
+                            e.pos,
+                            format!("`[…]` reads a list or dictionary, not a {}", v.type_name()),
+                        ));
+                    }
                 }
             }
             Neg(a) => match self.eval(a, env)? {
                 Value::Number(n) => Value::Number(-n),
                 Value::Percent(p) => Value::Percent(-p),
-                Value::Dice { n, sides, bonus } => Value::Number(-self.rng_for(env).dice(n, sides, bonus)),
+                Value::Dice { n, sides, bonus } => {
+                    Value::Number(-self.rng_for(env).dice(n, sides, bonus))
+                }
                 Value::Dir(d) => Value::Dir(d.opposite()),
                 Value::Side(s) => Value::Side(s.opposite()),
-                v => return Err(self.rt_err(env, e.pos, format!("`-` takes a number or direction, not a {}", v.type_name()))),
+                v => {
+                    return Err(self.rt_err(
+                        env,
+                        e.pos,
+                        format!("`-` takes a number or direction, not a {}", v.type_name()),
+                    ));
+                }
             },
             Not(a) => Value::Bool(!self.truth(a, env)?),
             Binary(op, a, b) => self.binary(*op, a, b, env, e.pos)?,
@@ -432,10 +597,21 @@ impl World<'_> {
                 };
                 Value::Range(a, b)
             }
-            Has { subject, no, component } => {
-                let full = if names::is_vocabulary(component) { component.clone() } else { self.resolve(env, component).map(|d| d.full.clone()).unwrap_or_else(|| component.clone()) };
+            Has {
+                subject,
+                no,
+                component,
+            } => {
+                let full = if names::is_vocabulary(component) {
+                    component.clone()
+                } else {
+                    self.resolve(env, component)
+                        .map(|d| d.full.clone())
+                        .unwrap_or_else(|| component.clone())
+                };
                 // `game has PERMADEATH` asks the game record (D 5.5)
-                let is_game = matches!(&subject.kind, Word(w) if w == "game" && !env.locals.contains_key(w));
+                let is_game =
+                    matches!(&subject.kind, Word(w) if w == "game" && !env.locals.contains_key(w));
                 let is_profile = matches!(&subject.kind, Word(w) if w == "profile" && !env.locals.contains_key(w));
                 let has = if is_game {
                     self.s.game.components.iter().any(|c| c.name == full)
@@ -445,7 +621,13 @@ impl World<'_> {
                     match self.eval(subject, env)? {
                         Value::Entity(x) => self.s.get(x).alive && self.s.get(x).has(&full),
                         Value::None => false,
-                        v => return Err(self.rt_err(env, e.pos, format!("`has` asks an entity, not a {}", v.type_name()))),
+                        v => {
+                            return Err(self.rt_err(
+                                env,
+                                e.pos,
+                                format!("`has` asks an entity, not a {}", v.type_name()),
+                            ));
+                        }
                     }
                 };
                 Value::Bool(has != *no)
@@ -460,7 +642,13 @@ impl World<'_> {
             }
             Where(a, cond) => {
                 let av = self.eval(a, env)?;
-                let items = av.members().ok_or_else(|| self.rt_err(env, e.pos, format!("`where` filters a set, not a {}", av.type_name())))?;
+                let items = av.members().ok_or_else(|| {
+                    self.rt_err(
+                        env,
+                        e.pos,
+                        format!("`where` filters a set, not a {}", av.type_name()),
+                    )
+                })?;
                 let mut kept = Vec::new();
                 for it in items {
                     env.it.push(it.clone());
@@ -472,7 +660,17 @@ impl World<'_> {
                 }
                 // the result is of the source's kind (RS 5.3)
                 match av {
-                    Value::Area(_) => Value::Area(Area::new(kept.into_iter().filter_map(|v| if let Value::Pos(p) = v { Some(p) } else { Option::None }).collect())),
+                    Value::Area(_) => Value::Area(Area::new(
+                        kept.into_iter()
+                            .filter_map(|v| {
+                                if let Value::Pos(p) = v {
+                                    Some(p)
+                                } else {
+                                    Option::None
+                                }
+                            })
+                            .collect(),
+                    )),
                     Value::List(_) | Value::Range(..) | Value::Dict(_) => Value::List(kept),
                     _ => Value::Collection(kept),
                 }
@@ -488,14 +686,19 @@ impl World<'_> {
                 Kind::Deck => Value::Deck(d.full.clone()),
                 Kind::Table => Value::Table(d.full.clone()),
                 Kind::Constant => match &d.source {
-                    DefSource::Row(r) => number_value(r.rest(1)).unwrap_or_else(|| Value::Text(r.rest(1).trim_matches('"').to_string())),
+                    DefSource::Row(r) => number_value(r.rest(1))
+                        .unwrap_or_else(|| Value::Text(r.rest(1).trim_matches('"').to_string())),
                     _ => Value::None,
                 },
                 _ => Value::Name(d.full.clone()),
             },
             None => {
                 for c in names::candidates(env.ns.as_deref(), written) {
-                    if self.m.languages.iter().any(|f| f.texts.iter().any(|t| names::qualify(f.namespace.as_deref(), t.key()) == c)) {
+                    if self.m.languages.iter().any(|f| {
+                        f.texts
+                            .iter()
+                            .any(|t| names::qualify(f.namespace.as_deref(), t.key()) == c)
+                    }) {
                         return Value::Name(c);
                     }
                 }
@@ -506,7 +709,11 @@ impl World<'_> {
 
     fn word(&mut self, w: &str, env: &mut Env, pos: Pos) -> RtResult<Value> {
         if w == "it" {
-            return env.it.last().cloned().ok_or_else(|| self.rt_err(env, pos, "`it` outside `where`"));
+            return env
+                .it
+                .last()
+                .cloned()
+                .ok_or_else(|| self.rt_err(env, pos, "`it` outside `where`"));
         }
         if let Some(v) = env.locals.get(w) {
             return Ok(v.clone());
@@ -517,8 +724,13 @@ impl World<'_> {
             "holder" => ent(env.holder),
             "actor" => ent(env.actor),
             "player" => ent(self.s.player),
-            "players" => Value::Collection(self.s.players().into_iter().map(Value::Entity).collect()),
-            "map" => env.map.map(|m| Value::Name(self.s.maps[m].name.clone())).unwrap_or(Value::None),
+            "players" => {
+                Value::Collection(self.s.players().into_iter().map(Value::Entity).collect())
+            }
+            "map" => env
+                .map
+                .map(|m| Value::Name(self.s.maps[m].name.clone()))
+                .unwrap_or(Value::None),
             _ if CONTEXT.contains(&w) => Value::None,
             _ => {
                 if let Some(d) = Dir::parse(w) {
@@ -539,7 +751,9 @@ impl World<'_> {
             Value::Name(n) => Some(n.clone()),
             _ => None,
         };
-        let (Some(ka), Some(kb)) = (kind(a), kind(b)) else { return false };
+        let (Some(ka), Some(kb)) = (kind(a), kind(b)) else {
+            return false;
+        };
         // the kind or one it extends (RS 5.3)
         let mut cur = Some(ka);
         for _ in 0..64 {
@@ -549,7 +763,10 @@ impl World<'_> {
             }
             cur = self.m.defs.get(&k).and_then(|d| d.block()).and_then(|b| {
                 let parent = b.arg_after("extends")?;
-                self.m.resolve(b.namespace.as_deref(), parent).ok().map(|d| d.full.clone())
+                self.m
+                    .resolve(b.namespace.as_deref(), parent)
+                    .ok()
+                    .map(|d| d.full.clone())
             });
         }
         false
@@ -573,10 +790,19 @@ impl World<'_> {
         (0..m.layers.len()).any(|l| m.tile(l, p.x, p.y).is_some_and(|t| tile_matches(t, name)))
     }
 
-    fn binary(&mut self, op: BinOp, a: &Expr, b: &Expr, env: &mut Env, pos: Pos) -> RtResult<Value> {
+    fn binary(
+        &mut self,
+        op: BinOp,
+        a: &Expr,
+        b: &Expr,
+        env: &mut Env,
+        pos: Pos,
+    ) -> RtResult<Value> {
         use BinOp::*;
         let av = self.eval(a, env)?;
-        if matches!(op, And | Or) && let Value::Bool(x) = av {
+        if matches!(op, And | Or)
+            && let Value::Bool(x) = av
+        {
             // `and` and `or` short-circuit on truth values
             if (op == And && !x) || (op == Or && x) {
                 return Ok(Value::Bool(x));
@@ -607,7 +833,8 @@ impl World<'_> {
 
     fn equal(&mut self, a: Value, b: Value, env: &mut Env) -> bool {
         match (&a, &b) {
-            (Value::Dice { .. } | Value::Range(..), Value::Number(_)) | (Value::Number(_), Value::Dice { .. }) => {
+            (Value::Dice { .. } | Value::Range(..), Value::Number(_))
+            | (Value::Number(_), Value::Dice { .. }) => {
                 let p = Pos::default();
                 self.number(a, env, p).ok() == self.number(b, env, p).ok()
             }
@@ -620,9 +847,15 @@ impl World<'_> {
         Ok(match (op, &a, &b) {
             (Add, Value::Pos(p), Value::Dir(d)) => Value::Pos(p.step(*d)),
             (Add, Value::Text(x), Value::Text(y)) => Value::Text(format!("{x}{y}")),
-            (Add | Sub, Value::Percent(x), Value::Percent(y)) => Value::Percent(if op == Add { x + y } else { x - y }),
-            (Mul, _, Value::Percent(p)) => Value::Number((self.number(a.clone(), env, pos)? * p).div_euclid(100)),
-            (Mul, Value::Percent(p), _) => Value::Number((self.number(b.clone(), env, pos)? * p).div_euclid(100)),
+            (Add | Sub, Value::Percent(x), Value::Percent(y)) => {
+                Value::Percent(if op == Add { x + y } else { x - y })
+            }
+            (Mul, _, Value::Percent(p)) => {
+                Value::Number((self.number(a.clone(), env, pos)? * p).div_euclid(100))
+            }
+            (Mul, Value::Percent(p), _) => {
+                Value::Number((self.number(b.clone(), env, pos)? * p).div_euclid(100))
+            }
             (Sub, Value::Area(_) | Value::Pos(_), _) if !matches!(b, Value::Number(_)) => {
                 let (x, y) = (self.area(&a, env, pos)?, self.area(&b, env, pos)?);
                 Value::Area(x.minus(&y))
@@ -650,11 +883,15 @@ impl World<'_> {
             Value::Area(a) => a.clone(),
             Value::Pos(p) => Area::one(*p),
             Value::Entity(e) => self.s.at(*e).map(Area::one).unwrap_or_default(),
-            Value::List(l) | Value::Collection(l) => Area::new(l.iter().filter_map(|x| match x {
-                Value::Pos(p) => Some(*p),
-                Value::Entity(e) => self.s.at(*e),
-                _ => None,
-            }).collect()),
+            Value::List(l) | Value::Collection(l) => Area::new(
+                l.iter()
+                    .filter_map(|x| match x {
+                        Value::Pos(p) => Some(*p),
+                        Value::Entity(e) => self.s.at(*e),
+                        _ => None,
+                    })
+                    .collect(),
+            ),
             Value::None => Area::default(),
             v => return Err(self.rt_err(env, pos, format!("an area, not a {}", v.type_name()))),
         })
@@ -700,29 +937,63 @@ impl World<'_> {
                             "turn" => Value::Number(g.turn()),
                             "call_depth" => Value::Number(g.call_depth as i64),
                             "loop_steps" => Value::Number(g.loop_steps as i64),
-                            "party" => Value::Name(if self.s.party_each { "each" } else { "switch" }.into()),
+                            "party" => Value::Name(
+                                if self.s.party_each { "each" } else { "switch" }.into(),
+                            ),
                             "leash" => Value::Bool(self.s.leash),
-                            "seats" => Value::Range(self.s.seat_range.0 as i64, Some(self.s.seat_range.1 as i64)),
+                            "seats" => Value::Range(
+                                self.s.seat_range.0 as i64,
+                                Some(self.s.seat_range.1 as i64),
+                            ),
                             _ => Value::None,
                         };
                         return self.fields_of(v, &parts[1..], env, e.pos);
                     }
-                    let (comp, n) = self.component_at(&parts, env).ok_or_else(|| self.rt_err(env, e.pos, format!("`game` has no component `{first}`")))?;
-                    let cv = self.s.game.components.iter().find(|c| c.name == comp).cloned();
+                    let (comp, n) = self.component_at(&parts, env).ok_or_else(|| {
+                        self.rt_err(env, e.pos, format!("`game` has no component `{first}`"))
+                    })?;
+                    let cv = self
+                        .s
+                        .game
+                        .components
+                        .iter()
+                        .find(|c| c.name == comp)
+                        .cloned();
                     let Some(cv) = cv else { return Ok(Value::None) };
-                    return self.component_fields_of(cv, crate::rt::world::GAME, &parts[n..], env, e.pos);
+                    return self.component_fields_of(
+                        cv,
+                        crate::rt::world::GAME,
+                        &parts[n..],
+                        env,
+                        e.pos,
+                    );
                 }
                 "profile" => {
                     let first = &parts[0];
-                    let (comp, n) = self.component_at(&parts, env).ok_or_else(|| self.rt_err(env, e.pos, format!("`profile` has no component `{first}`")))?;
+                    let (comp, n) = self.component_at(&parts, env).ok_or_else(|| {
+                        self.rt_err(env, e.pos, format!("`profile` has no component `{first}`"))
+                    })?;
                     let cv = self.s.profile.iter().find(|c| c.name == comp).cloned();
                     let Some(cv) = cv else { return Ok(Value::None) };
-                    return self.component_fields_of(cv, crate::rt::world::GAME, &parts[n..], env, e.pos);
+                    return self.component_fields_of(
+                        cv,
+                        crate::rt::world::GAME,
+                        &parts[n..],
+                        env,
+                        e.pos,
+                    );
                 }
                 "map" => {
-                    let Some(m) = env.map else { return Ok(Value::None) };
+                    let Some(m) = env.map else {
+                        return Ok(Value::None);
+                    };
                     let var = parts[0].clone();
-                    let v = self.s.maps[m].vars.iter().find(|(k, _)| *k == var).map(|(_, v)| v.clone()).unwrap_or(Value::Number(0));
+                    let v = self.s.maps[m]
+                        .vars
+                        .iter()
+                        .find(|(k, _)| *k == var)
+                        .map(|(_, v)| v.clone())
+                        .unwrap_or(Value::Number(0));
                     return self.fields_of(v, &parts[1..], env, e.pos);
                 }
                 _ => {}
@@ -737,11 +1008,19 @@ impl World<'_> {
         let upper = parts.iter().take_while(|p| names::is_part(p)).count();
         (1..=upper).rev().find_map(|n| {
             let name = parts[..n].join(".");
-            self.resolve(env, &name).filter(|d| d.kind == Kind::Component).map(|d| (d.full.clone(), n))
+            self.resolve(env, &name)
+                .filter(|d| d.kind == Kind::Component)
+                .map(|d| (d.full.clone(), n))
         })
     }
 
-    fn fields_of(&mut self, mut v: Value, parts: &[String], env: &mut Env, pos: Pos) -> RtResult<Value> {
+    fn fields_of(
+        &mut self,
+        mut v: Value,
+        parts: &[String],
+        env: &mut Env,
+        pos: Pos,
+    ) -> RtResult<Value> {
         let mut i = 0;
         while i < parts.len() {
             let p = &parts[i];
@@ -757,7 +1036,11 @@ impl World<'_> {
                     }
                     match p.as_str() {
                         "at" => self.s.at(e).map(Value::Pos).unwrap_or(Value::None),
-                        "map" => self.s.at(e).map(|q| Value::Name(self.s.maps[q.map].name.clone())).unwrap_or(Value::None),
+                        "map" => self
+                            .s
+                            .at(e)
+                            .map(|q| Value::Name(self.s.maps[q.map].name.clone()))
+                            .unwrap_or(Value::None),
                         "kind" => Value::Name(inst.kind.clone()),
                         "slot" => match inst.place {
                             Place::In { slot, .. } => Value::Number(slot as i64),
@@ -768,10 +1051,15 @@ impl World<'_> {
                             let (comp, n) = if names::is_vocabulary(p) {
                                 (p.clone(), 1)
                             } else {
-                                self.component_at(&parts[i..], env).ok_or_else(|| self.rt_err(env, pos, format!("no component `{p}`")))?
+                                self.component_at(&parts[i..], env).ok_or_else(|| {
+                                    self.rt_err(env, pos, format!("no component `{p}`"))
+                                })?
                             };
                             let Some(cv) = inst.get(&comp).cloned() else {
-                                self.warnings.push(format!("{}:{}: `{}` has no `{comp}`; the field reads as none (RS 5.3)", env.file, pos.line, inst.kind));
+                                self.warnings.push(format!(
+                                    "{}:{}: `{}` has no `{comp}`; the field reads as none (RS 5.3)",
+                                    env.file, pos.line, inst.kind
+                                ));
                                 return Ok(Value::None);
                             };
                             return self.component_fields_of(cv, e, &parts[i + n..], env, pos);
@@ -794,19 +1082,32 @@ impl World<'_> {
                     "level" => Value::Number(s.level),
                     _ => Value::None,
                 },
-                Value::Deck(d) if p == "count" => Value::Number(self.s.deck(&d).map(|s| s.draw.len()).unwrap_or(0) as i64),
-                ref set @ (Value::Collection(_) | Value::List(_) | Value::Area(_) | Value::Dict(_)) => {
+                Value::Deck(d) if p == "count" => {
+                    Value::Number(self.s.deck(&d).map(|s| s.draw.len()).unwrap_or(0) as i64)
+                }
+                ref set @ (Value::Collection(_)
+                | Value::List(_)
+                | Value::Area(_)
+                | Value::Dict(_)) => {
                     let items = set.members().unwrap_or_default();
                     match p.as_str() {
                         "count" => Value::Number(items.len() as i64),
                         "first" => items.first().cloned().unwrap_or(Value::None),
                         "last" => items.last().cloned().unwrap_or(Value::None),
                         "keys" => Value::List(items),
-                        _ => return Err(self.rt_err(env, pos, format!("a set has no field `{p}`"))),
+                        _ => {
+                            return Err(self.rt_err(env, pos, format!("a set has no field `{p}`")));
+                        }
                     }
                 }
                 Value::None => return Ok(Value::None),
-                other => return Err(self.rt_err(env, pos, format!("a {} has no field `{p}`", other.type_name()))),
+                other => {
+                    return Err(self.rt_err(
+                        env,
+                        pos,
+                        format!("a {} has no field `{p}`", other.type_name()),
+                    ));
+                }
             };
             i += 1;
         }
@@ -815,10 +1116,25 @@ impl World<'_> {
 
     /// The fields of a component value on an instance; a collection field
     /// reads as its members (D 5.4).
-    fn component_fields_of(&mut self, cv: ComponentValue, holder: EntityId, rest: &[String], env: &mut Env, pos: Pos) -> RtResult<Value> {
-        let Some(field) = rest.first() else { return Ok(Value::Component(cv)) };
+    fn component_fields_of(
+        &mut self,
+        cv: ComponentValue,
+        holder: EntityId,
+        rest: &[String],
+        env: &mut Env,
+        pos: Pos,
+    ) -> RtResult<Value> {
+        let Some(field) = rest.first() else {
+            return Ok(Value::Component(cv));
+        };
         let v = match cv.get(field) {
-            Some(Value::Collection(_)) => Value::Collection(self.s.members(holder, &cv.name, field).into_iter().map(Value::Entity).collect()),
+            Some(Value::Collection(_)) => Value::Collection(
+                self.s
+                    .members(holder, &cv.name, field)
+                    .into_iter()
+                    .map(Value::Entity)
+                    .collect(),
+            ),
             Some(v) => v.clone(),
             None => Value::None,
         };
@@ -840,7 +1156,11 @@ impl World<'_> {
                     Value::List(mut l) => {
                         let k = self.number(iv, env, i.pos)? as usize;
                         if k >= l.len() {
-                            return Err(self.rt_err(env, target.pos, format!("list index {k} is outside the list of {}", l.len())));
+                            return Err(self.rt_err(
+                                env,
+                                target.pos,
+                                format!("list index {k} is outside the list of {}", l.len()),
+                            ));
                         }
                         l[k] = v;
                         Value::List(l)
@@ -852,7 +1172,16 @@ impl World<'_> {
                         }
                         Value::Dict(d)
                     }
-                    other => return Err(self.rt_err(env, target.pos, format!("`[…] =` writes a list or dictionary, not a {}", other.type_name()))),
+                    other => {
+                        return Err(self.rt_err(
+                            env,
+                            target.pos,
+                            format!(
+                                "`[…] =` writes a list or dictionary, not a {}",
+                                other.type_name()
+                            ),
+                        ));
+                    }
                 };
                 self.assign(base, updated, env)
             }
@@ -870,9 +1199,19 @@ impl World<'_> {
                     && w == "game"
                     && !env.locals.contains_key(w)
                 {
-                    let (comp, _) = self.component_at(&parts, env).ok_or_else(|| self.rt_err(env, target.pos, "no such `game` component"))?;
+                    let (comp, _) = self
+                        .component_at(&parts, env)
+                        .ok_or_else(|| self.rt_err(env, target.pos, "no such `game` component"))?;
                     let v = self.keep_list(&comp, &last, v);
-                    let c = self.s.game.components.iter_mut().find(|c| c.name == comp).ok_or_else(|| format!("`game` has no `{comp}`; add it in the `game` block"))?;
+                    let c = self
+                        .s
+                        .game
+                        .components
+                        .iter_mut()
+                        .find(|c| c.name == comp)
+                        .ok_or_else(|| {
+                            format!("`game` has no `{comp}`; add it in the `game` block")
+                        })?;
                     c.set(&last, v);
                     return Ok(());
                 }
@@ -882,9 +1221,18 @@ impl World<'_> {
                     && w == "profile"
                     && !env.locals.contains_key(w)
                 {
-                    let (comp, _) = self.component_at(&parts, env).ok_or_else(|| self.rt_err(env, target.pos, "no such `profile` component"))?;
+                    let (comp, _) = self.component_at(&parts, env).ok_or_else(|| {
+                        self.rt_err(env, target.pos, "no such `profile` component")
+                    })?;
                     let v = self.keep_list(&comp, &last, v);
-                    let c = self.s.profile.iter_mut().find(|c| c.name == comp).ok_or_else(|| format!("`profile` has no `{comp}`; add it in the `profile` block"))?;
+                    let c = self
+                        .s
+                        .profile
+                        .iter_mut()
+                        .find(|c| c.name == comp)
+                        .ok_or_else(|| {
+                            format!("`profile` has no `{comp}`; add it in the `profile` block")
+                        })?;
                     c.set(&last, v);
                     self.profile_touched.insert((comp, last));
                     return Ok(());
@@ -894,7 +1242,9 @@ impl World<'_> {
                     && !env.locals.contains_key(w)
                     && parts.is_empty()
                 {
-                    let m = env.map.ok_or_else(|| self.rt_err(env, target.pos, "no map"))?;
+                    let m = env
+                        .map
+                        .ok_or_else(|| self.rt_err(env, target.pos, "no map"))?;
                     let vars = &mut self.s.maps[m].vars;
                     match vars.iter_mut().find(|(k, _)| *k == last) {
                         Some((_, old)) => *old = v,
@@ -910,11 +1260,25 @@ impl World<'_> {
                     while i < parts.len() {
                         match &b {
                             Value::Entity(_) => {
-                                let (c, n) = if names::is_vocabulary(&parts[i]) { (parts[i].clone(), 1) } else { self.component_at(&parts[i..], env).ok_or_else(|| self.rt_err(env, target.pos, format!("no component `{}`", parts[i])))? };
+                                let (c, n) = if names::is_vocabulary(&parts[i]) {
+                                    (parts[i].clone(), 1)
+                                } else {
+                                    self.component_at(&parts[i..], env).ok_or_else(|| {
+                                        self.rt_err(
+                                            env,
+                                            target.pos,
+                                            format!("no component `{}`", parts[i]),
+                                        )
+                                    })?
+                                };
                                 comp = Some(c);
                                 i += n;
                                 if i < parts.len() {
-                                    return Err(self.rt_err(env, target.pos, "nested field writes are not supported yet"));
+                                    return Err(self.rt_err(
+                                        env,
+                                        target.pos,
+                                        "nested field writes are not supported yet",
+                                    ));
                                 }
                             }
                             _ => {
@@ -933,7 +1297,9 @@ impl World<'_> {
                         c.set(&last, v);
                         Ok(())
                     }
-                    (Value::Entity(_), None) => Err(self.rt_err(env, target.pos, format!("`{last}` is kept by the engine"))),
+                    (Value::Entity(_), None) => {
+                        Err(self.rt_err(env, target.pos, format!("`{last}` is kept by the engine")))
+                    }
                     (Value::Component(mut cv), _) => {
                         // a local component value: write it back
                         cv.set(&last, v);
@@ -943,7 +1309,11 @@ impl World<'_> {
                         };
                         self.assign(&base_expr, Value::Component(cv), env)
                     }
-                    (other, _) => Err(self.rt_err(env, target.pos, format!("cannot write a field of a {}", other.type_name()))),
+                    (other, _) => Err(self.rt_err(
+                        env,
+                        target.pos,
+                        format!("cannot write a field of a {}", other.type_name()),
+                    )),
                 }
             }
             _ => Err(self.rt_err(env, target.pos, format!("cannot assign to `{target}`"))),
@@ -955,27 +1325,47 @@ impl World<'_> {
     fn call(&mut self, e: &Expr, f: &Expr, args: &[Arg], env: &mut Env) -> RtResult<Value> {
         match &f.kind {
             ExprKind::Name { name, root } => {
-                let written = if *root { format!(".{name}") } else { name.clone() };
-                let def = self.resolve(env, &written).cloned().ok_or_else(|| self.rt_err(env, f.pos, format!("`{name}` is not defined")))?;
+                let written = if *root {
+                    format!(".{name}")
+                } else {
+                    name.clone()
+                };
+                let def = self
+                    .resolve(env, &written)
+                    .cloned()
+                    .ok_or_else(|| self.rt_err(env, f.pos, format!("`{name}` is not defined")))?;
                 let mut vals = Vec::new();
                 for a in args {
                     vals.push((a.name.clone(), self.eval(&a.value, env)?));
                 }
                 match def.kind {
                     Kind::Function | Kind::Query => self.call_function(&def.full, vals, env),
-                    Kind::Command => Ok(Value::Command(CommandValue { name: def.full.clone(), args: vals })),
+                    Kind::Command => Ok(Value::Command(CommandValue {
+                        name: def.full.clone(),
+                        args: vals,
+                    })),
                     Kind::Ai => {
                         // another ai for the same `self` (RS 7.2)
-                        let me = env.self_.ok_or_else(|| self.rt_err(env, f.pos, "an ai runs for `self`"))?;
+                        let me = env
+                            .self_
+                            .ok_or_else(|| self.rt_err(env, f.pos, "an ai runs for `self`"))?;
                         self.run_ai(&def.full, me)
                     }
                     Kind::Entity => {
-                        let mut card = Card { entity: Some(def.full.clone()), count: None, overrides: vec![] };
+                        let mut card = Card {
+                            entity: Some(def.full.clone()),
+                            count: None,
+                            overrides: vec![],
+                        };
                         for (n, v) in vals {
                             match n {
                                 None => card.count = Some(Box::new(v)),
                                 Some(c) => {
-                                    let full = if names::is_vocabulary(&c) { c } else { self.resolve(env, &c).map(|d| d.full.clone()).unwrap_or(c) };
+                                    let full = if names::is_vocabulary(&c) {
+                                        c
+                                    } else {
+                                        self.resolve(env, &c).map(|d| d.full.clone()).unwrap_or(c)
+                                    };
                                     card.overrides.push((full, v));
                                 }
                             }
@@ -984,17 +1374,24 @@ impl World<'_> {
                     }
                     Kind::Component => Ok(Value::Component(self.component_value(&def.full, vals))),
                     // a scene call is a value for `start` and `wait scene` (RS 9)
-                    Kind::Scene => Ok(Value::Scene(CommandValue { name: def.full.clone(), args: vals })),
+                    Kind::Scene => Ok(Value::Scene(CommandValue {
+                        name: def.full.clone(),
+                        args: vals,
+                    })),
                     k => Err(self.rt_err(env, f.pos, format!("a {k} cannot be called"))),
                 }
             }
             ExprKind::Word(w) => {
-                if super::super::fields::engine_component(w).is_some() && crate::rs::sigs::kind_of(w).is_none() {
+                if super::super::fields::engine_component(w).is_some()
+                    && crate::rs::sigs::kind_of(w).is_none()
+                {
                     let mut vals = Vec::new();
                     for a in args {
                         let v = match (&a.value.kind, a.name.as_deref()) {
                             // a movement mode is a name, not a definition (D 7.5)
-                            (ExprKind::Name { name, .. }, Some("mode")) => Value::Name(name.clone()),
+                            (ExprKind::Name { name, .. }, Some("mode")) => {
+                                Value::Name(name.clone())
+                            }
                             _ => self.eval(&a.value, env)?,
                         };
                         vals.push((a.name.clone(), v));
@@ -1022,7 +1419,10 @@ impl World<'_> {
     /// place, and labels and movement modes are names as written.
     fn engine_arg(&mut self, f: &str, a: &Arg, env: &mut Env) -> RtResult<Value> {
         if let ExprKind::Name { name, .. } = &a.value.kind {
-            let label = (f == "label") || (f == "tag") || (["travel", "spawn"].contains(&f) && a.name.as_deref() == Some("at")) || (f == "tile" && a.name.as_deref() == Some("label"));
+            let label = (f == "label")
+                || (f == "tag")
+                || (["travel", "spawn"].contains(&f) && a.name.as_deref() == Some("at"))
+                || (f == "tile" && a.name.as_deref() == Some("label"));
             let mode = (f == "ray" && a.name.as_deref() == Some("mode")) || f == "blocks";
             if (label || mode) && self.resolve(env, name).is_none() {
                 return Ok(Value::Name(name.clone()));
@@ -1040,7 +1440,9 @@ impl World<'_> {
     /// `actor.PACK.items` as a place: a list with the holder, component and
     /// field, marked by the text `"@collection"`.
     fn collection_place(&mut self, e: &Expr, env: &mut Env) -> RtResult<Option<Value>> {
-        let ExprKind::Field(base, field) = &e.kind else { return Ok(None) };
+        let ExprKind::Field(base, field) = &e.kind else {
+            return Ok(None);
+        };
         let mut parts = vec![];
         let mut root = base.as_ref();
         while let ExprKind::Field(b, p) = &root.kind {
@@ -1049,21 +1451,48 @@ impl World<'_> {
         }
         parts.reverse();
         let holder = self.eval(root, env)?;
-        let Value::Entity(h) = holder else { return Ok(None) };
-        let Some((comp, n)) = self.component_at(&parts, env) else { return Ok(None) };
-        if n != parts.len() || !matches!(self.s.get(h).get(&comp).and_then(|c| c.get(field)), Some(Value::Collection(_))) {
+        let Value::Entity(h) = holder else {
+            return Ok(None);
+        };
+        let Some((comp, n)) = self.component_at(&parts, env) else {
+            return Ok(None);
+        };
+        if n != parts.len()
+            || !matches!(
+                self.s.get(h).get(&comp).and_then(|c| c.get(field)),
+                Some(Value::Collection(_))
+            )
+        {
             return Ok(None);
         }
-        Ok(Some(Value::List(vec![Value::Text("@collection".into()), Value::Entity(h), Value::Name(comp), Value::Name(field.clone())])))
+        Ok(Some(Value::List(vec![
+            Value::Text("@collection".into()),
+            Value::Entity(h),
+            Value::Name(comp),
+            Value::Name(field.clone()),
+        ])))
     }
 
     /// A component value from named or positional arguments; missing
     /// fields get their defaults when added (M 9.5).
     fn component_value(&self, comp: &str, vals: Vec<(Option<String>, Value)>) -> ComponentValue {
-        let defs = if names::is_vocabulary(comp) { crate::fields::engine_component(comp).unwrap_or_default() } else { self.m.defs.get(comp).map(crate::fields::component_fields).unwrap_or_default() };
-        let mut cv = ComponentValue { name: comp.to_string(), fields: vec![] };
+        let defs = if names::is_vocabulary(comp) {
+            crate::fields::engine_component(comp).unwrap_or_default()
+        } else {
+            self.m
+                .defs
+                .get(comp)
+                .map(crate::fields::component_fields)
+                .unwrap_or_default()
+        };
+        let mut cv = ComponentValue {
+            name: comp.to_string(),
+            fields: vec![],
+        };
         for (i, (n, v)) in vals.into_iter().enumerate() {
-            let name = n.or_else(|| defs.get(i).map(|f| f.name.clone())).unwrap_or_default();
+            let name = n
+                .or_else(|| defs.get(i).map(|f| f.name.clone()))
+                .unwrap_or_default();
             cv.set(&name, v);
         }
         cv
@@ -1074,7 +1503,11 @@ impl World<'_> {
     /// A choice's items as the player sees them: `hide when` drops an
     /// item, `disabled when` dims it, its key's parameters and an
     /// `adjust` item's value, all evaluated now (RS 9.7).
-    pub(crate) fn choice_items(&mut self, options: &[ChoiceOption], env: &mut Env) -> RtResult<Vec<super::world::ChoiceItem>> {
+    pub(crate) fn choice_items(
+        &mut self,
+        options: &[ChoiceOption],
+        env: &mut Env,
+    ) -> RtResult<Vec<super::world::ChoiceItem>> {
         let mut out = Vec::new();
         for o in options {
             if let Some(h) = &o.hide
@@ -1098,13 +1531,24 @@ impl World<'_> {
                     let now = self.number(now, env, target.pos)?;
                     let (lo, hi) = match self.eval(range, env)? {
                         Value::Range(lo, Some(hi)) => (lo, hi),
-                        v => return Err(self.rt_err(env, range.pos, format!("`adjust` takes a range, not `{v}`"))),
+                        v => {
+                            return Err(self.rt_err(
+                                env,
+                                range.pos,
+                                format!("`adjust` takes a range, not `{v}`"),
+                            ));
+                        }
                     };
                     Some((now, lo, hi))
                 }
                 OptionBody::Block(_) => None,
             };
-            out.push(super::world::ChoiceItem { name: o.name.clone(), args, enabled, adjust });
+            out.push(super::world::ChoiceItem {
+                name: o.name.clone(),
+                args,
+                enabled,
+                adjust,
+            });
         }
         Ok(out)
     }
@@ -1112,11 +1556,25 @@ impl World<'_> {
     /// An `adjust` item moved by `step` (RS 9.7): within its range, and with
     /// a pool, a raise takes one from it and a cut gives one back. `false`
     /// when it cannot move.
-    pub(crate) fn adjust(&mut self, option: &ChoiceOption, step: i64, env: &mut Env) -> RtResult<bool> {
-        let OptionBody::Adjust { target, range, pool } = &option.body else { return Ok(false) };
+    pub(crate) fn adjust(
+        &mut self,
+        option: &ChoiceOption,
+        step: i64,
+        env: &mut Env,
+    ) -> RtResult<bool> {
+        let OptionBody::Adjust {
+            target,
+            range,
+            pool,
+        } = &option.body
+        else {
+            return Ok(false);
+        };
         let now = self.eval(target, env)?;
         let now = self.number(now, env, target.pos)?;
-        let Value::Range(lo, Some(hi)) = self.eval(range, env)? else { return Ok(false) };
+        let Value::Range(lo, Some(hi)) = self.eval(range, env)? else {
+            return Ok(false);
+        };
         let to = now + step.signum();
         if to < lo || to > hi {
             return Ok(false);
@@ -1134,11 +1592,25 @@ impl World<'_> {
     }
 
     /// Binds a scene's parameters (RS 9).
-    pub(crate) fn bind_params(&mut self, params: &[Param], args: Vec<(Option<String>, Value)>, env: &mut Env, ns: Option<&str>, pos: Pos) -> RtResult<()> {
+    pub(crate) fn bind_params(
+        &mut self,
+        params: &[Param],
+        args: Vec<(Option<String>, Value)>,
+        env: &mut Env,
+        ns: Option<&str>,
+        pos: Pos,
+    ) -> RtResult<()> {
         self.bind(params, args, env, ns, pos)
     }
 
-    fn bind(&mut self, params: &[Param], args: Vec<(Option<String>, Value)>, env: &mut Env, ns: Option<&str>, pos: Pos) -> RtResult<()> {
+    fn bind(
+        &mut self,
+        params: &[Param],
+        args: Vec<(Option<String>, Value)>,
+        env: &mut Env,
+        ns: Option<&str>,
+        pos: Pos,
+    ) -> RtResult<()> {
         let mut given: Vec<Option<Value>> = vec![None; params.len()];
         let mut next = 0;
         for (n, v) in args {
@@ -1147,7 +1619,10 @@ impl World<'_> {
                     next += 1;
                     next - 1
                 }
-                Some(n) => params.iter().position(|p| p.name == n).ok_or_else(|| self.rt_err(env, pos, format!("no parameter `{n}`")))?,
+                Some(n) => params
+                    .iter()
+                    .position(|p| p.name == n)
+                    .ok_or_else(|| self.rt_err(env, pos, format!("no parameter `{n}`")))?,
             };
             if i < given.len() {
                 given[i] = Some(v);
@@ -1160,8 +1635,17 @@ impl World<'_> {
                 (None, None) if p.source.is_some() => return Err(self.rt_err(env, pos, format!("`{}` is asked from the player; give it as an argument (input is not supported yet)", p.name))),
                 (None, None) => Value::None,
             };
-            let ty = types::parse(&p.ty.to_string(), &|n| self.m.resolve(ns, n).is_ok_and(|d| d.kind == Kind::Component)).unwrap_or(Ty::Unknown);
-            let v = if ty == Ty::Number && matches!(v, Value::Dice { .. } | Value::Range(..)) { Value::Number(self.number(v, env, pos)?) } else { v };
+            let ty = types::parse(&p.ty.to_string(), &|n| {
+                self.m
+                    .resolve(ns, n)
+                    .is_ok_and(|d| d.kind == Kind::Component)
+            })
+            .unwrap_or(Ty::Unknown);
+            let v = if ty == Ty::Number && matches!(v, Value::Dice { .. } | Value::Range(..)) {
+                Value::Number(self.number(v, env, pos)?)
+            } else {
+                v
+            };
             env.locals.insert(p.name.clone(), v);
         }
         Ok(())
@@ -1171,7 +1655,10 @@ impl World<'_> {
         self.depth += 1;
         if self.depth > self.s.game.call_depth {
             self.depth = 0;
-            return Err(format!("{}: runtime error: the calls went over `game.call_depth` ({})", env.file, self.s.game.call_depth));
+            return Err(format!(
+                "{}: runtime error: the calls went over `game.call_depth` ({})",
+                env.file, self.s.game.call_depth
+            ));
         }
         Ok(())
     }
@@ -1182,9 +1669,25 @@ impl World<'_> {
 
     /// Calls a `fn` or `query` (RS 5.1). A query runs on a copy of its
     /// caller's stream (M 4.1).
-    pub fn call_function(&mut self, full: &str, args: Vec<(Option<String>, Value)>, caller: &mut Env) -> RtResult<Value> {
-        let (item, ns, file) = self.decl_of(full).ok_or_else(|| format!("no function `{full}`"))?;
-        let ItemKind::Function { query, present, params, body, .. } = &item.kind else { return Err(format!("`{full}` is not a function")) };
+    pub fn call_function(
+        &mut self,
+        full: &str,
+        args: Vec<(Option<String>, Value)>,
+        caller: &mut Env,
+    ) -> RtResult<Value> {
+        let (item, ns, file) = self
+            .decl_of(full)
+            .ok_or_else(|| format!("no function `{full}`"))?;
+        let ItemKind::Function {
+            query,
+            present,
+            params,
+            body,
+            ..
+        } = &item.kind
+        else {
+            return Err(format!("`{full}` is not a function"));
+        };
         let kind = if *query {
             BodyKind::Query
         } else if *present {
@@ -1225,8 +1728,12 @@ impl World<'_> {
     /// `run_ai` with `it` bound: a follower's ai sees whom it follows
     /// (M 8.1).
     pub fn run_ai_with(&mut self, full: &str, me: EntityId, it: Vec<Value>) -> RtResult<Value> {
-        let (item, ns, file) = self.decl_of(full).ok_or_else(|| format!("no ai `{full}`"))?;
-        let ItemKind::Ai { body } = &item.kind else { return Err(format!("`{full}` is not an ai")) };
+        let (item, ns, file) = self
+            .decl_of(full)
+            .ok_or_else(|| format!("no ai `{full}`"))?;
+        let ItemKind::Ai { body } = &item.kind else {
+            return Err(format!("`{full}` is not an ai"));
+        };
         let mut env = Env::new(BodyKind::Ai, full, ns, &file);
         env.self_ = Some(me);
         env.actor = Some(me);
@@ -1257,7 +1764,11 @@ impl World<'_> {
             StmtKind::Wait(WaitArg::Scene(e)) => {
                 return match self.eval(e, env)? {
                     Value::Scene(call) => Ok(Some(Flow::Sub(call))),
-                    v => Err(self.rt_err(env, e.pos, format!("`wait scene` takes a scene, not `{v}`"))),
+                    v => Err(self.rt_err(
+                        env,
+                        e.pos,
+                        format!("`wait scene` takes a scene, not `{v}`"),
+                    )),
                 };
             }
             StmtKind::Open(call) | StmtKind::OpenValue { call, .. } => {
@@ -1269,8 +1780,13 @@ impl World<'_> {
                     ExprKind::Call(f, _) => f.as_ref(),
                     _ => call,
                 };
-                let ExprKind::Name { name, .. } = &name.kind else { return Err(self.rt_err(env, s.pos, "`open` takes a menu or a panel")) };
-                let full = self.resolve(env, name).map(|d| d.full.clone()).ok_or_else(|| self.rt_err(env, s.pos, format!("no menu or panel `{name}`")))?;
+                let ExprKind::Name { name, .. } = &name.kind else {
+                    return Err(self.rt_err(env, s.pos, "`open` takes a menu or a panel"));
+                };
+                let full = self
+                    .resolve(env, name)
+                    .map(|d| d.full.clone())
+                    .ok_or_else(|| self.rt_err(env, s.pos, format!("no menu or panel `{name}`")))?;
                 self.scene_skipping = false;
                 self.pause = Some(super::world::Pause::Open { name: full, into });
                 return Ok(Some(Flow::Pause));
@@ -1278,13 +1794,26 @@ impl World<'_> {
             StmtKind::WaitInput { name, kind, arg } => {
                 let v = self.eval(arg, env)?;
                 let kind = match (kind.as_str(), v) {
-                    ("number", Value::Range(lo, Some(hi))) => super::world::AskKind::Number { lo, hi },
+                    ("number", Value::Range(lo, Some(hi))) => {
+                        super::world::AskKind::Number { lo, hi }
+                    }
                     ("number", Value::Number(hi)) => super::world::AskKind::Number { lo: 0, hi },
-                    ("text", Value::Number(n)) => super::world::AskKind::Text { max: n.max(1) as usize },
-                    (k, v) => return Err(self.rt_err(env, arg.pos, format!("`wait {k}` does not take `{v}`"))),
+                    ("text", Value::Number(n)) => super::world::AskKind::Text {
+                        max: n.max(1) as usize,
+                    },
+                    (k, v) => {
+                        return Err(self.rt_err(
+                            env,
+                            arg.pos,
+                            format!("`wait {k}` does not take `{v}`"),
+                        ));
+                    }
                 };
                 self.scene_skipping = false;
-                self.pause = Some(super::world::Pause::Ask { into: name.clone(), kind });
+                self.pause = Some(super::world::Pause::Ask {
+                    into: name.clone(),
+                    kind,
+                });
                 return Ok(Some(Flow::Pause));
             }
             _ => return Err(self.rt_err(env, s.pos, "not a wait point")),
@@ -1297,7 +1826,9 @@ impl World<'_> {
     /// Starts a command for an actor. A continuation (`return ATTACK(x)`)
     /// runs in its place with its own cost and failure (M 6.1.5).
     pub fn start_command(&mut self, actor: EntityId, cmd: &CommandValue) -> RtResult<Outcome> {
-        let (item, ns, file) = self.decl_of(&cmd.name).ok_or_else(|| format!("no command `{}`", cmd.name))?;
+        let (item, ns, file) = self
+            .decl_of(&cmd.name)
+            .ok_or_else(|| format!("no command `{}`", cmd.name))?;
         let mut env = Env::new(BodyKind::Command, &cmd.name, ns.clone(), &file);
         env.actor = Some(actor);
         env.self_ = Some(actor);
@@ -1315,10 +1846,23 @@ impl World<'_> {
                     _ => Err(format!("`{}` does not name a command", cmd.name)),
                 }
             }
-            ItemKind::Command { params, cost, body, .. } => {
+            ItemKind::Command {
+                params, cost, body, ..
+            } => {
                 self.bind(params, cmd.args.clone(), &mut env, ns.as_deref(), item.pos)?;
-                let frames = vec![Frame::Block { stmts: body.clone(), i: 0 }];
-                self.run_command(actor, &cmd.name, cost.unwrap_or(DEFAULT_COST), body, frames, env, false)
+                let frames = vec![Frame::Block {
+                    stmts: body.clone(),
+                    i: 0,
+                }];
+                self.run_command(
+                    actor,
+                    &cmd.name,
+                    cost.unwrap_or(DEFAULT_COST),
+                    body,
+                    frames,
+                    env,
+                    false,
+                )
             }
             _ => Err(format!("`{}` is not a command", cmd.name)),
         }
@@ -1336,14 +1880,18 @@ impl World<'_> {
     /// Can a waiting command go on: is its command there with the same
     /// body (M 6.1.6)? A save from before a change to the game fails this.
     pub fn waiting_fits(&self, state: &Suspended) -> bool {
-        self.command_body(&state.command).is_some_and(|b| body_hash(&b) == state.hash)
+        self.command_body(&state.command)
+            .is_some_and(|b| body_hash(&b) == state.hash)
     }
 
     /// The wait statement a held command stopped at; `None` for a command
     /// waiting at `wait N` or one that changed.
     fn held_stmt(&self, state: &Suspended) -> Option<Stmt> {
-        let body = self.command_body(&state.command).filter(|b| body_hash(b) == state.hash)?;
-        wait_stmt(&body, state.point).filter(|s| !matches!(s.kind, StmtKind::Wait(WaitArg::Time(_))))
+        let body = self
+            .command_body(&state.command)
+            .filter(|b| body_hash(b) == state.hash)?;
+        wait_stmt(&body, state.point)
+            .filter(|s| !matches!(s.kind, StmtKind::Wait(WaitArg::Time(_))))
     }
 
     /// Does the command wait for a scene, a confirmation, a menu or a
@@ -1355,27 +1903,64 @@ impl World<'_> {
     /// What a held command waits for, read from its wait point in `env`, a
     /// copy of its own (M 5.4): the pause it sets, or the scene to run.
     pub(crate) fn held_wait(&mut self, state: &Suspended, env: &mut Env) -> RtResult<Option<Flow>> {
-        let s = self.held_stmt(state).ok_or_else(|| format!("the waiting command `{}` waits for no scene", state.command))?;
+        let s = self
+            .held_stmt(state)
+            .ok_or_else(|| format!("the waiting command `{}` waits for no scene", state.command))?;
         self.wait_flow(&s, env)
     }
 
     /// Runs a waiting command on from its wait point (M 6.1.6).
-    pub fn continue_command(&mut self, actor: EntityId, state: Suspended, waited: bool) -> RtResult<Outcome> {
-        let body = self.command_body(&state.command).filter(|b| body_hash(b) == state.hash).ok_or_else(|| format!("the waiting command `{}` has changed", state.command))?;
+    pub fn continue_command(
+        &mut self,
+        actor: EntityId,
+        state: Suspended,
+        waited: bool,
+    ) -> RtResult<Outcome> {
+        let body = self
+            .command_body(&state.command)
+            .filter(|b| body_hash(b) == state.hash)
+            .ok_or_else(|| format!("the waiting command `{}` has changed", state.command))?;
         let frames = frames_at(&body, state.point, &state.loops)?;
-        self.run_command(actor, &state.command, state.cost, &body, frames, state.env, waited)
+        self.run_command(
+            actor,
+            &state.command,
+            state.cost,
+            &body,
+            frames,
+            state.env,
+            waited,
+        )
     }
 
     /// Runs a command's frames to its end or its next wait.
     #[allow(clippy::too_many_arguments)]
-    fn run_command(&mut self, actor: EntityId, name: &str, cost: i64, body: &[Stmt], mut frames: Vec<Frame>, mut env: Env, waited: bool) -> RtResult<Outcome> {
+    fn run_command(
+        &mut self,
+        actor: EntityId,
+        name: &str,
+        cost: i64,
+        body: &[Stmt],
+        mut frames: Vec<Frame>,
+        mut env: Env,
+        waited: bool,
+    ) -> RtResult<Outcome> {
         let flow = self.run_frames(&mut frames, &mut env)?;
         match flow {
             Flow::Wait(n) => {
                 let d = delay(n, self.speed(actor)).unwrap_or(n.max(1));
                 let (point, loops) = path_of(body, &frames)?;
-                let state = Suspended { command: name.to_string(), hash: body_hash(body), cost, point, loops, env };
-                Ok(Outcome::Waiting { delay: d, state: Box::new(state) })
+                let state = Suspended {
+                    command: name.to_string(),
+                    hash: body_hash(body),
+                    cost,
+                    point,
+                    loops,
+                    env,
+                };
+                Ok(Outcome::Waiting {
+                    delay: d,
+                    state: Box::new(state),
+                })
             }
             Flow::Done(Some(Value::Bool(false))) => Ok(Outcome::Failed { waited }),
             Flow::Done(Some(Value::Command(next))) => {
@@ -1385,25 +1970,53 @@ impl World<'_> {
                 r
             }
             Flow::Done(_) => Ok(Outcome::Done { cost }),
-            Flow::Cancel => Err(format!("{}: runtime error: `cancel` in a command", env.file)),
+            Flow::Cancel => Err(format!(
+                "{}: runtime error: `cancel` in a command",
+                env.file
+            )),
             Flow::Pause => {
                 let (point, loops) = path_of(body, &frames)?;
-                let state = Suspended { command: name.to_string(), hash: body_hash(body), cost, point, loops, env };
-                Ok(Outcome::Held { state: Box::new(state) })
+                let state = Suspended {
+                    command: name.to_string(),
+                    hash: body_hash(body),
+                    cost,
+                    point,
+                    loops,
+                    env,
+                };
+                Ok(Outcome::Held {
+                    state: Box::new(state),
+                })
             }
-            Flow::Sub(_) => Err(format!("{}: runtime error: a command's `wait scene` runs at the action's end", env.file)),
+            Flow::Sub(_) => Err(format!(
+                "{}: runtime error: a command's `wait scene` runs at the action's end",
+                env.file
+            )),
         }
     }
 
     // ---- events (RS 4, M 6.2) ----
 
-    fn bind_event_args(&mut self, event: &str, vals: Vec<(Option<String>, Value)>, env: &mut Env, pos: Pos) -> RtResult<Vec<Value>> {
-        let (item, ns, _) = self.decl_of(event).ok_or_else(|| self.rt_err(env, pos, format!("no event `{event}`")))?;
-        let ItemKind::Event { params } = &item.kind else { return Err(self.rt_err(env, pos, format!("`{event}` is not an event"))) };
+    fn bind_event_args(
+        &mut self,
+        event: &str,
+        vals: Vec<(Option<String>, Value)>,
+        env: &mut Env,
+        pos: Pos,
+    ) -> RtResult<Vec<Value>> {
+        let (item, ns, _) = self
+            .decl_of(event)
+            .ok_or_else(|| self.rt_err(env, pos, format!("no event `{event}`")))?;
+        let ItemKind::Event { params } = &item.kind else {
+            return Err(self.rt_err(env, pos, format!("`{event}` is not an event")));
+        };
         let mut tmp = Env::new(BodyKind::Function, event, ns.clone(), &env.file);
         tmp.rng = env.rng.clone();
         self.bind(params, vals, &mut tmp, ns.as_deref(), pos)?;
-        Ok(params.iter().map(|p| tmp.locals.remove(&p.name).unwrap_or(Value::None)).collect())
+        Ok(params
+            .iter()
+            .map(|p| tmp.locals.remove(&p.name).unwrap_or(Value::None))
+            .collect())
     }
 
     /// Sends an event: game events by full name, engine events by their
@@ -1414,7 +2027,13 @@ impl World<'_> {
 
     /// Sends an event to some of its handlers: `turn` goes to each
     /// instance's components and once to the general handlers (M 6.1.4).
-    pub fn emit_to(&mut self, event: &str, mut args: Vec<Value>, caller: &Env, scope: Scope) -> RtResult<()> {
+    pub fn emit_to(
+        &mut self,
+        event: &str,
+        mut args: Vec<Value>,
+        caller: &Env,
+        scope: Scope,
+    ) -> RtResult<()> {
         let engine = names::is_vocabulary(event);
         let subject = args.first().and_then(Value::as_entity);
         if let Some(s) = subject
@@ -1424,9 +2043,17 @@ impl World<'_> {
             return Ok(());
         }
         self.enter(caller)?;
-        let phases: &[Phase] = if engine { &[Phase::On, Phase::After] } else { &[Phase::Before, Phase::On, Phase::After] };
+        let phases: &[Phase] = if engine {
+            &[Phase::On, Phase::After]
+        } else {
+            &[Phase::Before, Phase::On, Phase::After]
+        };
         for &phase in phases {
-            for h in self.handlers(event, phase, subject).into_iter().filter(|h| scope.takes(h.component.is_some())) {
+            for h in self
+                .handlers(event, phase, subject)
+                .into_iter()
+                .filter(|h| scope.takes(h.component.is_some()))
+            {
                 // a component removed before its turn is skipped (RS 4)
                 if let Some(c) = &h.component
                     && !subject.is_some_and(|s| self.s.get(s).has(c))
@@ -1441,13 +2068,19 @@ impl World<'_> {
                 }
                 env.map = match (event, args.get(1)) {
                     ("arrive" | "depart", Some(Value::Name(m))) => self.s.map_id(m),
-                    _ => subject.and_then(|s| self.s.at(s)).map(|p| p.map).or(caller.map),
+                    _ => subject
+                        .and_then(|s| self.s.at(s))
+                        .map(|p| p.map)
+                        .or(caller.map),
                 };
                 if event == "begin" {
                     env.map = self.s.game.start.as_deref().and_then(|s| self.s.map_id(s));
                 }
                 for (i, n) in handler.names.iter().enumerate() {
-                    env.locals.insert(n.clone(), args.get(i + offset).cloned().unwrap_or(Value::None));
+                    env.locals.insert(
+                        n.clone(),
+                        args.get(i + offset).cloned().unwrap_or(Value::None),
+                    );
                 }
                 if let Some(w) = &handler.when
                     && !self.truth(w, &mut env)?
@@ -1481,16 +2114,33 @@ impl World<'_> {
         let mut out: Vec<(i64, usize, usize, HandlerRef)> = Vec::new();
         for (order, d) in self.m.code.iter().enumerate() {
             match &d.item.kind {
-                ItemKind::Handler(h) if h.phase == phase && self.event_name(&h.event, d.namespace.as_deref()) == event => {
+                ItemKind::Handler(h)
+                    if h.phase == phase
+                        && self.event_name(&h.event, d.namespace.as_deref()) == event =>
+                {
                     // a named handler runs only as the definition that won:
                     // `override on … as NAME` replaces it (RS 4, D 4.5)
                     if !d.name.is_empty()
-                        && let Some(def) = self.m.defs.get(&names::qualify(d.namespace.as_deref(), &d.name))
+                        && let Some(def) = self
+                            .m
+                            .defs
+                            .get(&names::qualify(d.namespace.as_deref(), &d.name))
                         && (def.file != d.file || def.line != d.line)
                     {
                         continue;
                     }
-                    out.push((h.priority, order, 0, HandlerRef { handler: Arc::new(h.clone()), component: None, name: d.name.clone(), ns: d.namespace.clone(), file: d.file.clone() }));
+                    out.push((
+                        h.priority,
+                        order,
+                        0,
+                        HandlerRef {
+                            handler: Arc::new(h.clone()),
+                            component: None,
+                            name: d.name.clone(),
+                            ns: d.namespace.clone(),
+                            file: d.file.clone(),
+                        },
+                    ));
                 }
                 ItemKind::Component { handlers, .. } => {
                     let Some(s) = subject else { continue };
@@ -1499,8 +2149,21 @@ impl World<'_> {
                         continue;
                     }
                     for (k, h) in handlers.iter().enumerate() {
-                        if h.phase == phase && self.event_name(&h.event, d.namespace.as_deref()) == event {
-                            out.push((h.priority, order, k, HandlerRef { handler: Arc::new(h.clone()), component: Some(full.clone()), name: full.clone(), ns: d.namespace.clone(), file: d.file.clone() }));
+                        if h.phase == phase
+                            && self.event_name(&h.event, d.namespace.as_deref()) == event
+                        {
+                            out.push((
+                                h.priority,
+                                order,
+                                k,
+                                HandlerRef {
+                                    handler: Arc::new(h.clone()),
+                                    component: Some(full.clone()),
+                                    name: full.clone(),
+                                    ns: d.namespace.clone(),
+                                    file: d.file.clone(),
+                                },
+                            ));
                         }
                     }
                 }
@@ -1515,7 +2178,10 @@ impl World<'_> {
         if names::is_vocabulary(written) {
             return written.to_string();
         }
-        self.m.resolve(ns, written).map(|d| d.full.clone()).unwrap_or_else(|_| written.to_string())
+        self.m
+            .resolve(ns, written)
+            .map(|d| d.full.clone())
+            .unwrap_or_else(|_| written.to_string())
     }
 
     /// Sends `created` for instances that wait for it, in order (M 3.2).
@@ -1537,7 +2203,12 @@ impl World<'_> {
                 Some(n) => n,
                 None => {
                     // `e` replaces the player, who leaves the seat (body swap)
-                    let n = self.s.player.and_then(|p| self.s.seat_of(p)).or_else(|| self.s.seats.first().map(|s| s.n)).unwrap_or(1);
+                    let n = self
+                        .s
+                        .player
+                        .and_then(|p| self.s.seat_of(p))
+                        .or_else(|| self.s.seats.first().map(|s| s.n))
+                        .unwrap_or(1);
                     if let Some(old) = self.s.player.filter(|&p| self.s.seat_of(p) == Some(n)) {
                         self.s.set_seat(old, None);
                     }
@@ -1572,12 +2243,26 @@ impl World<'_> {
 
     // ---- the engine's functions (M 9.3) ----
 
-    fn arg<'v>(&self, args: &'v [(Option<String>, Value)], i: usize, name: &str) -> Option<&'v Value> {
-        args.iter().find(|(n, _)| n.as_deref() == Some(name)).map(|(_, v)| v).or_else(|| args.iter().filter(|(n, _)| n.is_none()).nth(i).map(|(_, v)| v))
+    fn arg<'v>(
+        &self,
+        args: &'v [(Option<String>, Value)],
+        i: usize,
+        name: &str,
+    ) -> Option<&'v Value> {
+        args.iter()
+            .find(|(n, _)| n.as_deref() == Some(name))
+            .map(|(_, v)| v)
+            .or_else(|| {
+                args.iter()
+                    .filter(|(n, _)| n.is_none())
+                    .nth(i)
+                    .map(|(_, v)| v)
+            })
     }
 
     fn entity_arg(&self, v: Option<&Value>, f: &str, env: &Env, pos: Pos) -> RtResult<EntityId> {
-        v.and_then(Value::as_entity).ok_or_else(|| self.rt_err(env, pos, format!("`{f}` takes an entity")))
+        v.and_then(Value::as_entity)
+            .ok_or_else(|| self.rt_err(env, pos, format!("`{f}` takes an entity")))
     }
 
     /// One cell of an area, drawn from the caller's stream (M 4.3).
@@ -1586,7 +2271,13 @@ impl World<'_> {
         Some(a.cells()[i])
     }
 
-    fn engine(&mut self, f: &str, args: Vec<(Option<String>, Value)>, env: &mut Env, pos: Pos) -> RtResult<Value> {
+    fn engine(
+        &mut self,
+        f: &str,
+        args: Vec<(Option<String>, Value)>,
+        env: &mut Env,
+        pos: Pos,
+    ) -> RtResult<Value> {
         let a0 = args.first().map(|(_, v)| v.clone()).unwrap_or(Value::None);
         Ok(match f {
             "entities" => {
@@ -1608,25 +2299,64 @@ impl World<'_> {
             "tiles" => Value::Area(self.tiles(env)),
             "pos" => {
                 let x = self.number(a0, env, pos)?;
-                let y = self.number(self.arg(&args, 1, "y").cloned().unwrap_or(Value::None), env, pos)?;
-                Value::Pos(Cell { map: env.map.ok_or_else(|| self.rt_err(env, pos, "`pos` needs a map"))?, x: x as i32, y: y as i32 })
+                let y = self.number(
+                    self.arg(&args, 1, "y").cloned().unwrap_or(Value::None),
+                    env,
+                    pos,
+                )?;
+                Value::Pos(Cell {
+                    map: env
+                        .map
+                        .ok_or_else(|| self.rt_err(env, pos, "`pos` needs a map"))?,
+                    x: x as i32,
+                    y: y as i32,
+                })
             }
             "label" => {
-                let Value::Name(n) = a0 else { return Err(self.rt_err(env, pos, "`label` takes a label")) };
-                let Some(m) = env.map else { return Ok(Value::Area(Area::default())) };
-                let mut cells: Vec<Cell> = self.s.maps[m].label(&n).iter().map(|(x, y)| Cell { map: m, x: *x, y: *y }).collect();
+                let Value::Name(n) = a0 else {
+                    return Err(self.rt_err(env, pos, "`label` takes a label"));
+                };
+                let Some(m) = env.map else {
+                    return Ok(Value::Area(Area::default()));
+                };
+                let mut cells: Vec<Cell> = self.s.maps[m]
+                    .label(&n)
+                    .iter()
+                    .map(|(x, y)| Cell {
+                        map: m,
+                        x: *x,
+                        y: *y,
+                    })
+                    .collect();
                 for e in self.s.entities_on(m) {
-                    if self.s.get(e).get("label").and_then(|c| c.get("name")) == Some(&Value::Name(n.clone())) {
+                    if self.s.get(e).get("label").and_then(|c| c.get("name"))
+                        == Some(&Value::Name(n.clone()))
+                    {
                         cells.extend(self.s.at(e));
                     }
                 }
                 Value::Area(Area::new(cells))
             }
             "at" => {
-                let Value::Name(n) = a0 else { return Err(self.rt_err(env, pos, "`at` takes a tile or tileset")) };
-                let Some(m) = env.map else { return Ok(Value::Area(Area::default())) };
+                let Value::Name(n) = a0 else {
+                    return Err(self.rt_err(env, pos, "`at` takes a tile or tileset"));
+                };
+                let Some(m) = env.map else {
+                    return Ok(Value::Area(Area::default()));
+                };
                 let all = self.tiles(env);
-                Value::Area(Area::new(all.cells().iter().copied().filter(|p| self.cell_has(*p, &n)).collect::<Vec<_>>()).and(&Area::new(all.cells().iter().copied().filter(|p| p.map == m).collect())))
+                Value::Area(
+                    Area::new(
+                        all.cells()
+                            .iter()
+                            .copied()
+                            .filter(|p| self.cell_has(*p, &n))
+                            .collect::<Vec<_>>(),
+                    )
+                    .and(&Area::new(
+                        all.cells().iter().copied().filter(|p| p.map == m).collect(),
+                    )),
+                )
             }
             "near" => {
                 let a = self.area(&a0, env, pos)?;
@@ -1635,13 +2365,24 @@ impl World<'_> {
                     Some(Value::Range(a, b)) => (*a, *b),
                     _ => (0, Some(1)),
                 };
-                let Some(first) = a.cells().first() else { return Ok(Value::Area(Area::default())) };
+                let Some(first) = a.cells().first() else {
+                    return Ok(Value::Area(Area::default()));
+                };
                 let m = &self.s.maps[first.map];
                 let mut cells = Vec::new();
                 for y in 0..m.height {
                     for x in 0..m.width {
-                        let p = Cell { map: first.map, x, y };
-                        let d = a.cells().iter().map(|c| c.distance(p)).min().unwrap_or(i64::MAX);
+                        let p = Cell {
+                            map: first.map,
+                            x,
+                            y,
+                        };
+                        let d = a
+                            .cells()
+                            .iter()
+                            .map(|c| c.distance(p))
+                            .min()
+                            .unwrap_or(i64::MAX);
                         if d >= lo && hi.is_none_or(|h| d <= h) {
                             cells.push(p);
                         }
@@ -1650,17 +2391,32 @@ impl World<'_> {
                 Value::Area(Area::new(cells))
             }
             "distance" => {
-                let (x, y) = (self.area(&a0, env, pos)?, self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?);
-                let d = x.cells().iter().flat_map(|p| y.cells().iter().map(move |q| p.distance(*q))).min().unwrap_or(i64::MAX);
+                let (x, y) = (
+                    self.area(&a0, env, pos)?,
+                    self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?,
+                );
+                let d = x
+                    .cells()
+                    .iter()
+                    .flat_map(|p| y.cells().iter().map(move |q| p.distance(*q)))
+                    .min()
+                    .unwrap_or(i64::MAX);
                 Value::Number(d)
             }
             "nearest" => {
                 let to = self.area(self.arg(&args, 1, "a").unwrap_or(&Value::None), env, pos)?;
-                let items = a0.members().ok_or_else(|| self.rt_err(env, pos, "`nearest` takes a set"))?;
+                let items = a0
+                    .members()
+                    .ok_or_else(|| self.rt_err(env, pos, "`nearest` takes a set"))?;
                 let mut best: Option<(i64, Value)> = None;
                 for it in items {
                     let ia = self.area(&it, env, pos)?;
-                    let d = ia.cells().iter().flat_map(|p| to.cells().iter().map(move |q| p.distance(*q))).min().unwrap_or(i64::MAX);
+                    let d = ia
+                        .cells()
+                        .iter()
+                        .flat_map(|p| to.cells().iter().map(move |q| p.distance(*q)))
+                        .min()
+                        .unwrap_or(i64::MAX);
                     if best.as_ref().is_none_or(|(bd, _)| d < *bd) {
                         best = Some((d, it));
                     }
@@ -1669,13 +2425,23 @@ impl World<'_> {
             }
             "min" | "max" => {
                 let x = self.number(a0, env, pos)?;
-                let y = self.number(self.arg(&args, 1, "b").cloned().unwrap_or(Value::None), env, pos)?;
+                let y = self.number(
+                    self.arg(&args, 1, "b").cloned().unwrap_or(Value::None),
+                    env,
+                    pos,
+                )?;
                 Value::Number(if f == "min" { x.min(y) } else { x.max(y) })
             }
             "choose" => match a0 {
-                Value::Range(a, Some(b)) => self.rng_for(env).range(a, b).map(Value::Number).unwrap_or(Value::None),
+                Value::Range(a, Some(b)) => self
+                    .rng_for(env)
+                    .range(a, b)
+                    .map(Value::Number)
+                    .unwrap_or(Value::None),
                 v => {
-                    let items = v.members().ok_or_else(|| self.rt_err(env, pos, "`choose` takes a set"))?;
+                    let items = v
+                        .members()
+                        .ok_or_else(|| self.rt_err(env, pos, "`choose` takes a set"))?;
                     match self.rng_for(env).choose(items.len()) {
                         Some(i) => items[i].clone(),
                         None => Value::None,
@@ -1690,8 +2456,18 @@ impl World<'_> {
                 Value::Bool(self.rng_for(env).chance(p))
             }
             "pick" | "shuffled" => {
-                let items = a0.members().ok_or_else(|| self.rt_err(env, pos, format!("`{f}` takes a set")))?;
-                let n = if f == "pick" { self.number(self.arg(&args, 1, "n").cloned().unwrap_or(Value::Number(1)), env, pos)? as usize } else { items.len() };
+                let items = a0
+                    .members()
+                    .ok_or_else(|| self.rt_err(env, pos, format!("`{f}` takes a set")))?;
+                let n = if f == "pick" {
+                    self.number(
+                        self.arg(&args, 1, "n").cloned().unwrap_or(Value::Number(1)),
+                        env,
+                        pos,
+                    )? as usize
+                } else {
+                    items.len()
+                };
                 let out = self.rng_for(env).pick(&items, n);
                 match a0 {
                     Value::Collection(_) => Value::Collection(out),
@@ -1712,32 +2488,59 @@ impl World<'_> {
                 let tiles = !matches!(self.arg(&args, 3, "tiles"), Some(Value::Bool(false)));
                 // `except` leaves one more entity out: a swap's own mover (M 9.3)
                 let except = self.arg(&args, 4, "except").and_then(Value::as_entity);
-                Value::Bool(a.cells().iter().any(|p| match except {
-                    None => self.blocks(*p, &what, who, tiles),
-                    Some(x) => (tiles && self.blocks_tiles(*p, &what, who)) || self.s.entities_at(*p).into_iter().any(|e| e != x && Some(e) != who && self.entity_blocks(e, &what)),
+                Value::Bool(a.cells().iter().any(|p| {
+                    match except {
+                        None => self.blocks(*p, &what, who, tiles),
+                        Some(x) => {
+                            (tiles && self.blocks_tiles(*p, &what, who))
+                                || self.s.entities_at(*p).into_iter().any(|e| {
+                                    e != x && Some(e) != who && self.entity_blocks(e, &what)
+                                })
+                        }
+                    }
                 }))
             }
             "tile_of" => {
-                let Value::Pos(p) = a0 else { return Err(self.rt_err(env, pos, "`tile_of` takes a pos")) };
-                self.s.maps[p.map].tile(0, p.x, p.y).map(|t| Value::Name(t.to_string())).unwrap_or(Value::None)
+                let Value::Pos(p) = a0 else {
+                    return Err(self.rt_err(env, pos, "`tile_of` takes a pos"));
+                };
+                self.s.maps[p.map]
+                    .tile(0, p.x, p.y)
+                    .map(|t| Value::Name(t.to_string()))
+                    .unwrap_or(Value::None)
             }
             "line" => {
-                let (x, y) = (self.area(&a0, env, pos)?, self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?);
+                let (x, y) = (
+                    self.area(&a0, env, pos)?,
+                    self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?,
+                );
                 match (x.cells().first(), y.cells().first()) {
                     // a line keeps its order (M 9.3)
-                    (Some(p), Some(q)) => Value::List(line(*p, *q).into_iter().map(Value::Pos).collect()),
+                    (Some(p), Some(q)) => {
+                        Value::List(line(*p, *q).into_iter().map(Value::Pos).collect())
+                    }
                     _ => Value::List(vec![]),
                 }
             }
             "move" => self.engine_move(&args, env, pos)?,
             "noise" => {
-                let p = self.area(&a0, env, pos)?.cells().first().copied().ok_or_else(|| self.rt_err(env, pos, "`noise` takes a pos"))?;
+                let p = self
+                    .area(&a0, env, pos)?
+                    .cells()
+                    .first()
+                    .copied()
+                    .ok_or_else(|| self.rt_err(env, pos, "`noise` takes a pos"))?;
                 let kind = match self.arg(&args, 1, "kind") {
                     Some(Value::Name(n)) => n.clone(),
                     _ => return Err(self.rt_err(env, pos, "`noise` takes a sound kind")),
                 };
                 let source = self.arg(&args, 2, "source").and_then(Value::as_entity);
-                self.sounds.push(Noise { at: p, kind, source, time: self.s.game.time });
+                self.sounds.push(Noise {
+                    at: p,
+                    kind,
+                    source,
+                    time: self.s.game.time,
+                });
                 self.sounds_made += 1;
                 Value::None
             }
@@ -1749,13 +2552,20 @@ impl World<'_> {
             }
             "add" => {
                 let e = self.entity_arg(Some(&a0), f, env, pos)?;
-                let Some(Value::Component(cv)) = self.arg(&args, 1, "k").cloned() else { return Err(self.rt_err(env, pos, "`add` takes a component value")) };
+                let Some(Value::Component(cv)) = self.arg(&args, 1, "k").cloned() else {
+                    return Err(self.rt_err(env, pos, "`add` takes a component value"));
+                };
                 let full = self.complete(cv, env.ns.as_deref())?;
                 let name = full.name.clone();
                 if name == "seat" {
                     // membership goes through the seat table (M 6.1.10)
-                    let n = full.get("n").and_then(crate::rt::state::State::seat_number).filter(|&n| self.s.seat(n).is_some());
-                    let n = n.ok_or_else(|| self.rt_err(env, pos, "`add`: the seat is not joined (M 6.1.10)"))?;
+                    let n = full
+                        .get("n")
+                        .and_then(crate::rt::state::State::seat_number)
+                        .filter(|&n| self.s.seat(n).is_some());
+                    let n = n.ok_or_else(|| {
+                        self.rt_err(env, pos, "`add`: the seat is not joined (M 6.1.10)")
+                    })?;
                     self.s.set_seat(e, Some(n));
                 } else {
                     self.s.get_mut(e).set(full);
@@ -1792,8 +2602,11 @@ impl World<'_> {
                 let e = self.entity_arg(Some(&a0), f, env, pos)?;
                 let n = match self.arg(&args, 1, "seat") {
                     Some(v @ Value::Number(_)) => {
-                        let n = crate::rt::state::State::seat_number(v).filter(|&n| self.s.seat(n).is_some());
-                        Some(n.ok_or_else(|| self.rt_err(env, pos, "`control`: the seat is not joined (M 6.1.10)"))?)
+                        let n = crate::rt::state::State::seat_number(v)
+                            .filter(|&n| self.s.seat(n).is_some());
+                        Some(n.ok_or_else(|| {
+                            self.rt_err(env, pos, "`control`: the seat is not joined (M 6.1.10)")
+                        })?)
                     }
                     Some(Value::None) | None => None,
                     Some(_) => return Err(self.rt_err(env, pos, "`control` takes a seat number")),
@@ -1823,19 +2636,37 @@ impl World<'_> {
                 let id = self.load_map(&map)?;
                 self.flush_created(env)?;
                 if self.s.maps[id].label(&at).is_empty() {
-                    return Err(self.rt_err(env, pos, format!("map `{map}` has no label `{at}` (M 6.7)")));
+                    return Err(self.rt_err(
+                        env,
+                        pos,
+                        format!("map `{map}` has no label `{at}` (M 6.7)"),
+                    ));
                 }
                 self.travels.retain(|t| t.who != e);
-                self.travels.push(Travel { who: e, map, at, align });
+                self.travels.push(Travel {
+                    who: e,
+                    map,
+                    at,
+                    align,
+                });
                 Value::Entity(e)
             }
             "log" => {
-                let Value::Name(key) = a0 else { return Err(self.rt_err(env, pos, "`log` takes a message key")) };
-                let named = args.iter().filter_map(|(n, v)| n.clone().map(|n| (n, v.clone()))).collect();
+                let Value::Name(key) = a0 else {
+                    return Err(self.rt_err(env, pos, "`log` takes a message key"));
+                };
+                let named = args
+                    .iter()
+                    .filter_map(|(n, v)| n.clone().map(|n| (n, v.clone())))
+                    .collect();
                 if self.scene_skipping {
                     return Ok(Value::None);
                 }
-                self.log.push(LogEntry { key, args: named, speech: false });
+                self.log.push(LogEntry {
+                    key,
+                    args: named,
+                    speech: false,
+                });
                 Value::None
             }
             // presentation without a screen does nothing (M 9.3)
@@ -1853,17 +2684,34 @@ impl World<'_> {
                 let b = self.area(&a0, env, pos)?;
                 Value::Bool(self.in_view(b.cells()))
             }
-            "seats" => Value::List(self.s.seats.iter().map(|s| Value::Number(s.n as i64)).collect()),
+            "seats" => Value::List(
+                self.s
+                    .seats
+                    .iter()
+                    .map(|s| Value::Number(s.n as i64))
+                    .collect(),
+            ),
             "seat_of" => {
                 let e = a0.as_entity();
-                e.and_then(|e| self.s.seat_of(e)).map(|n| Value::Number(n as i64)).unwrap_or(Value::None)
+                e.and_then(|e| self.s.seat_of(e))
+                    .map(|n| Value::Number(n as i64))
+                    .unwrap_or(Value::None)
             }
             "members" | "active" => {
                 let n = a0.as_number().and_then(|n| SeatId::try_from(n).ok());
                 match (f, n) {
-                    ("members", Some(n)) => Value::Collection(self.s.seat_members(n).into_iter().map(Value::Entity).collect()),
+                    ("members", Some(n)) => Value::Collection(
+                        self.s
+                            .seat_members(n)
+                            .into_iter()
+                            .map(Value::Entity)
+                            .collect(),
+                    ),
                     ("members", None) => Value::Collection(vec![]),
-                    (_, n) => n.and_then(|n| self.s.active(n)).map(Value::Entity).unwrap_or(Value::None),
+                    (_, n) => n
+                        .and_then(|n| self.s.active(n))
+                        .map(Value::Entity)
+                        .unwrap_or(Value::None),
                 }
             }
             "controlled" => Value::Bool(a0.as_entity().is_some_and(|e| self.s.controlled(e))),
@@ -1873,25 +2721,46 @@ impl World<'_> {
             }
             "heard" => {
                 let a = self.entity_arg(Some(&a0), f, env, pos)?;
-                Value::Collection(self.heard.get(&a).cloned().unwrap_or_default().into_iter().map(Value::Sound).collect())
+                Value::Collection(
+                    self.heard
+                        .get(&a)
+                        .cloned()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(Value::Sound)
+                        .collect(),
+                )
             }
             "hears" => {
                 let a = self.entity_arg(Some(&a0), f, env, pos)?;
                 let b = self.arg(&args, 1, "b").and_then(Value::as_entity);
-                Value::Bool(self.heard.get(&a).is_some_and(|hs| hs.iter().any(|s| s.source.is_some() && s.source == b)))
+                Value::Bool(
+                    self.heard
+                        .get(&a)
+                        .is_some_and(|hs| hs.iter().any(|s| s.source.is_some() && s.source == b)),
+                )
             }
             "path" => {
                 let from = self.area(&a0, env, pos)?;
                 let to = self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?;
                 let who = self.arg(&args, 2, "for").and_then(Value::as_entity);
                 match from.cells().first() {
-                    Some(p) => Value::List(self.route(*p, to.cells(), who).into_iter().map(Value::Pos).collect()),
+                    Some(p) => Value::List(
+                        self.route(*p, to.cells(), who)
+                            .into_iter()
+                            .map(Value::Pos)
+                            .collect(),
+                    ),
                     None => Value::List(vec![]),
                 }
             }
             "ray" => {
                 let a = self.area(&a0, env, pos)?.cells().first().copied();
-                let b = self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?.cells().first().copied();
+                let b = self
+                    .area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?
+                    .cells()
+                    .first()
+                    .copied();
                 let who = self.arg(&args, 2, "for").and_then(Value::as_entity);
                 let range = match self.arg(&args, 3, "range").cloned() {
                     Some(v) => self.number(v, env, pos)?,
@@ -1902,23 +2771,39 @@ impl World<'_> {
                     _ => None,
                 };
                 match (a, b) {
-                    (Some(a), Some(b)) => Value::List(self.ray(a, b, who, range, mode.as_deref()).into_iter().map(Value::Pos).collect()),
+                    (Some(a), Some(b)) => Value::List(
+                        self.ray(a, b, who, range, mode.as_deref())
+                            .into_iter()
+                            .map(Value::Pos)
+                            .collect(),
+                    ),
                     _ => Value::List(vec![]),
                 }
             }
             // a foreground scene to the queue; it starts at the action's end
             // (RS 9, M 6.1.7 step 6)
             "start" => {
-                let Value::Scene(call) = a0 else { return Err(self.rt_err(env, pos, "`start` takes a scene")) };
-                let timeline = self.decl_of(&call.name).is_some_and(|(item, _, _)| matches!(item.kind, ItemKind::Timeline { .. }));
+                let Value::Scene(call) = a0 else {
+                    return Err(self.rt_err(env, pos, "`start` takes a scene"));
+                };
+                let timeline = self
+                    .decl_of(&call.name)
+                    .is_some_and(|(item, _, _)| matches!(item.kind, ItemKind::Timeline { .. }));
                 // until timelines run (RLML-kohtaukset.md steps 4 and 5) a
                 // timeline is left out with a warning
                 if timeline {
-                    self.warnings.push(format!("{}:{}: the timeline scene `{}` is left out: timelines do not run yet", env.file, pos.line, call.name));
+                    self.warnings.push(format!(
+                        "{}:{}: the timeline scene `{}` is left out: timelines do not run yet",
+                        env.file, pos.line, call.name
+                    ));
                     return Ok(Value::None);
                 }
                 let opener = env.actor.or(self.s.player);
-                self.s.scene_queue.push(super::state::QueuedScene { call, opener, map: env.map });
+                self.s.scene_queue.push(super::state::QueuedScene {
+                    call,
+                    opener,
+                    map: env.map,
+                });
                 Value::None
             }
             // a modal line in a scene, also to the log group SPEECH (RS 9.6,
@@ -1927,7 +2812,9 @@ impl World<'_> {
                 if env.kind != BodyKind::Scene {
                     return Err(self.rt_err(env, pos, "`say` belongs in a scene (RS 9.6)"));
                 }
-                let Value::Name(key) = a0 else { return Err(self.rt_err(env, pos, "`say` takes a text key")) };
+                let Value::Name(key) = a0 else {
+                    return Err(self.rt_err(env, pos, "`say` takes a text key"));
+                };
                 if self.scene_skipping {
                     return Ok(Value::None);
                 }
@@ -1935,9 +2822,22 @@ impl World<'_> {
                     Some(Value::Entity(e)) => Some(*e),
                     _ => None,
                 };
-                let named: Vec<(String, Value)> = args.iter().filter_map(|(n, v)| n.clone().filter(|n| n != "speaker").map(|n| (n, v.clone()))).collect();
-                self.log.push(LogEntry { key: key.clone(), args: named.clone(), speech: true });
-                self.pause = Some(super::world::Pause::Say { key, args: named, speaker });
+                let named: Vec<(String, Value)> = args
+                    .iter()
+                    .filter_map(|(n, v)| {
+                        n.clone().filter(|n| n != "speaker").map(|n| (n, v.clone()))
+                    })
+                    .collect();
+                self.log.push(LogEntry {
+                    key: key.clone(),
+                    args: named.clone(),
+                    speech: true,
+                });
+                self.pause = Some(super::world::Pause::Say {
+                    key,
+                    args: named,
+                    speaker,
+                });
                 Value::None
             }
             // the camera's target, or the default without one (M 7.1)
@@ -1945,7 +2845,13 @@ impl World<'_> {
                 self.s.camera = match self.arg(&args, 1, "e") {
                     Some(Value::Entity(e)) => Some(*e),
                     Some(Value::None) | None => None,
-                    Some(other) => return Err(self.rt_err(env, pos, format!("`follow` takes an entity, not `{other}`"))),
+                    Some(other) => {
+                        return Err(self.rt_err(
+                            env,
+                            pos,
+                            format!("`follow` takes an entity, not `{other}`"),
+                        ));
+                    }
                 };
                 Value::None
             }
@@ -1978,34 +2884,71 @@ impl World<'_> {
                 // a key's text in the chosen language with its named
                 // arguments as placeholders; a name, number or entity
                 // shows as its placeholder would (RS 2.6, M 7.3)
-                let lang = self.m.settings().get("language").map(|i| i.rest(1).to_string()).unwrap_or_default();
-                let named: Vec<(String, Value)> = args.iter().skip(1).filter_map(|(n, v)| n.clone().map(|n| (n, v.clone()))).collect();
+                let lang = self
+                    .m
+                    .settings()
+                    .get("language")
+                    .map(|i| i.rest(1).to_string())
+                    .unwrap_or_default();
+                let named: Vec<(String, Value)> = args
+                    .iter()
+                    .skip(1)
+                    .filter_map(|(n, v)| n.clone().map(|n| (n, v.clone())))
+                    .collect();
                 Value::Text(match &a0 {
-                    Value::Name(key) if self.m.has_text(&lang, key) => self.text(&lang, key, &named),
+                    Value::Name(key) if self.m.has_text(&lang, key) => {
+                        self.text(&lang, key, &named)
+                    }
                     Value::None => String::new(),
                     other => self.name_text(&lang, other),
                 })
             }
-            other => return Err(self.rt_err(env, pos, format!("engine function `{other}` is not implemented yet"))),
+            other => {
+                return Err(self.rt_err(
+                    env,
+                    pos,
+                    format!("engine function `{other}` is not implemented yet"),
+                ));
+            }
         })
     }
 
     fn tiles(&self, env: &Env) -> Area {
-        let Some(m) = env.map else { return Area::default() };
+        let Some(m) = env.map else {
+            return Area::default();
+        };
         let map = &self.s.maps[m];
-        Area::new((0..map.height).flat_map(|y| (0..map.width).map(move |x| Cell { map: m, x, y })).collect())
+        Area::new(
+            (0..map.height)
+                .flat_map(|y| (0..map.width).map(move |x| Cell { map: m, x, y }))
+                .collect(),
+        )
     }
 
     /// Fills a component value's missing fields with defaults or zeros and
     /// rolls its number fields (M 9.5, M 3.2 steps 3–4).
     fn complete(&mut self, mut cv: ComponentValue, ns: Option<&str>) -> RtResult<ComponentValue> {
-        let defs = if names::is_vocabulary(&cv.name) { crate::fields::engine_component(&cv.name).unwrap_or_default() } else { self.m.defs.get(&cv.name).map(crate::fields::component_fields).unwrap_or_default() };
+        let defs = if names::is_vocabulary(&cv.name) {
+            crate::fields::engine_component(&cv.name).unwrap_or_default()
+        } else {
+            self.m
+                .defs
+                .get(&cv.name)
+                .map(crate::fields::component_fields)
+                .unwrap_or_default()
+        };
         for f in defs {
             if cv.get(&f.name).is_none() {
                 let ty = if names::is_vocabulary(&cv.name) {
-                    crate::rs::sigs::engine_component_field(&cv.name, &f.name).unwrap_or(Ty::Unknown)
+                    crate::rs::sigs::engine_component_field(&cv.name, &f.name)
+                        .unwrap_or(Ty::Unknown)
                 } else {
-                    types::parse(&f.ty, &|n| self.m.resolve(ns, n).is_ok_and(|d| d.kind == Kind::Component)).unwrap_or(Ty::Unknown)
+                    types::parse(&f.ty, &|n| {
+                        self.m
+                            .resolve(ns, n)
+                            .is_ok_and(|d| d.kind == Kind::Component)
+                    })
+                    .unwrap_or(Ty::Unknown)
                 };
                 let v = match &f.default {
                     Some(d) if cv.get(d).is_some() => cv.get(d).cloned().unwrap(),
@@ -2027,9 +2970,14 @@ impl World<'_> {
     /// The cells `e` can step to: its directions and the corner rule, not
     /// the target's own blocking (M 9.3).
     pub fn adjacent(&self, e: EntityId) -> Area {
-        let Some(at) = self.s.at(e) else { return Area::default() };
+        let Some(at) = self.s.at(e) else {
+            return Area::default();
+        };
         let mv = self.s.get(e).get("movement");
-        let dirs = mv.and_then(|m| m.get("dirs")).and_then(Value::as_number).unwrap_or(8);
+        let dirs = mv
+            .and_then(|m| m.get("dirs"))
+            .and_then(Value::as_number)
+            .unwrap_or(8);
         let corners = matches!(mv.and_then(|m| m.get("corners")), Some(Value::Bool(true)));
         let map = &self.s.maps[at.map];
         let mut out = Vec::new();
@@ -2068,9 +3016,20 @@ impl World<'_> {
         if !m.inside(p.x, p.y) {
             return true;
         }
-        let mode = who.and_then(|w| self.s.get(w).get("movement")).and_then(|c| c.get("mode")).and_then(|v| if let Value::Name(n) = v { Some(n.clone()) } else { None });
+        let mode = who
+            .and_then(|w| self.s.get(w).get("movement"))
+            .and_then(|c| c.get("mode"))
+            .and_then(|v| {
+                if let Value::Name(n) = v {
+                    Some(n.clone())
+                } else {
+                    None
+                }
+            });
         for l in 0..m.layers.len() {
-            let Some(t) = m.tile(l, p.x, p.y) else { continue };
+            let Some(t) = m.tile(l, p.x, p.y) else {
+                continue;
+            };
             let blocks = self.tile_property(t, "blocks");
             if blocks.iter().any(|b| b == what) {
                 return true;
@@ -2092,7 +3051,10 @@ impl World<'_> {
 
     /// The entities' part of `blocks`: their own `blocks` component.
     pub fn blocks_entities(&self, p: Cell, what: &str, who: Option<EntityId>) -> bool {
-        self.s.entities_at(p).into_iter().any(|e| Some(e) != who && self.entity_blocks(e, what))
+        self.s
+            .entities_at(p)
+            .into_iter()
+            .any(|e| Some(e) != who && self.entity_blocks(e, what))
     }
 
     /// Does an entity's own `blocks` component hold `what`?
@@ -2115,8 +3077,16 @@ impl World<'_> {
             let mut found: Option<Vec<String>> = None;
             for words in rows.get(&key).into_iter().flatten() {
                 if let Some(i) = words.iter().position(|w| *w == prop) {
-                    let end = (i + 1..words.len()).find(|&j| ["blocks", "only", "lit", "forget"].contains(&words[j].as_str())).unwrap_or(words.len());
-                    found = Some(words[i + 1..end].iter().filter(|w| *w != "none").cloned().collect());
+                    let end = (i + 1..words.len())
+                        .find(|&j| ["blocks", "only", "lit", "forget"].contains(&words[j].as_str()))
+                        .unwrap_or(words.len());
+                    found = Some(
+                        words[i + 1..end]
+                            .iter()
+                            .filter(|w| *w != "none")
+                            .cloned()
+                            .collect(),
+                    );
                 }
             }
             if let Some(v) = found {
@@ -2126,7 +3096,12 @@ impl World<'_> {
         vec![]
     }
 
-    fn engine_move(&mut self, args: &[(Option<String>, Value)], env: &mut Env, pos: Pos) -> RtResult<Value> {
+    fn engine_move(
+        &mut self,
+        args: &[(Option<String>, Value)],
+        env: &mut Env,
+        pos: Pos,
+    ) -> RtResult<Value> {
         let e = self.entity_arg(args.first().map(|(_, v)| v), "move", env, pos)?;
         let to = self.arg(args, 1, "to").cloned().unwrap_or(Value::None);
         let prev = self.s.at(e);
@@ -2135,66 +3110,135 @@ impl World<'_> {
         if let Value::List(l) = &to
             && l.first() == Some(&Value::Text("@collection".into()))
         {
-            let (Value::Entity(h), Value::Name(comp), Value::Name(field)) = (&l[1], &l[2], &l[3]) else { return Ok(Value::Bool(false)) };
+            let (Value::Entity(h), Value::Name(comp), Value::Name(field)) = (&l[1], &l[2], &l[3])
+            else {
+                return Ok(Value::Bool(false));
+            };
             let slot = self.s.free_slot(*h, comp, field);
-            self.s.get_mut(e).place = Place::In { holder: *h, component: comp.clone(), field: field.clone(), slot };
+            self.s.get_mut(e).place = Place::In {
+                holder: *h,
+                component: comp.clone(),
+                field: field.clone(),
+                slot,
+            };
             self.s.unschedule(e);
             if let (true, Some(p)) = (was_on_map, prev) {
                 let name = self.s.maps[p.map].name.clone();
                 self.emit("leave", vec![Value::Entity(e), Value::Pos(p)], env)?;
-                self.emit("depart", vec![Value::Entity(e), Value::Name(name), Value::Pos(p)], env)?;
+                self.emit(
+                    "depart",
+                    vec![Value::Entity(e), Value::Name(name), Value::Pos(p)],
+                    env,
+                )?;
             }
             return Ok(Value::Bool(true));
         }
         let area = self.area(&to, env, pos)?;
-        let Some(p) = self.one_cell(&area, env) else { return Ok(Value::Bool(false)) };
+        let Some(p) = self.one_cell(&area, env) else {
+            return Ok(Value::Bool(false));
+        };
         if was_on_map && prev.is_some_and(|q| q.map != p.map) {
-            return Err(self.rt_err(env, pos, "`move` stays on one map; maps change with `travel` (M 6.2)"));
+            return Err(self.rt_err(
+                env,
+                pos,
+                "`move` stays on one map; maps change with `travel` (M 6.2)",
+            ));
         }
         self.s.get_mut(e).place = Place::Map(p);
         match (was_on_map, prev) {
             (true, Some(q)) => {
                 self.emit("leave", vec![Value::Entity(e), Value::Pos(q)], env)?;
-                self.emit("enter", vec![Value::Entity(e), Value::Pos(p), Value::Pos(q)], env)?;
+                self.emit(
+                    "enter",
+                    vec![Value::Entity(e), Value::Pos(p), Value::Pos(q)],
+                    env,
+                )?;
             }
             _ => {
                 if self.s.is_actor(e) {
                     self.wake_new(e, p.map);
                 }
                 let name = self.s.maps[p.map].name.clone();
-                self.emit("arrive", vec![Value::Entity(e), Value::Name(name), Value::Pos(p)], env)?;
-                self.emit("enter", vec![Value::Entity(e), Value::Pos(p), Value::None], env)?;
+                self.emit(
+                    "arrive",
+                    vec![Value::Entity(e), Value::Name(name), Value::Pos(p)],
+                    env,
+                )?;
+                self.emit(
+                    "enter",
+                    vec![Value::Entity(e), Value::Pos(p), Value::None],
+                    env,
+                )?;
             }
         }
         Ok(Value::Bool(true))
     }
 
-    fn engine_spawn(&mut self, args: &[(Option<String>, Value)], env: &mut Env, pos: Pos) -> RtResult<Value> {
+    fn engine_spawn(
+        &mut self,
+        args: &[(Option<String>, Value)],
+        env: &mut Env,
+        pos: Pos,
+    ) -> RtResult<Value> {
         let x = args.first().map(|(_, v)| v.clone()).unwrap_or(Value::None);
         let card = match &x {
             Value::Card(c) => c.clone(),
-            Value::Name(n) | Value::Deck(n) | Value::Table(n) => Card { entity: Some(n.clone()), count: None, overrides: vec![] },
+            Value::Name(n) | Value::Deck(n) | Value::Table(n) => Card {
+                entity: Some(n.clone()),
+                count: None,
+                overrides: vec![],
+            },
             Value::None => return Ok(Value::None),
-            v => return Err(self.rt_err(env, pos, format!("`spawn` takes a name, card, deck or table, not a {}", v.type_name()))),
+            v => {
+                return Err(self.rt_err(
+                    env,
+                    pos,
+                    format!(
+                        "`spawn` takes a name, card, deck or table, not a {}",
+                        v.type_name()
+                    ),
+                ));
+            }
         };
-        let place: Box<dyn Fn(&super::state::State) -> Place> = if let Some(Value::List(l)) = self.arg(args, 1, "into").cloned()
+        let place: Box<dyn Fn(&super::state::State) -> Place> = if let Some(Value::List(l)) =
+            self.arg(args, 1, "into").cloned()
             && l.first() == Some(&Value::Text("@collection".into()))
         {
-            let (Value::Entity(h), Value::Name(comp), Value::Name(field)) = (l[1].clone(), l[2].clone(), l[3].clone()) else { return Ok(Value::None) };
-            Box::new(move |s: &super::state::State| Place::In { holder: h, component: comp.clone(), field: field.clone(), slot: s.free_slot(h, &comp, &field) })
+            let (Value::Entity(h), Value::Name(comp), Value::Name(field)) =
+                (l[1].clone(), l[2].clone(), l[3].clone())
+            else {
+                return Ok(Value::None);
+            };
+            Box::new(move |s: &super::state::State| Place::In {
+                holder: h,
+                component: comp.clone(),
+                field: field.clone(),
+                slot: s.free_slot(h, &comp, &field),
+            })
         } else {
             let at = self.arg(args, 1, "at").cloned().unwrap_or(Value::None);
             let area = self.area(&at, env, pos)?;
-            let Some(p) = self.one_cell(&area, env) else { return Ok(if matches!(x, Value::Name(_)) { Value::None } else { Value::Collection(vec![]) }) };
+            let Some(p) = self.one_cell(&area, env) else {
+                return Ok(if matches!(x, Value::Name(_)) {
+                    Value::None
+                } else {
+                    Value::Collection(vec![])
+                });
+            };
             Box::new(move |_| Place::Map(p))
         };
         let made = self.spawn_card(&card, &*place)?;
         self.flush_created(env)?;
         // a name spawns one entity; a card, deck or table a collection (M 9.4)
-        Ok(match (&x, self.m.kind(card.entity.as_deref().unwrap_or(""))) {
-            (Value::Name(_), Some(Kind::Entity)) => made.first().map(|e| Value::Entity(*e)).unwrap_or(Value::None),
-            _ => Value::Collection(made.into_iter().map(Value::Entity).collect()),
-        })
+        Ok(
+            match (&x, self.m.kind(card.entity.as_deref().unwrap_or(""))) {
+                (Value::Name(_), Some(Kind::Entity)) => made
+                    .first()
+                    .map(|e| Value::Entity(*e))
+                    .unwrap_or(Value::None),
+                _ => Value::Collection(made.into_iter().map(Value::Entity).collect()),
+            },
+        )
     }
 
     /// `destroy`: `removed` first, then the members, holder before members
@@ -2204,7 +3248,12 @@ impl World<'_> {
             return Ok(());
         }
         self.emit("removed", vec![Value::Entity(e)], env)?;
-        let members: Vec<EntityId> = (0..self.s.entities.len()).filter(|&m| matches!(&self.s.get(m).place, Place::In { holder, .. } if *holder == e) && self.s.get(m).alive).collect();
+        let members: Vec<EntityId> = (0..self.s.entities.len())
+            .filter(|&m| {
+                matches!(&self.s.get(m).place, Place::In { holder, .. } if *holder == e)
+                    && self.s.get(m).alive
+            })
+            .collect();
         self.s.get_mut(e).alive = false;
         self.s.unschedule(e);
         for m in members {
@@ -2218,12 +3267,27 @@ impl World<'_> {
         let env = Env::new(BodyKind::Handler, "<action end>", None, "<engine>");
         let travels = std::mem::take(&mut self.travels);
         for t in travels {
-            let Some(id) = self.s.map_id(&t.map) else { continue };
+            let Some(id) = self.s.map_id(&t.map) else {
+                continue;
+            };
             let from = self.s.at(t.who);
-            let cells: Vec<Cell> = self.s.maps[id].label(&t.at).iter().map(|(x, y)| Cell { map: id, x: *x, y: *y }).collect();
+            let cells: Vec<Cell> = self.s.maps[id]
+                .label(&t.at)
+                .iter()
+                .map(|(x, y)| Cell {
+                    map: id,
+                    x: *x,
+                    y: *y,
+                })
+                .collect();
             let i = if t.align {
                 // the same index as the start cell has in its own group
-                let idx = from.and_then(|p| self.s.maps[p.map].labels.iter().find_map(|(_, cs)| cs.iter().position(|c| *c == (p.x, p.y))));
+                let idx = from.and_then(|p| {
+                    self.s.maps[p.map]
+                        .labels
+                        .iter()
+                        .find_map(|(_, cs)| cs.iter().position(|c| *c == (p.x, p.y)))
+                });
                 match idx {
                     Some(k) => k.min(cells.len() - 1),
                     None => self.rng.below(cells.len() as u64) as usize,
@@ -2241,7 +3305,10 @@ impl World<'_> {
             self.s.get_mut(t.who).place = Place::Map(to);
             if let Some(left) = left {
                 let at = self.s.maps[id].clock(self.s.game.time) + left;
-                self.s.restore(super::state::Wake { at, ..wake.unwrap() });
+                self.s.restore(super::state::Wake {
+                    at,
+                    ..wake.unwrap()
+                });
             }
             if self.s.player == Some(t.who) {
                 // the active map changes at the microstep's end (M 6.7)
@@ -2255,13 +3322,21 @@ impl World<'_> {
             if let Some(p) = from {
                 let name = self.s.maps[p.map].name.clone();
                 self.emit("leave", vec![Value::Entity(t.who), Value::Pos(p)], &env)?;
-                self.emit("depart", vec![Value::Entity(t.who), Value::Name(name), Value::Pos(p)], &env)?;
+                self.emit(
+                    "depart",
+                    vec![Value::Entity(t.who), Value::Name(name), Value::Pos(p)],
+                    &env,
+                )?;
             }
             if self.s.seat_of(t.who).is_some() || self.s.player == Some(t.who) {
                 self.saves.arrived = true;
             }
             let name = self.s.maps[id].name.clone();
-            self.emit("arrive", vec![Value::Entity(t.who), Value::Name(name), Value::Pos(to)], &env)?;
+            self.emit(
+                "arrive",
+                vec![Value::Entity(t.who), Value::Name(name), Value::Pos(to)],
+                &env,
+            )?;
         }
         Ok(())
     }
@@ -2281,19 +3356,30 @@ impl World<'_> {
     /// A text key's text in a language, with placeholders filled; a
     /// missing text shows as its key (M 7.3).
     pub fn text(&self, lang: &str, key: &str, args: &[(String, Value)]) -> String {
-        self.text_runs(lang, key, args).into_iter().map(|(t, _)| t).collect()
+        self.text_runs(lang, key, args)
+            .into_iter()
+            .map(|(t, _)| t)
+            .collect()
     }
 
     /// A text key's text as runs: plain text, and `{#TILE}` as the tile's
     /// glyph with its look, which a panel draws in the style's colors
     /// (D 10, M 7.3, M 7.7). A missing text is its key.
-    pub fn text_runs(&self, lang: &str, key: &str, args: &[(String, Value)]) -> Vec<(String, Option<super::view::Look>)> {
-        let Some(item) = self.m.text_item(lang, key) else { return vec![(key.to_string(), None)] };
-        let mut out: Vec<(String, Option<super::view::Look>)> = Vec::new();
-        let plain = |out: &mut Vec<(String, Option<super::view::Look>)>, t: &str| match out.last_mut() {
-            Some((last, None)) => last.push_str(t),
-            _ => out.push((t.to_string(), None)),
+    pub fn text_runs(
+        &self,
+        lang: &str,
+        key: &str,
+        args: &[(String, Value)],
+    ) -> Vec<(String, Option<super::view::Look>)> {
+        let Some(item) = self.m.text_item(lang, key) else {
+            return vec![(key.to_string(), None)];
         };
+        let mut out: Vec<(String, Option<super::view::Look>)> = Vec::new();
+        let plain =
+            |out: &mut Vec<(String, Option<super::view::Look>)>, t: &str| match out.last_mut() {
+                Some((last, None)) => last.push_str(t),
+                _ => out.push((t.to_string(), None)),
+            };
         let mut rest = item.rest(1);
         while let Some(open) = rest.find('{') {
             plain(&mut out, &rest[..open]);
@@ -2340,7 +3426,9 @@ impl World<'_> {
             Some((n, s)) => (n, s),
             None => (inner, "NAME"),
         };
-        let Some(v) = args.iter().find(|(n, _)| n == name).map(|(_, v)| v) else { return format!("{{{inner}}}") };
+        let Some(v) = args.iter().find(|(n, _)| n == name).map(|(_, v)| v) else {
+            return format!("{{{inner}}}");
+        };
         match v {
             Value::Entity(e) => {
                 let inst = self.s.get(*e);
@@ -2353,7 +3441,8 @@ impl World<'_> {
                 // at each level of its kind, so seats have their own names
                 // and a child's own name still wins (D 10, M 7.3)
                 let seat = self.s.seat_of(*e).map(|n| format!("SEAT{n}.{suffix}"));
-                self.kind_text_opt(lang, &inst.kind, seat.as_deref(), suffix).unwrap_or_else(|| format!("{}.{suffix}", inst.kind))
+                self.kind_text_opt(lang, &inst.kind, seat.as_deref(), suffix)
+                    .unwrap_or_else(|| format!("{}.{suffix}", inst.kind))
             }
             Value::Name(n) => {
                 if self.m.kind(n) == Some(Kind::Entity) || suffix != "NAME" {
@@ -2363,7 +3452,10 @@ impl World<'_> {
                     let mut base = n.as_str();
                     while self.kind_text_opt(lang, base, None, suffix).is_none()
                         && let Some((head, last)) = base.rsplit_once('.')
-                        && last.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+                        && last
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
                     {
                         base = head;
                     }
@@ -2380,12 +3472,19 @@ impl World<'_> {
 
     /// `<KIND>.NAME`, from the nearest parent that has the text (D 10).
     fn kind_text(&self, lang: &str, kind: &str, suffix: &str) -> String {
-        self.kind_text_opt(lang, kind, None, suffix).unwrap_or_else(|| format!("{kind}.{suffix}"))
+        self.kind_text_opt(lang, kind, None, suffix)
+            .unwrap_or_else(|| format!("{kind}.{suffix}"))
     }
 
     /// The text of the nearest kind that has `first` or `suffix`, `first`
     /// winning on the same level.
-    fn kind_text_opt(&self, lang: &str, kind: &str, first: Option<&str>, suffix: &str) -> Option<String> {
+    fn kind_text_opt(
+        &self,
+        lang: &str,
+        kind: &str,
+        first: Option<&str>,
+        suffix: &str,
+    ) -> Option<String> {
         let mut cur = Some(kind.to_string());
         for _ in 0..64 {
             let k = cur?;
@@ -2397,7 +3496,10 @@ impl World<'_> {
             }
             cur = self.m.defs.get(&k).and_then(|d| d.block()).and_then(|b| {
                 let parent = b.arg_after("extends")?;
-                self.m.resolve(b.namespace.as_deref(), parent).ok().map(|d| d.full.clone())
+                self.m
+                    .resolve(b.namespace.as_deref(), parent)
+                    .ok()
+                    .map(|d| d.full.clone())
             });
         }
         None
@@ -2445,7 +3547,10 @@ fn tile_matches(tile: &str, name: &str) -> bool {
 /// horizontal step (M 9.3).
 pub fn line(a: Cell, b: Cell) -> Vec<Cell> {
     let (dx, dy) = ((b.x - a.x).abs(), -(b.y - a.y).abs());
-    let (sx, sy) = (if a.x < b.x { 1 } else { -1 }, if a.y < b.y { 1 } else { -1 });
+    let (sx, sy) = (
+        if a.x < b.x { 1 } else { -1 },
+        if a.y < b.y { 1 } else { -1 },
+    );
     let (mut x, mut y, mut err) = (a.x, a.y, dx + dy);
     let mut out = vec![];
     loop {

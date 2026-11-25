@@ -88,7 +88,15 @@ pub struct AutosaveRules {
 
 impl Default for AutosaveRules {
     fn default() -> AutosaveRules {
-        AutosaveRules { slots: 0, manual: 3, quit_save: true, on_input: None, on_scene: false, on_checkpoint: false, on_arrive: false }
+        AutosaveRules {
+            slots: 0,
+            manual: 3,
+            quit_save: true,
+            on_input: None,
+            on_scene: false,
+            on_checkpoint: false,
+            on_arrive: false,
+        }
     }
 }
 
@@ -104,7 +112,13 @@ impl AutosaveRules {
                 ("slots", _) => r.slots = num(1).unwrap_or(0),
                 ("manual", _) => r.manual = num(1).unwrap_or(3),
                 ("quit", w) => r.quit_save = w != Some("none"),
-                ("on", Some("input")) => r.on_input = Some(if item.word(2) == Some("every") { num(3).unwrap_or(1).max(1) } else { 1 }),
+                ("on", Some("input")) => {
+                    r.on_input = Some(if item.word(2) == Some("every") {
+                        num(3).unwrap_or(1).max(1)
+                    } else {
+                        1
+                    })
+                }
                 ("on", Some("scene")) => r.on_scene = true,
                 ("on", Some("checkpoint")) => r.on_checkpoint = true,
                 ("on", Some("arrive")) => r.on_arrive = true,
@@ -139,11 +153,17 @@ impl Slot {
     }
 
     pub fn parse(name: &str) -> Option<Slot> {
-        let num = |p: &str| name.strip_prefix(p).and_then(|n| n.parse().ok()).filter(|n| *n > 0);
+        let num = |p: &str| {
+            name.strip_prefix(p)
+                .and_then(|n| n.parse().ok())
+                .filter(|n| *n > 0)
+        };
         match name {
             "quit" => Some(Slot::Quit),
             "game" => Some(Slot::Only),
-            _ => num("auto-").map(Slot::Auto).or_else(|| num("manual-").map(Slot::Manual)),
+            _ => num("auto-")
+                .map(Slot::Auto)
+                .or_else(|| num("manual-").map(Slot::Manual)),
         }
     }
 }
@@ -177,7 +197,12 @@ pub struct Saves<S: Store> {
 
 impl<S: Store> Saves<S> {
     pub fn new(store: S, rules: AutosaveRules) -> Saves<S> {
-        let mut s = Saves { store, rules, session: 0, auto_off: false };
+        let mut s = Saves {
+            store,
+            rules,
+            session: 0,
+            auto_off: false,
+        };
         s.session = s.next_stamp();
         s
     }
@@ -199,7 +224,11 @@ impl<S: Store> Saves<S> {
     }
 
     fn next_stamp(&self) -> u64 {
-        self.list().iter().map(|l| l.save.stamp).max().map_or(1, |s| s + 1)
+        self.list()
+            .iter()
+            .map(|l| l.save.stamp)
+            .max()
+            .map_or(1, |s| s + 1)
     }
 
     /// A new game starts a session of its own, with the data's `slots`
@@ -224,7 +253,12 @@ impl<S: Store> Saves<S> {
         (1..=count)
             .map(kind)
             .find(|&s| taken(s).is_none())
-            .unwrap_or_else(|| (1..=count).map(kind).min_by_key(|&s| taken(s).map_or(0, |l| l.save.stamp)).unwrap_or(kind(1)))
+            .unwrap_or_else(|| {
+                (1..=count)
+                    .map(kind)
+                    .min_by_key(|&s| taken(s).map_or(0, |l| l.save.stamp))
+                    .unwrap_or(kind(1))
+            })
     }
 
     /// An automatic save the runner took at an action's end (M 5.4).
@@ -288,7 +322,10 @@ impl<S: Store> Saves<S> {
     /// The save in `slot`, made the session's: its saves go on from it,
     /// with its locked `slots`.
     pub fn load(&mut self, m: &Model, slot: Slot) -> RtResult<Save> {
-        let text = self.store.read(&slot.name()).ok_or_else(|| format!("no save in {}", slot.name()))?;
+        let text = self
+            .store
+            .read(&slot.name())
+            .ok_or_else(|| format!("no save in {}", slot.name()))?;
         let save = Save::read(&text)?;
         // the `on` rows come from the data, `slots` from the session
         self.rules = AutosaveRules::read(m);

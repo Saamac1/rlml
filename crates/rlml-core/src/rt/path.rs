@@ -35,20 +35,35 @@ pub struct PathLoop {
 }
 
 fn is_wait(s: &Stmt) -> bool {
-    matches!(s.kind, StmtKind::Wait(_) | StmtKind::WaitInput { .. } | StmtKind::Open(_) | StmtKind::OpenValue { .. })
+    matches!(
+        s.kind,
+        StmtKind::Wait(_)
+            | StmtKind::WaitInput { .. }
+            | StmtKind::Open(_)
+            | StmtKind::OpenValue { .. }
+    )
 }
 
 fn is_loop(s: &Stmt) -> bool {
-    matches!(s.kind, StmtKind::For { .. } | StmtKind::Repeat { .. } | StmtKind::While { .. })
+    matches!(
+        s.kind,
+        StmtKind::For { .. } | StmtKind::Repeat { .. } | StmtKind::While { .. }
+    )
 }
 
 /// The bodies inside a statement, in source order: `if` arms and then
 /// `else`, `match` cases, a loop's body.
 fn children(s: &Stmt) -> Vec<&[Stmt]> {
     match &s.kind {
-        StmtKind::If { arms, otherwise } => arms.iter().map(|(_, b)| b.as_slice()).chain(otherwise.as_deref()).collect(),
+        StmtKind::If { arms, otherwise } => arms
+            .iter()
+            .map(|(_, b)| b.as_slice())
+            .chain(otherwise.as_deref())
+            .collect(),
         StmtKind::Match { cases, .. } => cases.iter().map(|(_, b)| b.as_slice()).collect(),
-        StmtKind::For { body, .. } | StmtKind::Repeat { body, .. } | StmtKind::While { body, .. } => vec![body.as_slice()],
+        StmtKind::For { body, .. }
+        | StmtKind::Repeat { body, .. }
+        | StmtKind::While { body, .. } => vec![body.as_slice()],
         _ => vec![],
     }
 }
@@ -102,18 +117,32 @@ fn at(f: &Frame) -> Option<&Stmt> {
 /// The path of frames stopped at a wait point.
 pub fn path_of(body: &[Stmt], frames: &[Frame]) -> RtResult<(usize, Vec<PathLoop>)> {
     let bad = || "a waiting command's frames do not match its body".to_string();
-    let wait = frames.last().and_then(at).filter(|s| is_wait(s)).ok_or_else(bad)?;
+    let wait = frames
+        .last()
+        .and_then(at)
+        .filter(|s| is_wait(s))
+        .ok_or_else(bad)?;
     let point = number_of(body, is_wait, wait.pos).ok_or_else(bad)?;
     let mut loops = Vec::new();
     for (j, f) in frames.iter().enumerate() {
         let state = match f {
             Frame::Block { .. } => continue,
-            Frame::Repeat { left, count, .. } => LoopState::Repeat { round: count - left - 1, count: *count },
-            Frame::For { items, k, .. } => LoopState::For { items: items.clone(), index: k.saturating_sub(1) },
+            Frame::Repeat { left, count, .. } => LoopState::Repeat {
+                round: count - left - 1,
+                count: *count,
+            },
+            Frame::For { items, k, .. } => LoopState::For {
+                items: items.clone(),
+                index: k.saturating_sub(1),
+            },
             Frame::While { .. } => LoopState::While,
         };
         // the loop statement is where the block before it is
-        let stmt = j.checked_sub(1).and_then(|p| at(&frames[p])).filter(|s| is_loop(s)).ok_or_else(bad)?;
+        let stmt = j
+            .checked_sub(1)
+            .and_then(|p| at(&frames[p]))
+            .filter(|s| is_loop(s))
+            .ok_or_else(bad)?;
         let loop_no = number_of(body, is_loop, stmt.pos).ok_or_else(bad)?;
         loops.push(PathLoop { loop_no, state });
     }
@@ -166,21 +195,36 @@ pub fn frames_at(body: &[Stmt], point: usize, loops: &[PathLoop]) -> RtResult<Ve
     let mut frames = Vec::new();
     let mut cur: Vec<Stmt> = body.to_vec();
     for (i, child) in route {
-        frames.push(Frame::Block { stmts: cur.clone(), i: i + 1 });
+        frames.push(Frame::Block {
+            stmts: cur.clone(),
+            i: i + 1,
+        });
         let Some(k) = child else { break };
         let s = cur[i].clone();
         let next: Vec<Stmt> = children(&s).get(k).ok_or_else(bad)?.to_vec();
         match &s.kind {
             StmtKind::For { var, body, .. } => match saved.next().map(|l| &l.state) {
-                Some(LoopState::For { items, index }) => frames.push(Frame::For { var: var.clone(), items: items.clone(), k: index + 1, body: body.clone() }),
+                Some(LoopState::For { items, index }) => frames.push(Frame::For {
+                    var: var.clone(),
+                    items: items.clone(),
+                    k: index + 1,
+                    body: body.clone(),
+                }),
                 _ => return Err(bad()),
             },
             StmtKind::Repeat { body, .. } => match saved.next().map(|l| &l.state) {
-                Some(LoopState::Repeat { round, count }) => frames.push(Frame::Repeat { left: count - round - 1, count: *count, body: body.clone() }),
+                Some(LoopState::Repeat { round, count }) => frames.push(Frame::Repeat {
+                    left: count - round - 1,
+                    count: *count,
+                    body: body.clone(),
+                }),
                 _ => return Err(bad()),
             },
             StmtKind::While { cond, body } => match saved.next().map(|l| &l.state) {
-                Some(LoopState::While) => frames.push(Frame::While { cond: cond.clone(), body: body.clone() }),
+                Some(LoopState::While) => frames.push(Frame::While {
+                    cond: cond.clone(),
+                    body: body.clone(),
+                }),
                 _ => return Err(bad()),
             },
             _ => {}

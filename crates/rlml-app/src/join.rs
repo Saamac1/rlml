@@ -55,21 +55,44 @@ pub enum JoinStep {
 impl JoinScreen {
     /// A new game's screen, with `first` as seat 1.
     pub fn new_game(seed: u64, (least, most): (u8, u8), first: Device) -> JoinScreen {
-        JoinScreen { seats: vec![(1, Slot::Taken(first))], load: None, seed, least, most }
+        JoinScreen {
+            seats: vec![(1, Slot::Taken(first))],
+            load: None,
+            seed,
+            least,
+            most,
+        }
     }
 
     /// A save's screen: each saved seat waits for a device.
     pub fn load(save: Save, (least, most): (u8, u8)) -> JoinScreen {
-        let seats = save.now.s.seats.iter().map(|s| (s.n, Slot::Waiting)).collect();
-        JoinScreen { seats, load: Some(save), seed: 0, least, most }
+        let seats = save
+            .now
+            .s
+            .seats
+            .iter()
+            .map(|s| (s.n, Slot::Waiting))
+            .collect();
+        JoinScreen {
+            seats,
+            load: Some(save),
+            seed: 0,
+            least,
+            most,
+        }
     }
 
     fn holds(&self, device: Device) -> Option<usize> {
-        self.seats.iter().position(|(_, s)| *s == Slot::Taken(device))
+        self.seats
+            .iter()
+            .position(|(_, s)| *s == Slot::Taken(device))
     }
 
     fn taken(&self) -> usize {
-        self.seats.iter().filter(|(_, s)| matches!(s, Slot::Taken(_))).count()
+        self.seats
+            .iter()
+            .filter(|(_, s)| matches!(s, Slot::Taken(_)))
+            .count()
     }
 
     /// `join` from `device`: a free device takes the next waiting saved
@@ -80,8 +103,16 @@ impl JoinScreen {
         }
         if let Some(i) = self.seats.iter().position(|(_, s)| *s == Slot::Waiting) {
             self.seats[i].1 = Slot::Taken(device);
-        } else if self.seats.iter().filter(|(_, s)| *s != Slot::Skipped).count() < self.most as usize {
-            let n = (1..=self.most).find(|n| !self.seats.iter().any(|(m, _)| m == n)).unwrap_or(self.most);
+        } else if self
+            .seats
+            .iter()
+            .filter(|(_, s)| *s != Slot::Skipped)
+            .count()
+            < self.most as usize
+        {
+            let n = (1..=self.most)
+                .find(|n| !self.seats.iter().any(|(m, _)| m == n))
+                .unwrap_or(self.most);
             self.seats.push((n, Slot::Taken(device)));
             self.seats.sort_by_key(|(n, _)| *n);
         }
@@ -91,8 +122,13 @@ impl JoinScreen {
     /// `back` from `device`: its seat goes. A new game's seats are
     /// numbered again from 1; a saved seat waits again.
     pub fn back(&mut self, device: Device) -> JoinStep {
-        let Some(i) = self.holds(device) else { return JoinStep::Stay };
-        let saved = self.load.as_ref().is_some_and(|s| s.now.s.seat(self.seats[i].0).is_some());
+        let Some(i) = self.holds(device) else {
+            return JoinStep::Stay;
+        };
+        let saved = self
+            .load
+            .as_ref()
+            .is_some_and(|s| s.now.s.seat(self.seats[i].0).is_some());
         if saved {
             self.seats[i].1 = Slot::Waiting;
             return JoinStep::Stay;
@@ -134,21 +170,45 @@ impl JoinScreen {
     /// The screen's lines: a title, a line a seat and the keys' hint.
     pub fn lines(&self, w: &World, lang: &str) -> Vec<String> {
         let text = |key: &str, n: Option<usize>, fallback: &str| {
-            let args: Vec<(String, rlml_core::rt::value::Value)> = n.map(|n| ("N".to_string(), rlml_core::rt::value::Value::Number(n as i64))).into_iter().collect();
-            if w.m.has_text(lang, key) { w.text(lang, key, &args) } else { fallback.replace("{N}", &n.map(|n| n.to_string()).unwrap_or_default()) }
+            let args: Vec<(String, rlml_core::rt::value::Value)> = n
+                .map(|n| {
+                    (
+                        "N".to_string(),
+                        rlml_core::rt::value::Value::Number(n as i64),
+                    )
+                })
+                .into_iter()
+                .collect();
+            if w.m.has_text(lang, key) {
+                w.text(lang, key, &args)
+            } else {
+                fallback.replace("{N}", &n.map(|n| n.to_string()).unwrap_or_default())
+            }
         };
-        let mut out = vec![text("ENGINE.JOIN.TITLE", None, "Join the game"), String::new()];
+        let mut out = vec![
+            text("ENGINE.JOIN.TITLE", None, "Join the game"),
+            String::new(),
+        ];
         for (n, slot) in &self.seats {
             let what = match slot {
-                Slot::Taken(Device::Keyboard(p)) => text("ENGINE.JOIN.KEYBOARD", Some(*p as usize), "keyboard {N}"),
+                Slot::Taken(Device::Keyboard(p)) => {
+                    text("ENGINE.JOIN.KEYBOARD", Some(*p as usize), "keyboard {N}")
+                }
                 Slot::Taken(Device::Pad(p)) => text("ENGINE.JOIN.PAD", Some(*p + 1), "pad {N}"),
                 Slot::Waiting => text("ENGINE.JOIN.WAITING", None, "waiting for a device"),
                 Slot::Skipped => text("ENGINE.JOIN.SKIPPED", None, "skipped"),
             };
-            out.push(format!("{}  {what}", text("ENGINE.JOIN.SEAT", Some(*n as usize), "Seat {N}")));
+            out.push(format!(
+                "{}  {what}",
+                text("ENGINE.JOIN.SEAT", Some(*n as usize), "Seat {N}")
+            ));
         }
         out.push(String::new());
-        out.push(text("ENGINE.JOIN.HINT", None, "Join from a free device, start with confirm"));
+        out.push(text(
+            "ENGINE.JOIN.HINT",
+            None,
+            "Join from a free device, start with confirm",
+        ));
         out
     }
 }

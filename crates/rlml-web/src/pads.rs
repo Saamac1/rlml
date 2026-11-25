@@ -23,8 +23,14 @@ pub fn decode(s: &str) -> Option<(usize, Raw)> {
     let raw = match (w.next()?, w.next(), w.next()) {
         ("c", None, None) => Raw::Connected,
         ("d", None, None) => Raw::Disconnected,
-        ("b", Some(name), Some(down)) => Raw::Button { name: name.to_string(), down: down == "1" },
-        ("a", Some(name), Some(value)) => Raw::Axis { name: name.to_string(), value: value.parse().ok()? },
+        ("b", Some(name), Some(down)) => Raw::Button {
+            name: name.to_string(),
+            down: down == "1",
+        },
+        ("a", Some(name), Some(value)) => Raw::Axis {
+            name: name.to_string(),
+            value: value.parse().ok()?,
+        },
         _ => return None,
     };
     w.next().is_none().then_some((id, raw))

@@ -24,7 +24,13 @@ fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<Strin
         if p.is_dir() {
             read_tree(root, &p, out);
         } else {
-            out.insert(p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"), std::fs::read_to_string(&p).unwrap());
+            out.insert(
+                p.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+                std::fs::read_to_string(&p).unwrap(),
+            );
         }
     }
 }
@@ -90,9 +96,14 @@ fn model() -> Model {
     let mut f = MemFiles::default();
     read_tree(&repo, &repo.join("lib"), &mut f.engine);
     f.game.insert("game.rlml".into(), GAME.into());
-    f.game.insert("text/fi.rlml".into(), "language fi\nLINE.ONE Hei.\n".into());
+    f.game
+        .insert("text/fi.rlml".into(), "language fi\nLINE.ONE Hei.\n".into());
     let (m, r) = rlml_core::check_game(&f, "game.rlml");
-    assert!(!r.has_errors(), "{:#?}", r.errors().map(|d| d.to_string()).collect::<Vec<_>>());
+    assert!(
+        !r.has_errors(),
+        "{:#?}",
+        r.errors().map(|d| d.to_string()).collect::<Vec<_>>()
+    );
     m
 }
 
@@ -105,16 +116,39 @@ fn start(m: &Model) -> Runner<'_> {
 }
 
 fn told(r: &Runner) -> i64 {
-    r.w.s.game.components.iter().find(|c| c.name == "TALES").unwrap().get("told").unwrap().as_number().unwrap()
+    r.w.s
+        .game
+        .components
+        .iter()
+        .find(|c| c.name == "TALES")
+        .unwrap()
+        .get("told")
+        .unwrap()
+        .as_number()
+        .unwrap()
 }
 
 fn word(r: &Runner) -> Option<Value> {
-    r.w.s.game.components.iter().find(|c| c.name == "TALES").unwrap().get("word").cloned()
+    r.w.s
+        .game
+        .components
+        .iter()
+        .find(|c| c.name == "TALES")
+        .unwrap()
+        .get("word")
+        .cloned()
 }
 
 fn command(r: &mut Runner, name: &str) {
     let n = r.awaiting().unwrap();
-    r.input(n, &CommandValue { name: name.into(), args: vec![] }).unwrap();
+    r.input(
+        n,
+        &CommandValue {
+            name: name.into(),
+            args: vec![],
+        },
+    )
+    .unwrap();
 }
 
 #[test]
@@ -123,12 +157,23 @@ fn a_command_waits_for_a_scene_a_confirmation_and_a_field() {
     let mut r = start(&m);
     command(&mut r, "ASK");
     assert_eq!(told(&r), 1, "the command ran up to `wait scene`");
-    assert!(matches!(r.scene_pause(), Some(Pause::Say { key, .. }) if key == "LINE.ONE"), "the action's end opened STORY");
+    assert!(
+        matches!(r.scene_pause(), Some(Pause::Say { key, .. }) if key == "LINE.ONE"),
+        "the action's end opened STORY"
+    );
     assert_eq!(r.run(0).unwrap(), Status::Scene);
     r.scene_confirm().unwrap();
     assert!(!r.in_scene());
-    assert_eq!(told(&r), 1001, "the scene ran; the command waits for its new action");
-    assert_eq!(r.run(0).unwrap(), Status::Scene, "the command went on to `wait confirm`");
+    assert_eq!(
+        told(&r),
+        1001,
+        "the scene ran; the command waits for its new action"
+    );
+    assert_eq!(
+        r.run(0).unwrap(),
+        Status::Scene,
+        "the command went on to `wait confirm`"
+    );
     assert_eq!(told(&r), 1011);
     assert!(matches!(r.scene_pause(), Some(Pause::Confirm)));
     r.scene_confirm().unwrap();
@@ -137,12 +182,20 @@ fn a_command_waits_for_a_scene_a_confirmation_and_a_field() {
     assert!(matches!(r.scene_pause(), Some(Pause::Ask { .. })));
     assert!(r.scene_answer(Value::Text("Dorothy Gale".into())).unwrap());
     assert_eq!(r.run(0).unwrap(), Status::Input);
-    assert_eq!(word(&r), Some(Value::Text("Dorothy ".into())), "the answer went into the command's name, cut to 8");
-    assert_eq!(r.w.s.game.time, 30, "the command's cost, once, at its end; the waits took no time");
+    assert_eq!(
+        word(&r),
+        Some(Value::Text("Dorothy ".into())),
+        "the answer went into the command's name, cut to 8"
+    );
+    assert_eq!(
+        r.w.s.game.time, 30,
+        "the command's cost, once, at its end; the waits took no time"
+    );
     assert!(r.waiting.is_empty());
 
     let text = r.input_log().write().unwrap();
-    let got = Replay::run(&m, &InputLog::read(&text).unwrap()).unwrap_or_else(|e| panic!("{e}\n{text}"));
+    let got =
+        Replay::run(&m, &InputLog::read(&text).unwrap()).unwrap_or_else(|e| panic!("{e}\n{text}"));
     assert!(got.w.s == r.w.s, "the replay waits as the game did\n{text}");
 }
 
@@ -151,9 +204,15 @@ fn queued_scenes_run_before_the_menu_a_command_waits_for() {
     let m = model();
     let mut r = start(&m);
     command(&mut r, "PAUSED");
-    assert!(matches!(r.scene_pause(), Some(Pause::Say { .. })), "the queued scene first (M 6.1.6)");
+    assert!(
+        matches!(r.scene_pause(), Some(Pause::Say { .. })),
+        "the queued scene first (M 6.1.6)"
+    );
     r.scene_confirm().unwrap();
-    assert!(matches!(r.scene_pause(), Some(Pause::Open { name, .. }) if name == "PAUSE"), "then the menu");
+    assert!(
+        matches!(r.scene_pause(), Some(Pause::Open { name, .. }) if name == "PAUSE"),
+        "then the menu"
+    );
     assert_eq!(told(&r), 1000);
     assert!(r.scene_closed().unwrap());
     assert_eq!(r.run(0).unwrap(), Status::Input);
@@ -173,8 +232,16 @@ fn the_on_scene_save_keeps_the_waiting_command() {
     let save = Save::read(&r.due[0].write()).unwrap();
     let mut l = Runner::load(&m, &save).unwrap();
     assert_eq!(told(&l), 1);
-    assert_eq!(l.run(0).unwrap(), Status::Scene, "the loaded game shows STORY from its start (M 5.4)");
-    assert_eq!(l.due.len(), 0, "the loaded state is the save: no second save");
+    assert_eq!(
+        l.run(0).unwrap(),
+        Status::Scene,
+        "the loaded game shows STORY from its start (M 5.4)"
+    );
+    assert_eq!(
+        l.due.len(),
+        0,
+        "the loaded state is the save: no second save"
+    );
     assert!(matches!(l.scene_pause(), Some(Pause::Say { key, .. }) if key == "LINE.ONE"));
     l.scene_confirm().unwrap();
     assert_eq!(l.run(0).unwrap(), Status::Scene);
@@ -203,6 +270,9 @@ fn restart_shows_a_held_wait_again() {
     assert_eq!(told(&r), 1001, "the draft went, the scene ran once");
     r.run(0).unwrap();
     r.scene_restart().unwrap();
-    assert!(matches!(r.scene_pause(), Some(Pause::Confirm)), "a confirmation restarts as itself");
+    assert!(
+        matches!(r.scene_pause(), Some(Pause::Confirm)),
+        "a confirmation restarts as itself"
+    );
     assert_eq!(told(&r), 1011);
 }

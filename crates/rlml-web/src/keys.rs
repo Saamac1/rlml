@@ -29,7 +29,12 @@ pub fn binding(key: &str, code: &str, ctrl: bool, alt: bool, shift: bool) -> Opt
         "PageUp" => Some(KeyCode::PageUp),
         "PageDown" => Some(KeyCode::PageDown),
         "Spacebar" => Some(KeyCode::Char(' ')),
-        f if f.len() >= 2 && f.starts_with('F') && f[1..].chars().all(|c| c.is_ascii_digit()) => f[1..].parse().ok().filter(|n| (1..=24).contains(n)).map(KeyCode::F),
+        f if f.len() >= 2 && f.starts_with('F') && f[1..].chars().all(|c| c.is_ascii_digit()) => f
+            [1..]
+            .parse()
+            .ok()
+            .filter(|n| (1..=24).contains(n))
+            .map(KeyCode::F),
         _ => None,
     };
     let mods = Mods { ctrl, alt, shift };
@@ -65,12 +70,17 @@ pub fn mouse(button: i32, ctrl: bool, alt: bool, shift: bool) -> Option<Binding>
 
 /// The binding of one wheel step, `wheel.up` or `wheel.down`.
 pub fn wheel(up: bool, ctrl: bool, alt: bool, shift: bool) -> Binding {
-    Binding::Mouse(if up { Mouse::WheelUp } else { Mouse::WheelDown }, Mods { ctrl, alt, shift })
+    Binding::Mouse(
+        if up { Mouse::WheelUp } else { Mouse::WheelDown },
+        Mods { ctrl, alt, shift },
+    )
 }
 
 /// `KeyA` → `a`, `Digit1` → `1`.
 fn from_code(code: &str) -> Option<char> {
-    let c = code.strip_prefix("Key").or_else(|| code.strip_prefix("Digit"))?;
+    let c = code
+        .strip_prefix("Key")
+        .or_else(|| code.strip_prefix("Digit"))?;
     let mut chars = c.chars();
     match (chars.next(), chars.next()) {
         (Some(c), None) if c.is_ascii_alphanumeric() => Some(c.to_ascii_lowercase()),
@@ -82,7 +92,12 @@ fn from_code(code: &str) -> Option<char> {
 /// `space`), and ctrl+c, which always leaves: the page keeps the
 /// browser's own use of these keys from them.
 pub fn bound(keys: &Keys) -> BTreeSet<String> {
-    let mut out: BTreeSet<String> = keys.contexts.values().flat_map(|c| c.rows.iter().chain(c.parts.values().flatten())).map(|(b, _)| b.name()).collect();
+    let mut out: BTreeSet<String> = keys
+        .contexts
+        .values()
+        .flat_map(|c| c.rows.iter().chain(c.parts.values().flatten()))
+        .map(|(b, _)| b.name())
+        .collect();
     out.insert("ctrl+c".into());
     out
 }

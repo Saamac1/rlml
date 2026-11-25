@@ -87,7 +87,10 @@ impl Ty {
 
     /// Can the value be looped over and filtered (`for`, `where`, `in`)?
     pub fn is_set(&self) -> bool {
-        matches!(self, Ty::Collection(_) | Ty::List(_) | Ty::Area | Ty::Range | Ty::Dict(..) | Ty::Unknown)
+        matches!(
+            self,
+            Ty::Collection(_) | Ty::List(_) | Ty::Area | Ty::Range | Ty::Dict(..) | Ty::Unknown
+        )
     }
 }
 
@@ -98,15 +101,25 @@ impl Ty {
 /// as a list member (RS 12.1).
 pub fn parse(text: &str, component: &dyn Fn(&str) -> bool) -> Result<Ty, String> {
     if text.contains('|') {
-        return text.split('|').map(|t| parse(t.trim(), component)).collect::<Result<Vec<_>, _>>().map(Ty::Union);
+        return text
+            .split('|')
+            .map(|t| parse(t.trim(), component))
+            .collect::<Result<Vec<_>, _>>()
+            .map(Ty::Union);
     }
     let words: Vec<&str> = text.split_whitespace().collect();
     // words after the type are a field type's size, merge and sort (D 5.1)
     words_to_ty(&words, component, false).map(|(ty, _)| ty)
 }
 
-fn words_to_ty(words: &[&str], component: &dyn Fn(&str) -> bool, member: bool) -> Result<(Ty, usize), String> {
-    let Some(base) = words.first() else { return Err("missing type".into()) };
+fn words_to_ty(
+    words: &[&str],
+    component: &dyn Fn(&str) -> bool,
+    member: bool,
+) -> Result<(Ty, usize), String> {
+    let Some(base) = words.first() else {
+        return Err("missing type".into());
+    };
     let simple = match *base {
         "number" => Some(Ty::Number),
         "percent" => Some(Ty::Percent),
@@ -152,24 +165,33 @@ fn words_to_ty(words: &[&str], component: &dyn Fn(&str) -> bool, member: bool) -
         "list" => {
             let (m, n) = words_to_ty(&words[1..], component, true)?;
             if matches!(m, Ty::List(_) | Ty::Dict(..) | Ty::Deck | Ty::Collection(_)) {
-                return Err(format!("a list member is not a list, dictionary, deck or collection: `{}`", words.join(" ")));
+                return Err(format!(
+                    "a list member is not a list, dictionary, deck or collection: `{}`",
+                    words.join(" ")
+                ));
             }
             Ok((Ty::list(m), 1 + n))
         }
         "dict" => {
             let (k, nk) = words_to_ty(&words[1..], component, false)?;
             if !matches!(k, Ty::Entity | Ty::Name | Ty::Number) {
-                return Err(format!("a dictionary key is entity, name or number, not `{k}`"));
+                return Err(format!(
+                    "a dictionary key is entity, name or number, not `{k}`"
+                ));
             }
             let (v, nv) = words_to_ty(&words[1 + nk..], component, false)?;
             if matches!(v, Ty::Collection(_) | Ty::Deck | Ty::Dict(..)) {
-                return Err(format!("a dictionary value is not a collection, deck or dictionary: `{v}`"));
+                return Err(format!(
+                    "a dictionary value is not a collection, deck or dictionary: `{v}`"
+                ));
             }
             Ok((Ty::Dict(Box::new(k), Box::new(v)), 1 + nk + nv))
         }
         w if crate::names::is_name(w) => {
             if !member {
-                return Err(format!("`{w}`: an upper-case type is a component and is allowed only as a list member (`list {w}`)"));
+                return Err(format!(
+                    "`{w}`: an upper-case type is a component and is allowed only as a list member (`list {w}`)"
+                ));
             }
             if !component(w) {
                 return Err(format!("`{w}` is not a component"));
@@ -299,17 +321,29 @@ mod tests {
         assert_eq!(ty("list area"), Ty::list(Area));
         assert_eq!(ty("collection"), Collection(Member::Entity));
         assert_eq!(ty("collection card"), Collection(Member::Card));
-        assert_eq!(ty("dict entity number"), Dict(Box::new(Entity), Box::new(Number)));
+        assert_eq!(
+            ty("dict entity number"),
+            Dict(Box::new(Entity), Box::new(Number))
+        );
         assert_eq!(ty("number|dice|all"), Union(vec![Number, Dice, All]));
         assert_eq!(ty("name|text"), Union(vec![Name, Text]));
     }
 
     #[test]
     fn reads_data_field_types() {
-        assert_eq!(ty("collection 26 merge STACKABLE modifies"), Collection(Member::Entity));
+        assert_eq!(
+            ty("collection 26 merge STACKABLE modifies"),
+            Collection(Member::Entity)
+        );
         assert_eq!(ty("deck copy"), Deck);
-        assert_eq!(ty("list SCORE 10 sort score desc"), Ty::list(Component(Some("SCORE".into()))));
-        assert_eq!(ty("dict name number"), Dict(Box::new(Name), Box::new(Number)));
+        assert_eq!(
+            ty("list SCORE 10 sort score desc"),
+            Ty::list(Component(Some("SCORE".into())))
+        );
+        assert_eq!(
+            ty("dict name number"),
+            Dict(Box::new(Name), Box::new(Number))
+        );
     }
 
     #[test]
@@ -324,7 +358,14 @@ mod tests {
 
     #[test]
     fn display_round_trips() {
-        for s in ["number", "list area", "collection card", "dict entity number", "list SCORE", "number|dice|all"] {
+        for s in [
+            "number",
+            "list area",
+            "collection card",
+            "dict entity number",
+            "list SCORE",
+            "number|dice|all",
+        ] {
             assert_eq!(ty(s).to_string(), s);
         }
     }
@@ -336,21 +377,36 @@ mod tests {
         assert!(!fits(&Text, &Number), "HURT(target, \"5\")");
         assert!(!fits(&Dir, &Pos), "STEP(north)");
         assert!(!fits(&Side, &Dir) && !fits(&Dir, &Side), "D 5.1");
-        assert!(fits(&Dice, &Number), "emit HIT(target, attacker, attacker.MELEE.damage)");
+        assert!(
+            fits(&Dice, &Number),
+            "emit HIT(target, attacker, attacker.MELEE.damage)"
+        );
         assert!(!fits(&Number, &Range), "RS 2.6: a number is not a range");
         for a in [Pos, Entity, Area, Ty::list(Pos), Ty::list(Unknown)] {
             assert!(fits(&a, &Area), "{a} as an area");
         }
         assert!(!fits(&Collection(Member::Entity), &Area));
         assert!(fits(&Ty::list(Entity), &Collection(Member::Entity)));
-        assert!(!fits(&Collection(Member::Card), &Collection(Member::Entity)));
-        assert!(fits(&Ty::list(Unknown), &Ty::list(Area)), "an empty list takes its type from its use");
+        assert!(!fits(
+            &Collection(Member::Card),
+            &Collection(Member::Entity)
+        ));
+        assert!(
+            fits(&Ty::list(Unknown), &Ty::list(Area)),
+            "an empty list takes its type from its use"
+        );
         assert!(fits(&None, &Entity) && fits(&None, &Number) && !fits(&None, &Bool));
         assert!(fits(&All, &Union(vec![Number, Dice, All])));
         assert!(!fits(&Text, &Union(vec![Number, Dice, All])));
-        assert!(fits(&Component(Some("HP".into())), &Component(Option::None)));
+        assert!(fits(
+            &Component(Some("HP".into())),
+            &Component(Option::None)
+        ));
         assert!(fits(&Label, &Name) && fits(&Name, &Label));
-        assert!(fits(&Name, &Card) && !fits(&Card, &Name), "GIVE(player, QUEST.SEAL)");
+        assert!(
+            fits(&Name, &Card) && !fits(&Card, &Name),
+            "GIVE(player, QUEST.SEAL)"
+        );
     }
 
     #[test]

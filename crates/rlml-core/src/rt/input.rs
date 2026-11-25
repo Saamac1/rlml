@@ -48,7 +48,10 @@ pub enum Arg {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Act {
     /// The seat's command with its filled arguments.
-    Command { name: String, args: Vec<(Option<String>, Arg)> },
+    Command {
+        name: String,
+        args: Vec<(Option<String>, Arg)>,
+    },
     /// `travel_to`: a travel to a cell starts (M 8.1).
     TravelTo { map: String, x: i32, y: i32 },
     /// `follow`: a following of the entity starts (M 8.1).
@@ -112,7 +115,11 @@ impl Arg {
             Value::Name(n) => Arg::Name(n.clone()),
             Value::Dir(d) => Arg::Dir(*d),
             Value::Side(d) => Arg::Side(*d),
-            Value::Pos(p) => Arg::Pos { map: s.maps[p.map].name.clone(), x: p.x, y: p.y },
+            Value::Pos(p) => Arg::Pos {
+                map: s.maps[p.map].name.clone(),
+                x: p.x,
+                y: p.y,
+            },
             Value::Entity(e) => Arg::Entity(*e),
             Value::None => Arg::None,
             other => return Err(format!("the input log cannot hold the argument `{other}`")),
@@ -131,7 +138,9 @@ impl Arg {
             Arg::Pos { map, x, y } => Value::Pos(pos(s, map, *x, *y)?),
             Arg::Entity(e) => {
                 if *e >= s.entities.len() {
-                    return Err(format!("the input log names entity #{e}, which the game has not made"));
+                    return Err(format!(
+                        "the input log names entity #{e}, which the game has not made"
+                    ));
                 }
                 Value::Entity(*e)
             }
@@ -141,7 +150,9 @@ impl Arg {
 }
 
 fn pos(s: &State, map: &str, x: i32, y: i32) -> RtResult<Pos> {
-    let map = s.map_id(map).ok_or_else(|| format!("the input log names map {map}, which is not loaded"))?;
+    let map = s
+        .map_id(map)
+        .ok_or_else(|| format!("the input log names map {map}, which is not loaded"))?;
     Ok(Pos { map, x, y })
 }
 
@@ -279,7 +290,10 @@ fn read_arg(w: &str) -> Result<Arg, String> {
         return read_text(w).map(Arg::Text);
     }
     if let Some(e) = w.strip_prefix('#') {
-        return e.parse().map(Arg::Entity).map_err(|_| format!("a bad entity `{w}`"));
+        return e
+            .parse()
+            .map(Arg::Entity)
+            .map_err(|_| format!("a bad entity `{w}`"));
     }
     if let Ok(n) = w.parse() {
         return Ok(Arg::Number(n));
@@ -308,16 +322,29 @@ fn read_arg(w: &str) -> Result<Arg, String> {
 
 fn read_row(line: &str) -> Result<Row, String> {
     let ws = words(line)?;
-    let time: i64 = ws.first().and_then(|w| w.parse().ok()).ok_or("a row starts with its moment")?;
+    let time: i64 = ws
+        .first()
+        .and_then(|w| w.parse().ok())
+        .ok_or("a row starts with its moment")?;
     if ws.get(1).map(String::as_str) == Some("end") {
-        return Ok(Row { time, seat: None, act: Act::End });
+        return Ok(Row {
+            time,
+            seat: None,
+            act: Act::End,
+        });
     }
-    let seat: SeatId = ws.get(1).and_then(|w| w.parse().ok()).ok_or("a seat number after the moment")?;
+    let seat: SeatId = ws
+        .get(1)
+        .and_then(|w| w.parse().ok())
+        .ok_or("a seat number after the moment")?;
     let what = ws.get(2).ok_or("an input after the seat")?;
     let rest = &ws[3..];
     let act = match what.as_str() {
         "travel_to" => {
-            let (map, x, y) = rest.first().and_then(|w| read_cell(w)).ok_or("`travel_to` takes a cell MAP:x,y")?;
+            let (map, x, y) = rest
+                .first()
+                .and_then(|w| read_cell(w))
+                .ok_or("`travel_to` takes a cell MAP:x,y")?;
             Act::TravelTo { map, x, y }
         }
         "follow" => match rest.first().map(|w| read_arg(w)) {
@@ -332,16 +359,25 @@ fn read_row(line: &str) -> Result<Row, String> {
         "skip" => Act::SceneSkip,
         "restart" => Act::SceneRestart,
         "scene.close" => Act::SceneClose,
-        "scene.choose" => Act::SceneChoose(rest.first().ok_or("`scene.choose` takes an item")?.clone()),
+        "scene.choose" => {
+            Act::SceneChoose(rest.first().ok_or("`scene.choose` takes an item")?.clone())
+        }
         "scene.adjust" => Act::SceneAdjust(
             rest.first().ok_or("`scene.adjust` takes an item")?.clone(),
-            rest.get(1).and_then(|s| s.parse().ok()).ok_or("`scene.adjust` takes +1 or -1")?,
+            rest.get(1)
+                .and_then(|s| s.parse().ok())
+                .ok_or("`scene.adjust` takes +1 or -1")?,
         ),
-        "scene.answer" => Act::SceneAnswer(read_arg(rest.first().ok_or("`scene.answer` takes a value")?)?),
+        "scene.answer" => Act::SceneAnswer(read_arg(
+            rest.first().ok_or("`scene.answer` takes a value")?,
+        )?),
         name => {
             let mut args = Vec::new();
             for w in rest {
-                let named = !w.starts_with('"') && w.split_once('=').is_some_and(|(k, _)| !k.is_empty() && k.chars().all(|c| c.is_alphanumeric() || c == '_'));
+                let named = !w.starts_with('"')
+                    && w.split_once('=').is_some_and(|(k, _)| {
+                        !k.is_empty() && k.chars().all(|c| c.is_alphanumeric() || c == '_')
+                    });
                 if named {
                     let (k, v) = w.split_once('=').unwrap();
                     args.push((Some(k.to_string()), read_arg(v)?));
@@ -349,10 +385,17 @@ fn read_row(line: &str) -> Result<Row, String> {
                     args.push((None, read_arg(w)?));
                 }
             }
-            Act::Command { name: name.to_string(), args }
+            Act::Command {
+                name: name.to_string(),
+                args,
+            }
         }
     };
-    Ok(Row { time, seat: Some(seat), act })
+    Ok(Row {
+        time,
+        seat: Some(seat),
+        act,
+    })
 }
 
 impl InputLog {
@@ -363,7 +406,10 @@ impl InputLog {
         }
         let mut out = format!("rlml-input 1\nseed {}\nseats {}\n", self.seed, self.seats);
         if !self.profile.is_empty() {
-            out.push_str(&format!("profile {}\n", super::save::write_value(&self.profile)));
+            out.push_str(&format!(
+                "profile {}\n",
+                super::save::write_value(&self.profile)
+            ));
         }
         for r in &self.rows {
             out.push_str(&r.to_string());
@@ -373,7 +419,10 @@ impl InputLog {
     }
 
     pub fn read(text: &str) -> Result<InputLog, String> {
-        let mut lines = text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty());
+        let mut lines = text
+            .lines()
+            .enumerate()
+            .filter(|(_, l)| !l.trim().is_empty());
         let at = |i: usize, e: String| format!("input log line {}: {e}", i + 1);
         match lines.next() {
             Some((_, l)) if l.trim() == "rlml-input 1" => {}
@@ -382,12 +431,20 @@ impl InputLog {
         let mut log = InputLog::default();
         let mut header = |key: &str| -> Result<String, String> {
             match lines.next() {
-                Some((i, l)) => l.trim().strip_prefix(key).map(|v| v.trim().to_string()).ok_or_else(|| at(i, format!("`{key} …` expected"))),
+                Some((i, l)) => l
+                    .trim()
+                    .strip_prefix(key)
+                    .map(|v| v.trim().to_string())
+                    .ok_or_else(|| at(i, format!("`{key} …` expected"))),
                 None => Err(format!("the input log has no `{key}` line")),
             }
         };
-        log.seed = header("seed")?.parse().map_err(|_| "a bad seed".to_string())?;
-        log.seats = header("seats")?.parse().map_err(|_| "a bad seat count".to_string())?;
+        log.seed = header("seed")?
+            .parse()
+            .map_err(|_| "a bad seed".to_string())?;
+        log.seats = header("seats")?
+            .parse()
+            .map_err(|_| "a bad seat count".to_string())?;
         let mut lines = lines.peekable();
         if let Some((i, l)) = lines.peek().copied()
             && let Some(p) = l.trim().strip_prefix("profile ")
@@ -420,18 +477,35 @@ impl<'m> Runner<'m> {
                 }
             }
         }
-        self.record(Some(n), Act::Command { name: cmd.name.clone(), args });
+        self.record(
+            Some(n),
+            Act::Command {
+                name: cmd.name.clone(),
+                args,
+            },
+        );
     }
 
     pub(crate) fn record_cell(&mut self, n: SeatId, p: Pos) {
         let map = self.w.s.maps[p.map].name.clone();
-        self.record(Some(n), Act::TravelTo { map, x: p.x, y: p.y });
+        self.record(
+            Some(n),
+            Act::TravelTo {
+                map,
+                x: p.x,
+                y: p.y,
+            },
+        );
     }
 
     /// The log so far, with its `end` row at the moment now.
     pub fn input_log(&self) -> InputLog {
         let mut log = self.inputs.clone();
-        log.rows.push(Row { time: self.w.s.game.time, seat: None, act: Act::End });
+        log.rows.push(Row {
+            time: self.w.s.game.time,
+            seat: None,
+            act: Act::End,
+        });
         log
     }
 }
@@ -452,7 +526,12 @@ impl<'m> Replay<'m> {
         w.begin()?;
         let mut r = Runner::new(w);
         let status = r.run(0)?;
-        Ok(Replay { r, status, rows: log.rows.clone(), next: 0 })
+        Ok(Replay {
+            r,
+            status,
+            rows: log.rows.clone(),
+            next: 0,
+        })
     }
 
     /// A replay from a game under way, as from a save (M 4.4): `log`'s
@@ -464,7 +543,12 @@ impl<'m> Replay<'m> {
         r.orders.clear();
         let status = r.run(0)?;
         let rows = log.rows.get(done..).unwrap_or_default().to_vec();
-        Ok(Replay { r, status, rows, next: 0 })
+        Ok(Replay {
+            r,
+            status,
+            rows,
+            next: 0,
+        })
     }
 
     /// Runs every row left.
@@ -475,7 +559,9 @@ impl<'m> Replay<'m> {
 
     /// Runs the next row and gives it; `None` after the last one.
     pub fn step(&mut self) -> RtResult<Option<Row>> {
-        let Some(row) = self.rows.get(self.next).cloned() else { return Ok(None) };
+        let Some(row) = self.rows.get(self.next).cloned() else {
+            return Ok(None);
+        };
         self.next += 1;
         let line = self.next;
         let err = |e: String| format!("input log row {line} ({row}): {e}");
@@ -489,13 +575,28 @@ impl<'m> Replay<'m> {
         }
         let now = self.r.w.s.game.time;
         if now != row.time {
-            return Err(err(format!("the game is at time {now}, not {}: the data or the engine has changed since the log was written", row.time)));
+            return Err(err(format!(
+                "the game is at time {now}, not {}: the data or the engine has changed since the log was written",
+                row.time
+            )));
         }
         let seat = row.seat.unwrap_or(1);
         match &row.act {
             Act::Command { name, args } => {
-                let args = args.iter().map(|(k, a)| Ok((k.clone(), a.value(&self.r.w.s)?))).collect::<RtResult<Vec<_>>>().map_err(err)?;
-                self.r.input(seat, &CommandValue { name: name.clone(), args }).map_err(err)?;
+                let args = args
+                    .iter()
+                    .map(|(k, a)| Ok((k.clone(), a.value(&self.r.w.s)?)))
+                    .collect::<RtResult<Vec<_>>>()
+                    .map_err(err)?;
+                self.r
+                    .input(
+                        seat,
+                        &CommandValue {
+                            name: name.clone(),
+                            args,
+                        },
+                    )
+                    .map_err(err)?;
                 self.status = self.r.run(0)?;
             }
             Act::TravelTo { map, x, y } => {
@@ -523,7 +624,13 @@ impl<'m> Replay<'m> {
                 }
                 self.status = self.r.run(0)?;
             }
-            Act::SceneConfirm | Act::SceneSkip | Act::SceneRestart | Act::SceneChoose(_) | Act::SceneAdjust(..) | Act::SceneAnswer(_) | Act::SceneClose => {
+            Act::SceneConfirm
+            | Act::SceneSkip
+            | Act::SceneRestart
+            | Act::SceneChoose(_)
+            | Act::SceneAdjust(..)
+            | Act::SceneAnswer(_)
+            | Act::SceneClose => {
                 if !self.r.in_scene() {
                     return Err(err("no scene waits".into()));
                 }
@@ -580,7 +687,14 @@ mod tests {
                 args: vec![
                     (None, Arg::Text("a \"b\"".into())),
                     (Some("to".into()), Arg::Entity(3)),
-                    (Some("at".into()), Arg::Pos { map: "ROOM".into(), x: 4, y: 5 }),
+                    (
+                        Some("at".into()),
+                        Arg::Pos {
+                            map: "ROOM".into(),
+                            x: 4,
+                            y: 5
+                        }
+                    ),
                     (None, Arg::Side(Side::parse("left").unwrap())),
                     (None, Arg::Number(2)),
                     (None, Arg::Name("low".into())),
@@ -592,7 +706,8 @@ mod tests {
 
     #[test]
     fn a_bad_log_says_where() {
-        let e = InputLog::read("rlml-input 1\nseed 7\nseats 1\n0 1 STD.MOVE dir=\"open\n").unwrap_err();
+        let e =
+            InputLog::read("rlml-input 1\nseed 7\nseats 1\n0 1 STD.MOVE dir=\"open\n").unwrap_err();
         assert!(e.contains("line 4"), "{e}");
         assert!(InputLog::read("seed 7\n").is_err());
     }

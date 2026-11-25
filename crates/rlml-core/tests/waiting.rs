@@ -19,7 +19,13 @@ fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<Strin
         if p.is_dir() {
             read_tree(root, &p, out);
         } else {
-            out.insert(p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"), std::fs::read_to_string(&p).unwrap());
+            out.insert(
+                p.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+                std::fs::read_to_string(&p).unwrap(),
+            );
         }
     }
 }
@@ -76,7 +82,11 @@ fn files(game: &str) -> MemFiles {
 
 fn model(game: &str) -> Model {
     let (m, r) = rlml_core::check_game(&files(game), "game.rlml");
-    assert!(!r.has_errors(), "{:#?}", r.errors().map(|d| d.to_string()).collect::<Vec<_>>());
+    assert!(
+        !r.has_errors(),
+        "{:#?}",
+        r.errors().map(|d| d.to_string()).collect::<Vec<_>>()
+    );
     m
 }
 
@@ -89,12 +99,27 @@ fn start(m: &Model) -> Runner<'_> {
 }
 
 fn counter(r: &Runner, f: &str) -> i64 {
-    r.w.s.game.components.iter().find(|c| c.name == "COUNTER").unwrap().get(f).unwrap().as_number().unwrap()
+    r.w.s
+        .game
+        .components
+        .iter()
+        .find(|c| c.name == "COUNTER")
+        .unwrap()
+        .get(f)
+        .unwrap()
+        .as_number()
+        .unwrap()
 }
 
 /// The player's command on its turn.
 fn command(r: &mut Runner, name: &str) {
-    assert!(r.player(&CommandValue { name: name.into(), args: vec![] }).unwrap());
+    assert!(
+        r.player(&CommandValue {
+            name: name.into(),
+            args: vec![]
+        })
+        .unwrap()
+    );
 }
 
 #[test]
@@ -108,12 +133,25 @@ fn dig_waits_at_point_0_in_round_2() {
         let s = &r.waiting[&p];
         (s.point, s.loops.clone())
     };
-    assert_eq!(path(&r), (0, vec![PathLoop { loop_no: 0, state: LoopState::Repeat { round: 0, count: 5 } }]));
+    assert_eq!(
+        path(&r),
+        (
+            0,
+            vec![PathLoop {
+                loop_no: 0,
+                state: LoopState::Repeat { round: 0, count: 5 }
+            }]
+        )
+    );
     assert_eq!(r.w.s.wake_of(p).unwrap().at, 120);
     // the scheduler runs to the player's next input: all five rounds
     assert_eq!(r.run(0).unwrap(), Status::Input);
     assert_eq!(counter(&r, "dug"), 5);
-    assert_eq!(r.w.s.game.time, 5 * 120 + 60, "DIG takes 660 microsteps (M 6.1.6)");
+    assert_eq!(
+        r.w.s.game.time,
+        5 * 120 + 60,
+        "DIG takes 660 microsteps (M 6.1.6)"
+    );
 }
 
 #[test]
@@ -123,11 +161,27 @@ fn the_path_holds_the_round_it_waits_in() {
     let mut w = World::new_game(&m, 7).unwrap();
     w.begin().unwrap();
     let p = w.s.player.unwrap();
-    let mut out = w.start_command(p, &CommandValue { name: "DIG".into(), args: vec![] }).unwrap();
+    let mut out = w
+        .start_command(
+            p,
+            &CommandValue {
+                name: "DIG".into(),
+                args: vec![],
+            },
+        )
+        .unwrap();
     for round in 0..3 {
-        let rlml_core::rt::eval::Outcome::Waiting { state, .. } = out else { panic!("DIG waits") };
+        let rlml_core::rt::eval::Outcome::Waiting { state, .. } = out else {
+            panic!("DIG waits")
+        };
         assert_eq!(state.point, 0);
-        assert_eq!(state.loops, vec![PathLoop { loop_no: 0, state: LoopState::Repeat { round, count: 5 } }]);
+        assert_eq!(
+            state.loops,
+            vec![PathLoop {
+                loop_no: 0,
+                state: LoopState::Repeat { round, count: 5 }
+            }]
+        );
         out = w.continue_command(p, *state, true).unwrap();
     }
 }
@@ -138,22 +192,66 @@ fn nested_loops_keep_their_set_index_and_round() {
     let mut w = World::new_game(&m, 7).unwrap();
     w.begin().unwrap();
     let p = w.s.player.unwrap();
-    let out = w.start_command(p, &CommandValue { name: "SEARCH".into(), args: vec![] }).unwrap();
-    let rlml_core::rt::eval::Outcome::Waiting { state, .. } = out else { panic!("SEARCH waits at the third spot") };
+    let out = w
+        .start_command(
+            p,
+            &CommandValue {
+                name: "SEARCH".into(),
+                args: vec![],
+            },
+        )
+        .unwrap();
+    let rlml_core::rt::eval::Outcome::Waiting { state, .. } = out else {
+        panic!("SEARCH waits at the third spot")
+    };
     let set = vec![Value::Number(1), Value::Number(2), Value::Number(3)];
     assert_eq!(state.point, 0);
     assert_eq!(
         state.loops,
-        vec![PathLoop { loop_no: 0, state: LoopState::For { items: set.clone(), index: 2 } }, PathLoop { loop_no: 1, state: LoopState::Repeat { round: 0, count: 3 } }]
+        vec![
+            PathLoop {
+                loop_no: 0,
+                state: LoopState::For {
+                    items: set.clone(),
+                    index: 2
+                }
+            },
+            PathLoop {
+                loop_no: 1,
+                state: LoopState::Repeat { round: 0, count: 3 }
+            }
+        ]
     );
-    assert_eq!(state.env.locals.get("spot"), Some(&Value::Number(3)), "the loop variable is a local name");
+    assert_eq!(
+        state.env.locals.get("spot"),
+        Some(&Value::Number(3)),
+        "the loop variable is a local name"
+    );
     let out = w.continue_command(p, *state, true).unwrap();
-    let rlml_core::rt::eval::Outcome::Waiting { state, .. } = out else { panic!("the second round waits too") };
-    assert_eq!(state.loops[1].state, LoopState::Repeat { round: 1, count: 3 });
+    let rlml_core::rt::eval::Outcome::Waiting { state, .. } = out else {
+        panic!("the second round waits too")
+    };
+    assert_eq!(
+        state.loops[1].state,
+        LoopState::Repeat { round: 1, count: 3 }
+    );
     let out = w.continue_command(p, *state, true).unwrap();
-    let rlml_core::rt::eval::Outcome::Waiting { state, .. } = out else { panic!("and the third") };
-    assert!(matches!(w.continue_command(p, *state, true).unwrap(), rlml_core::rt::eval::Outcome::Done { .. }));
-    let searched = w.s.game.components.iter().find(|c| c.name == "COUNTER").unwrap().get("searched").unwrap().as_number();
+    let rlml_core::rt::eval::Outcome::Waiting { state, .. } = out else {
+        panic!("and the third")
+    };
+    assert!(matches!(
+        w.continue_command(p, *state, true).unwrap(),
+        rlml_core::rt::eval::Outcome::Done { .. }
+    ));
+    let searched =
+        w.s.game
+            .components
+            .iter()
+            .find(|c| c.name == "COUNTER")
+            .unwrap()
+            .get("searched")
+            .unwrap()
+            .as_number();
     assert_eq!(searched, Some(9), "three spots, three rounds each");
 }
 
@@ -165,7 +263,10 @@ fn comments_and_spacing_keep_the_hash() {
     command(&mut r, "DIG");
     let p = r.w.s.player.unwrap();
     r.w.m = &b;
-    assert!(r.w.waiting_fits(&r.waiting[&p]), "the same body, written otherwise");
+    assert!(
+        r.w.waiting_fits(&r.waiting[&p]),
+        "the same body, written otherwise"
+    );
     assert_eq!(r.run(0).unwrap(), Status::Input);
     assert_eq!(counter(&r, "dug"), 5);
     assert!(r.w.warnings.is_empty(), "{:?}", r.w.warnings);
@@ -174,18 +275,32 @@ fn comments_and_spacing_keep_the_hash() {
 #[test]
 fn a_changed_body_drops_the_wait() {
     let a = model(GAME);
-    let b = model(&GAME.replace("        game.COUNTER.dug += 1\n", "        game.COUNTER.dug += 2\n"));
+    let b = model(&GAME.replace(
+        "        game.COUNTER.dug += 1\n",
+        "        game.COUNTER.dug += 2\n",
+    ));
     let mut r = start(&a);
     command(&mut r, "DIG");
     let p = r.w.s.player.unwrap();
     assert!(r.waiting.contains_key(&p));
     // as after loading a save made before the game changed (M 6.1.6)
     r.w.m = &b;
-    assert_eq!(r.run(0).unwrap(), Status::Input, "the wake is the player's ordinary turn");
+    assert_eq!(
+        r.run(0).unwrap(),
+        Status::Input,
+        "the wake is the player's ordinary turn"
+    );
     assert!(!r.waiting.contains_key(&p));
     assert_eq!(counter(&r, "dug"), 0, "nothing more is dug");
-    assert_eq!(r.w.s.game.time, 120, "no cost is paid: the turn comes at the wake");
-    assert!(r.w.warnings.iter().any(|w| w.contains("DIG")), "{:?}", r.w.warnings);
+    assert_eq!(
+        r.w.s.game.time, 120,
+        "no cost is paid: the turn comes at the wake"
+    );
+    assert!(
+        r.w.warnings.iter().any(|w| w.contains("DIG")),
+        "{:?}",
+        r.w.warnings
+    );
 }
 
 #[test]
@@ -200,9 +315,15 @@ fn a_saved_wait_goes_on_after_loading() {
     let save = Save::read(&text).unwrap();
     assert_eq!(save.now.s, r.w.s);
     let mut loaded = Runner::load(&m, &save).unwrap();
-    assert_eq!(loaded.waiting, r.waiting, "the path, the set, the round and the locals (M 5.2)");
+    assert_eq!(
+        loaded.waiting, r.waiting,
+        "the path, the set, the round and the locals (M 5.2)"
+    );
     assert_eq!(r.run(0).unwrap(), Status::Input);
     assert_eq!(loaded.run(0).unwrap(), Status::Input);
     assert_eq!(counter(&loaded, "searched"), 9);
-    assert!(loaded.w.s == r.w.s, "the loaded game went as the one that was not saved");
+    assert!(
+        loaded.w.s == r.w.s,
+        "the loaded game went as the one that was not saved"
+    );
 }

@@ -24,21 +24,26 @@ pub fn dir_of(action: &str) -> Option<Dir> {
 pub fn moved(w: &World, p: Pos, d: Dir) -> Pos {
     let m = &w.s.maps[p.map];
     let n = p.step(d);
-    Pos { x: n.x.clamp(0, m.width - 1), y: n.y.clamp(0, m.height - 1), ..n }
+    Pos {
+        x: n.x.clamp(0, m.width - 1),
+        y: n.y.clamp(0, m.height - 1),
+        ..n
+    }
 }
 
 /// The entities a cursor's `next` and `prev` visit: drawn ones in the
 /// shared view, nearest to `from` first, then in reading order (M 8.1).
 pub fn visible(w: &World, from: Pos) -> Vec<Pos> {
-    let Some(view) = w.shared_view(from.map) else { return vec![] };
-    let mut cells: Vec<Pos> = w
-        .s
-        .entities_on(from.map)
-        .into_iter()
-        .filter(|&e| w.s.get(e).alive && w.s.get(e).get("render").is_some())
-        .filter_map(|e| w.s.at(e))
-        .filter(|p| view.contains(&(p.x, p.y)) && *p != from)
-        .collect();
+    let Some(view) = w.shared_view(from.map) else {
+        return vec![];
+    };
+    let mut cells: Vec<Pos> =
+        w.s.entities_on(from.map)
+            .into_iter()
+            .filter(|&e| w.s.get(e).alive && w.s.get(e).get("render").is_some())
+            .filter_map(|e| w.s.at(e))
+            .filter(|p| view.contains(&(p.x, p.y)) && *p != from)
+            .collect();
     cells.sort_by_key(|p| (from.distance(*p), p.y, p.x));
     cells.dedup();
     cells
@@ -46,5 +51,8 @@ pub fn visible(w: &World, from: Pos) -> Vec<Pos> {
 
 /// The actor under a cursor that `follow` follows: the top one drawn.
 pub fn actor_at(w: &World, p: Pos) -> Option<EntityId> {
-    w.s.entities_at(p).into_iter().rev().find(|&e| w.s.get(e).alive && w.s.is_actor(e))
+    w.s.entities_at(p)
+        .into_iter()
+        .rev()
+        .find(|&e| w.s.get(e).alive && w.s.is_actor(e))
 }

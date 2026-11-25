@@ -15,18 +15,82 @@ use crate::token::Token;
 
 /// Engine actions a key, menu item or `{^…}` may name (M 9.1).
 pub const ENGINE_ACTIONS: &[&str] = &[
-    "save", "quit", "pass", "repeat", "help", "confirm", "back", "close", "resume", "skip", "restart", "rewind", "new_game", "load_game",
-    "exit", "next", "prev", "toggle", "travel_to", "look", "cursor", "follow", "verbs", "focus", "join", "leave_seat", "read", "tab", "tab.next",
-    "tab.prev", "page.up", "page.down", "first", "last", "hold",
+    "save",
+    "quit",
+    "pass",
+    "repeat",
+    "help",
+    "confirm",
+    "back",
+    "close",
+    "resume",
+    "skip",
+    "restart",
+    "rewind",
+    "new_game",
+    "load_game",
+    "exit",
+    "next",
+    "prev",
+    "toggle",
+    "travel_to",
+    "look",
+    "cursor",
+    "follow",
+    "verbs",
+    "focus",
+    "join",
+    "leave_seat",
+    "read",
+    "tab",
+    "tab.next",
+    "tab.prev",
+    "page.up",
+    "page.down",
+    "first",
+    "last",
+    "hold",
 ];
 
 /// Engine events (M 9.1, M 9.6).
-pub const ENGINE_EVENTS: &[&str] = &["begin", "turn", "wake", "created", "removed", "enter", "leave", "arrive", "depart", "hear", "join", "part"];
+pub const ENGINE_EVENTS: &[&str] = &[
+    "begin", "turn", "wake", "created", "removed", "enter", "leave", "arrive", "depart", "hear",
+    "join", "part",
+];
 
-const GAME_FIELDS: &[&str] =
-    &["start", "at", "seed", "call_depth", "loop_steps", "keys", "title", "layout", "naming", "walk", "walk_stop", "walk_avoid", "leader", "rest", "follow_distance", "follow_ai", "masking", "seats", "party", "leash"];
+const GAME_FIELDS: &[&str] = &[
+    "start",
+    "at",
+    "seed",
+    "call_depth",
+    "loop_steps",
+    "keys",
+    "title",
+    "layout",
+    "naming",
+    "walk",
+    "walk_stop",
+    "walk_avoid",
+    "leader",
+    "rest",
+    "follow_distance",
+    "follow_ai",
+    "masking",
+    "seats",
+    "party",
+    "leash",
+];
 
-const SETTINGS: &[&str] = &["language", "style", "round", "idle", "external", "external_timeout", "mouse", "targeting"];
+const SETTINGS: &[&str] = &[
+    "language",
+    "style",
+    "round",
+    "idle",
+    "external",
+    "external_timeout",
+    "mouse",
+    "targeting",
+];
 
 /// A drawn map or prefab after its legend has been read.
 #[derive(Debug, Default)]
@@ -38,7 +102,12 @@ struct Drawn {
 
 pub fn check(m: &Model, main: &str, r: &mut Report) {
     let logic_tiles = crate::rs::check::check(m, r);
-    let mut c = Checker { m, r, drawn: BTreeMap::new(), used_tiles: logic_tiles };
+    let mut c = Checker {
+        m,
+        r,
+        drawn: BTreeMap::new(),
+        used_tiles: logic_tiles,
+    };
     c.components();
     c.maps();
     c.entities();
@@ -79,12 +148,16 @@ impl Checker<'_> {
         for def in defs_of(self.m, Kind::Component) {
             let Some(b) = def.block() else { continue };
             if names::is_vocabulary(&b.name) || fields::engine_component(&def.full).is_some() {
-                self.r.push(b.err(format!("`{}` is an engine component; give your own component an upper-case name", b.name)));
+                self.r.push(b.err(format!(
+                    "`{}` is an engine component; give your own component an upper-case name",
+                    b.name
+                )));
             }
             let fields = component_fields(def);
             for (item, f) in b.items.iter().zip(&fields) {
                 if !names::is_vocabulary(&f.name) && !names::is_name(&f.name) {
-                    self.r.push(item.err(format!("bad field name `{}`", f.name)));
+                    self.r
+                        .push(item.err(format!("bad field name `{}`", f.name)));
                 }
                 if let Err(e) = fields::check_type(&f.ty) {
                     self.r.push(item.err(e));
@@ -92,7 +165,11 @@ impl Checker<'_> {
                 }
                 // the same type reading as RogueScript's (D 5.1 = RS 2.6)
                 let ns = b.namespace.as_deref();
-                if let Err(e) = crate::rs::types::parse(&f.ty, &|n| self.m.resolve(ns, n).is_ok_and(|d| d.kind == Kind::Component)) {
+                if let Err(e) = crate::rs::types::parse(&f.ty, &|n| {
+                    self.m
+                        .resolve(ns, n)
+                        .is_ok_and(|d| d.kind == Kind::Component)
+                }) {
                     self.r.push(item.err(e));
                     continue;
                 }
@@ -103,9 +180,14 @@ impl Checker<'_> {
                     }
                     let toks = crate::token::tokenize(d).unwrap_or_default();
                     let v = self.values(b.namespace.as_deref());
-                    let res = if f.base_type() == "collection" { v.draw(&toks, &[Kind::Deck, Kind::Table, Kind::Entity]) } else { v.value(&f.ty, &toks) };
+                    let res = if f.base_type() == "collection" {
+                        v.draw(&toks, &[Kind::Deck, Kind::Table, Kind::Entity])
+                    } else {
+                        v.value(&f.ty, &toks)
+                    };
                     if let Err(e) = res {
-                        self.r.push(item.err(format!("default of `{}`: {e}", f.name)));
+                        self.r
+                            .push(item.err(format!("default of `{}`: {e}", f.name)));
                     }
                 }
             }
@@ -126,7 +208,8 @@ impl Checker<'_> {
                     Err(e) => self.r.push(b.err(e)),
                 }
             } else if !b.args.is_empty() {
-                self.r.push(b.err(format!("unexpected `{}` in the entity header", b.args_text)));
+                self.r
+                    .push(b.err(format!("unexpected `{}` in the entity header", b.args_text)));
             }
             for item in &b.items {
                 let (marker, row) = item.marker();
@@ -154,7 +237,9 @@ impl Checker<'_> {
         {
             self.used_tiles.insert(full);
         }
-        let Some(def) = self.m.defs.get(&row.component) else { return };
+        let Some(def) = self.m.defs.get(&row.component) else {
+            return;
+        };
         let fields = component_fields(def);
         let maps: Vec<&str> = fields
             .iter()
@@ -164,12 +249,17 @@ impl Checker<'_> {
             .collect();
         let [map] = maps.as_slice() else { return };
         let map_full = self.m.resolve(ns, map).unwrap().full.clone();
-        let Some(drawn) = self.drawn.get(&map_full) else { return };
+        let Some(drawn) = self.drawn.get(&map_full) else {
+            return;
+        };
         for f in fields.iter().filter(|f| f.base_type() == "label") {
             if let Some(label) = row.get(&f.name)
                 && !drawn.labels.contains(label)
             {
-                self.r.push(item.err(format!("`{}.{}`: map `{map_full}` has no label `{label}`", row.component, f.name)));
+                self.r.push(item.err(format!(
+                    "`{}.{}`: map `{map_full}` has no label `{label}`",
+                    row.component, f.name
+                )));
             }
         }
     }
@@ -179,7 +269,10 @@ impl Checker<'_> {
         let mut cur = def;
         while let Some(b) = cur.block() {
             let parent = b.arg_after("extends")?;
-            let next = self.m.resolve_kind(b.namespace.as_deref(), parent, &[kind]).ok()?;
+            let next = self
+                .m
+                .resolve_kind(b.namespace.as_deref(), parent, &[kind])
+                .ok()?;
             seen.push(next.full.clone());
             if next.full == def.full {
                 return Some(seen.join(" → "));
@@ -193,7 +286,12 @@ impl Checker<'_> {
     }
 
     fn maps(&mut self) {
-        let defs: Vec<&Def> = self.m.defs.values().filter(|d| matches!(d.kind, Kind::Map | Kind::Prefab)).collect();
+        let defs: Vec<&Def> = self
+            .m
+            .defs
+            .values()
+            .filter(|d| matches!(d.kind, Kind::Map | Kind::Prefab))
+            .collect();
         for def in &defs {
             let Some(b) = def.block() else { continue };
             if b.has_arg("extends") {
@@ -205,11 +303,18 @@ impl Checker<'_> {
         // extending maps get their base's drawing and labels (D 8.10)
         for def in defs {
             let Some(b) = def.block() else { continue };
-            let Some(base) = b.arg_after("extends") else { continue };
+            let Some(base) = b.arg_after("extends") else {
+                continue;
+            };
             if !b.drawing.is_empty() {
-                self.r.push(b.err("an extending map takes its base's drawing; it cannot have its own (D 8.10)"));
+                self.r.push(b.err(
+                    "an extending map takes its base's drawing; it cannot have its own (D 8.10)",
+                ));
             }
-            let base_def = match self.m.resolve_kind(b.namespace.as_deref(), base, &[Kind::Map]) {
+            let base_def = match self
+                .m
+                .resolve_kind(b.namespace.as_deref(), base, &[Kind::Map])
+            {
                 Ok(d) => d,
                 Err(e) => {
                     self.r.push(b.err(e));
@@ -220,14 +325,29 @@ impl Checker<'_> {
                 self.r.push(b.err(format!("`extends` cycle: {cycle}")));
                 continue;
             }
-            let mut labels = self.drawn.get(&base_def.full).map(|d| d.labels.clone()).unwrap_or_default();
-            let (w, h) = self.drawn.get(&base_def.full).map(|d| (d.width, d.height)).unwrap_or((0, 0));
+            let mut labels = self
+                .drawn
+                .get(&base_def.full)
+                .map(|d| d.labels.clone())
+                .unwrap_or_default();
+            let (w, h) = self
+                .drawn
+                .get(&base_def.full)
+                .map(|d| (d.width, d.height))
+                .unwrap_or((0, 0));
             for item in b.sub("legend") {
                 if let Some(l) = self.legend_row(item, b) {
                     labels.extend(l);
                 }
             }
-            self.drawn.insert(def.full.clone(), Drawn { width: w, height: h, labels });
+            self.drawn.insert(
+                def.full.clone(),
+                Drawn {
+                    width: w,
+                    height: h,
+                    labels,
+                },
+            );
         }
     }
 
@@ -235,30 +355,52 @@ impl Checker<'_> {
     fn drawing(&mut self, b: &RawBlock) -> Drawn {
         let mut d = Drawn::default();
         if b.drawing.is_empty() {
-            self.r.push(b.err(format!("{} `{}` has no drawing", b.kind, b.name)));
+            self.r
+                .push(b.err(format!("{} `{}` has no drawing", b.kind, b.name)));
             return d;
         }
         let rows: Vec<Vec<char>> = b.drawing.iter().map(|l| l.chars().collect()).collect();
-        let size = b.arg_after("size").map(|s| s.split_once('x').and_then(|(w, h)| Some((w.parse::<usize>().ok()?, h.parse::<usize>().ok()?))));
+        let size = b.arg_after("size").map(|s| {
+            s.split_once('x')
+                .and_then(|(w, h)| Some((w.parse::<usize>().ok()?, h.parse::<usize>().ok()?)))
+        });
         match size {
             Some(Some((w, h))) => {
                 (d.width, d.height) = (w, h);
                 for (i, row) in rows.iter().enumerate() {
                     if row.len() > w {
-                        self.r.error(&b.file, b.drawing_line + i, format!("drawing row is {} wide; the size is {w}x{h}", row.len()));
+                        self.r.error(
+                            &b.file,
+                            b.drawing_line + i,
+                            format!("drawing row is {} wide; the size is {w}x{h}", row.len()),
+                        );
                     }
                 }
                 if rows.len() > h {
-                    self.r.error(&b.file, b.drawing_line + h, format!("drawing has {} rows; the size is {w}x{h}", rows.len()));
+                    self.r.error(
+                        &b.file,
+                        b.drawing_line + h,
+                        format!("drawing has {} rows; the size is {w}x{h}", rows.len()),
+                    );
                 }
             }
-            Some(None) => self.r.push(b.err("size is written `WxH`, such as `size 24x4`")),
+            Some(None) => self
+                .r
+                .push(b.err("size is written `WxH`, such as `size 24x4`")),
             None => {
                 d.width = rows[0].len();
                 d.height = rows.len();
                 for (i, row) in rows.iter().enumerate() {
                     if row.len() != d.width {
-                        self.r.error(&b.file, b.drawing_line + i, format!("drawing rows differ in length ({} and {}); give the map a `size`", d.width, row.len()));
+                        self.r.error(
+                            &b.file,
+                            b.drawing_line + i,
+                            format!(
+                                "drawing rows differ in length ({} and {}); give the map a `size`",
+                                d.width,
+                                row.len()
+                            ),
+                        );
                         break;
                     }
                 }
@@ -283,11 +425,26 @@ impl Checker<'_> {
                     continue;
                 }
                 if c.width().unwrap_or(1) > 1 {
-                    self.r.warning(&b.file, line, format!("wide character `{c}` at column {} breaks the drawing's alignment", x + 1));
+                    self.r.warning(
+                        &b.file,
+                        line,
+                        format!(
+                            "wide character `{c}` at column {} breaks the drawing's alignment",
+                            x + 1
+                        ),
+                    );
                 }
                 match legend.get(c) {
                     Some(labels) => d.labels.extend(labels.iter().cloned()),
-                    None => self.r.error(&b.file, line, format!("unknown character `{c}` at row {}, column {}: it is not in the legend", y + 1, x + 1)),
+                    None => self.r.error(
+                        &b.file,
+                        line,
+                        format!(
+                            "unknown character `{c}` at row {}, column {}: it is not in the legend",
+                            y + 1,
+                            x + 1
+                        ),
+                    ),
                 }
             }
         }
@@ -295,12 +452,20 @@ impl Checker<'_> {
         for item in b.sub("at") {
             let pos = item.key();
             if !is_pos(pos) {
-                self.r.push(item.err(format!("an `at:` row starts with a position `X,Y`, not `{pos}`")));
+                self.r.push(item.err(format!(
+                    "an `at:` row starts with a position `X,Y`, not `{pos}`"
+                )));
                 continue;
             }
-            let (x, y) = pos.split_once(',').map(|(x, y)| (x.parse::<usize>().unwrap(), y.parse::<usize>().unwrap())).unwrap();
+            let (x, y) = pos
+                .split_once(',')
+                .map(|(x, y)| (x.parse::<usize>().unwrap(), y.parse::<usize>().unwrap()))
+                .unwrap();
             if x >= d.width || y >= d.height {
-                self.r.push(item.err(format!("position {pos} is outside the {}x{} map", d.width, d.height)));
+                self.r.push(item.err(format!(
+                    "position {pos} is outside the {}x{} map",
+                    d.width, d.height
+                )));
             }
             if !seen_at.insert(pos.to_string()) {
                 self.r.push(item.err(format!("second `at:` row for {pos}")));
@@ -338,13 +503,17 @@ impl Checker<'_> {
             let is_layer = i >= pairs_from && (i - pairs_from).is_multiple_of(2);
             if is_layer {
                 if let Err(e) = self.m.resolve_kind(ns, &w.text, &[Kind::Layer]) {
-                    self.r.push(rest.err(format!("`{}` is not a terrain layer: {e}", w.text)));
+                    self.r
+                        .push(rest.err(format!("`{}` is not a terrain layer: {e}", w.text)));
                     ok = false;
                 }
             } else if w.text != "none" {
                 match names::tile_name(&w.text) {
                     Ok(t) if matches!(t.index, Some(Index::Range(..))) => {
-                        self.r.push(rest.err(format!("`{}`: a legend produces one tile, not a range (D 7.4)", w.text)));
+                        self.r.push(rest.err(format!(
+                            "`{}`: a legend produces one tile, not a range (D 7.4)",
+                            w.text
+                        )));
                         ok = false;
                     }
                     Ok(_) => match self.m.resolve_tile(ns, &w.text) {
@@ -366,17 +535,25 @@ impl Checker<'_> {
         let mut labels = BTreeSet::new();
         let mut i = tile_end;
         while i < words.len() {
-            let end = (i + 1..words.len()).find(|&j| kw(words[j])).unwrap_or(words.len());
+            let end = (i + 1..words.len())
+                .find(|&j| kw(words[j]))
+                .unwrap_or(words.len());
             let args: Vec<Token> = words[i + 1..end].iter().map(|t| (*t).clone()).collect();
             match words[i].text.as_str() {
                 "with" => {
-                    if let Err(e) = self.values(ns).draw(&args, &[Kind::Entity, Kind::Deck, Kind::Table]) {
+                    if let Err(e) = self
+                        .values(ns)
+                        .draw(&args, &[Kind::Entity, Kind::Deck, Kind::Table])
+                    {
                         self.r.push(rest.err(format!("`with`: {e}")));
                         ok = false;
                     }
                     // an entity label given as an override (`with LIFT label GATE_A`)
                     if let Some(p) = args.iter().position(|t| t.text == "label") {
-                        let l = args.get(p + 1).filter(|t| t.text == "local").map_or(p + 1, |_| p + 2);
+                        let l = args
+                            .get(p + 1)
+                            .filter(|t| t.text == "local")
+                            .map_or(p + 1, |_| p + 2);
                         if let Some(t) = args.get(l) {
                             labels.insert(t.text.clone());
                         }
@@ -387,14 +564,18 @@ impl Checker<'_> {
                         [l] => l,
                         [local, l] if local.text == "local" => l,
                         _ => {
-                            self.r.push(rest.err(format!("`{}` takes one label, optionally `local`", words[i].text)));
+                            self.r.push(rest.err(format!(
+                                "`{}` takes one label, optionally `local`",
+                                words[i].text
+                            )));
                             ok = false;
                             i = end;
                             continue;
                         }
                     };
                     if !names::is_name(&name.text) {
-                        self.r.push(rest.err(format!("`{}` is not a label NAME", name.text)));
+                        self.r
+                            .push(rest.err(format!("`{}` is not a label NAME", name.text)));
                         ok = false;
                     } else if words[i].text == "as" {
                         labels.insert(name.text.clone());
@@ -419,7 +600,12 @@ impl Checker<'_> {
                     errors.push(crate::error::Diagnostic::error(
                         &def.file,
                         def.line,
-                        format!("label `{l}` of map `{map}` has the same name as the {} `{}` ({})", other.kind, other.full, other.place()),
+                        format!(
+                            "label `{l}` of map `{map}` has the same name as the {} `{}` ({})",
+                            other.kind,
+                            other.full,
+                            other.place()
+                        ),
                     ));
                 }
             }
@@ -432,15 +618,22 @@ impl Checker<'_> {
     fn game(&mut self, main: &str) {
         let named: Vec<&RawBlock> = self.m.games.iter().filter(|g| !g.name.is_empty()).collect();
         if named.len() > 1 {
-            self.r.push(named[1].err(format!("second named `game` block (the first is at {}:{})", named[0].file, named[0].line)));
+            self.r.push(named[1].err(format!(
+                "second named `game` block (the first is at {}:{})",
+                named[0].file, named[0].line
+            )));
         }
         for g in &self.m.games {
             for item in &g.items {
                 if names::is_vocabulary(item.key()) {
                     if g.name.is_empty() {
-                        self.r.push(item.err(format!("`{}`: only the main file's named `game` block has engine fields", item.key())));
+                        self.r.push(item.err(format!(
+                            "`{}`: only the main file's named `game` block has engine fields",
+                            item.key()
+                        )));
                     } else if !GAME_FIELDS.contains(&item.key()) {
-                        self.r.push(item.err(format!("unknown `game` field `{}`", item.key())));
+                        self.r
+                            .push(item.err(format!("unknown `game` field `{}`", item.key())));
                     }
                 } else {
                     self.component_row(item, g.namespace.as_deref());
@@ -448,7 +641,11 @@ impl Checker<'_> {
             }
         }
         let Some(g) = named.first().copied() else {
-            self.r.error(main, 0, "no named `game` block: the main file names the game with `game NAME` (D 3.3)");
+            self.r.error(
+                main,
+                0,
+                "no named `game` block: the main file names the game with `game NAME` (D 3.3)",
+            );
             return;
         };
         let ns = g.namespace.as_deref();
@@ -456,11 +653,19 @@ impl Checker<'_> {
         // the short form `game NAME start TOWN at START` (D 3.3)
         let header = RawItem::new(&g.file, g.line, g.namespace.clone(), &g.args_text).ok();
         if let Some(h) = header.filter(|h| !h.tokens.is_empty()) {
-            let at = h.tokens.iter().position(|t| t.is("at")).unwrap_or(h.tokens.len());
+            let at = h
+                .tokens
+                .iter()
+                .position(|t| t.is("at"))
+                .unwrap_or(h.tokens.len());
             if h.key() == "start" {
-                fields.insert("start".into(), RawItem::new(&g.file, g.line, g.namespace.clone(), h.span(0, at)).unwrap());
+                fields.insert(
+                    "start".into(),
+                    RawItem::new(&g.file, g.line, g.namespace.clone(), h.span(0, at)).unwrap(),
+                );
             } else {
-                self.r.push(g.err(format!("unexpected `{}` in the game header", h.key())));
+                self.r
+                    .push(g.err(format!("unexpected `{}` in the game header", h.key())));
             }
             if at < h.tokens.len() {
                 fields.insert("at".into(), h.shift(at));
@@ -477,10 +682,17 @@ impl Checker<'_> {
         };
         let mut start_map = None;
         match fields.get("start") {
-            None => self.r.push(g.err("no `start`: the game cannot be started as a new game (D 3.3)")),
+            None => self
+                .r
+                .push(g.err("no `start`: the game cannot be started as a new game (D 3.3)")),
             Some(item) => match one(item) {
-                None => self.r.push(item.err("`start` takes a map, a deck or a table")),
-                Some(s) => match self.m.resolve_kind(ns, &s, &[Kind::Map, Kind::Deck, Kind::Table]) {
+                None => self
+                    .r
+                    .push(item.err("`start` takes a map, a deck or a table")),
+                Some(s) => match self
+                    .m
+                    .resolve_kind(ns, &s, &[Kind::Map, Kind::Deck, Kind::Table])
+                {
                     Ok(d) if d.kind == Kind::Map => start_map = Some(d.full.clone()),
                     Ok(_) => {}
                     Err(e) => self.r.push(item.err(format!("`start`: {e}"))),
@@ -491,9 +703,15 @@ impl Checker<'_> {
         match (&at, &start_map) {
             (Some(item), Some(map)) => self.search(&item.shift(1), map),
             (None, Some(map))
-                if self.drawn.get(map).is_some_and(|d| !d.labels.contains("START")) => {
-                    self.r.push(g.err(format!("no `at` and the start map `{map}` has no label `START` (D 3.3)")));
-                }
+                if self
+                    .drawn
+                    .get(map)
+                    .is_some_and(|d| !d.labels.contains("START")) =>
+            {
+                self.r.push(g.err(format!(
+                    "no `at` and the start map `{map}` has no label `START` (D 3.3)"
+                )));
+            }
             _ => {}
         }
         let refs: &[(&str, &[Kind])] = &[
@@ -507,9 +725,12 @@ impl Checker<'_> {
             ("follow_ai", &[Kind::Ai]),
         ];
         if let Some(item) = fields.get("follow_distance")
-            && !one(item).and_then(|w| w.parse::<i64>().ok()).is_some_and(|n| n >= 1)
+            && !one(item)
+                .and_then(|w| w.parse::<i64>().ok())
+                .is_some_and(|n| n >= 1)
         {
-            self.r.push(item.err("`follow_distance` takes a number of at least 1 (D 3.3)"));
+            self.r
+                .push(item.err("`follow_distance` takes a number of at least 1 (D 3.3)"));
         }
         for (field, kinds) in refs {
             if let Some(item) = fields.get(*field) {
@@ -526,7 +747,9 @@ impl Checker<'_> {
         if let Some(item) = fields.get("keys") {
             match one(item) {
                 Some(n) if self.context(ns, &n).is_some() => {}
-                Some(n) => self.r.push(item.err(format!("`keys`: no key context `{n}`"))),
+                Some(n) => self
+                    .r
+                    .push(item.err(format!("`keys`: no key context `{n}`"))),
                 None => self.r.push(item.err("`keys` takes one context NAME")),
             }
         }
@@ -544,22 +767,35 @@ impl Checker<'_> {
             }
             match item.tokens.iter().position(|t| t.is("when")) {
                 Some(at) => {
-                    let words: Vec<&str> = item.tokens[at + 1..].iter().map(|t| t.text.as_str()).collect();
+                    let words: Vec<&str> = item.tokens[at + 1..]
+                        .iter()
+                        .map(|t| t.text.as_str())
+                        .collect();
                     if let Err(e) = crate::model::layout_cond(&words) {
-                        self.r.push(item.err(format!("`layout ... when`: {e} (D 11.1)")));
+                        self.r
+                            .push(item.err(format!("`layout ... when`: {e} (D 11.1)")));
                     }
                 }
-                None if item.tokens.len() > 2 => self.r.push(item.err("`layout NAME` takes nothing more than `when CONDITION` (D 11.1)")),
+                None if item.tokens.len() > 2 => self.r.push(
+                    item.err("`layout NAME` takes nothing more than `when CONDITION` (D 11.1)"),
+                ),
                 None => plain += 1,
             }
         }
         if layout_rows.len() > 1 && plain != 1 {
-            self.r.push(g.err(format!("of several `layout` rows exactly one has no `when`, here {plain} (D 11.1)")));
+            self.r.push(g.err(format!(
+                "of several `layout` rows exactly one has no `when`, here {plain} (D 11.1)"
+            )));
         }
         if !fields.contains_key("layout") {
-            let layouts: Vec<&str> = defs_of(self.m, Kind::Layout).map(|d| d.full.as_str()).collect();
+            let layouts: Vec<&str> = defs_of(self.m, Kind::Layout)
+                .map(|d| d.full.as_str())
+                .collect();
             if layouts.len() > 1 {
-                self.r.push(g.err(format!("several layouts ({}) and no `layout` field to choose one (D 11.1)", layouts.join(", "))));
+                self.r.push(g.err(format!(
+                    "several layouts ({}) and no `layout` field to choose one (D 11.1)",
+                    layouts.join(", ")
+                )));
             }
         }
         // seats, party and leash (D 3.3)
@@ -567,35 +803,55 @@ impl Checker<'_> {
         if let Some(item) = fields.get("seats") {
             match one(item).as_deref().and_then(crate::rt::world::seat_range) {
                 Some((a, b)) if (1..=8).contains(&a) && (1..=8).contains(&b) && a <= b => upper = b,
-                _ => self.r.push(item.err("`seats` is a range `a..b` from 1 to 8 with `a` at most `b` (D 3.3)")),
+                _ => self.r.push(
+                    item.err("`seats` is a range `a..b` from 1 to 8 with `a` at most `b` (D 3.3)"),
+                ),
             }
         }
         for (field, values) in [("party", ["switch", "each"]), ("leash", ["on", "off"])] {
             if let Some(item) = fields.get(field)
                 && !one(item).is_some_and(|v| values.contains(&v.as_str()))
             {
-                self.r.push(item.err(format!("`{field}` is `{}` or `{}` (D 3.3)", values[0], values[1])));
+                self.r.push(item.err(format!(
+                    "`{field}` is `{}` or `{}` (D 3.3)",
+                    values[0], values[1]
+                )));
             }
         }
         if upper == 1
-            && let Some(item) = fields.get("leash").filter(|i| one(i).as_deref() == Some("on"))
+            && let Some(item) = fields
+                .get("leash")
+                .filter(|i| one(i).as_deref() == Some("on"))
         {
-            self.r.push(item.warn("`leash on` in a one-seat game does nothing (D 3.3)"));
+            self.r
+                .push(item.warn("`leash on` in a one-seat game does nothing (D 3.3)"));
         }
         for def in defs_of(self.m, Kind::Entity) {
             let Some(b) = def.block() else { continue };
             for item in b.items.iter().filter(|i| i.key() == "seat") {
-                if !one(item).and_then(|v| v.parse::<u8>().ok()).is_some_and(|n| (1..=upper).contains(&n)) {
+                if !one(item)
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .is_some_and(|n| (1..=upper).contains(&n))
+                {
                     self.r.push(item.err(format!("`seat` is a seat number from 1 to the game's `seats` upper bound {upper} (D 5.3)")));
                 }
             }
         }
-        for (field, lo, hi) in [("call_depth", 32, 4096), ("loop_steps", 10_000, i64::MAX), ("seed", i64::MIN, i64::MAX), ("masking", i64::MIN, i64::MAX)] {
+        for (field, lo, hi) in [
+            ("call_depth", 32, 4096),
+            ("loop_steps", 10_000, i64::MAX),
+            ("seed", i64::MIN, i64::MAX),
+            ("masking", i64::MIN, i64::MAX),
+        ] {
             if let Some(item) = fields.get(field) {
                 match one(item).and_then(|v| v.parse::<i64>().ok()) {
                     Some(n) if (lo..=hi).contains(&n) => {}
-                    _ if field == "call_depth" => self.r.push(item.err("`call_depth` is a number from 32 to 4096")),
-                    _ if field == "loop_steps" => self.r.push(item.err("`loop_steps` is a number of at least 10000")),
+                    _ if field == "call_depth" => self
+                        .r
+                        .push(item.err("`call_depth` is a number from 32 to 4096")),
+                    _ if field == "loop_steps" => self
+                        .r
+                        .push(item.err("`loop_steps` is a number of at least 10000")),
                     _ => self.r.push(item.err(format!("`{field}` takes a number"))),
                 }
             }
@@ -604,7 +860,9 @@ impl Checker<'_> {
 
     /// A key context by reference.
     fn context(&self, ns: Option<&str>, name: &str) -> Option<String> {
-        names::candidates(ns, name).into_iter().find(|c| self.m.contexts.contains_key(c))
+        names::candidates(ns, name)
+            .into_iter()
+            .find(|c| self.m.contexts.contains_key(c))
     }
 
     /// A data search `KOHDE [near [ANKKURI] [ETÄISYYS]]` or
@@ -619,9 +877,21 @@ impl Checker<'_> {
             }
             match c.m.resolve(ns, w) {
                 Ok(d) if matches!(d.kind, Kind::Tile | Kind::Tileset) => Ok(()),
-                Ok(d) => Err(format!("`{w}` is a {} ({}), not a label, tile or tileset", d.kind, d.place())),
-                Err(_) if names::tile_name(w).is_ok_and(|t| c.m.kind(&names::qualify(ns, &t.base)) == Some(Kind::Tile)) => Ok(()),
-                Err(_) if drawn.is_some() => Err(format!("map `{map}` has no label `{w}`, and no tile or tileset has that name")),
+                Ok(d) => Err(format!(
+                    "`{w}` is a {} ({}), not a label, tile or tileset",
+                    d.kind,
+                    d.place()
+                )),
+                Err(_)
+                    if names::tile_name(w).is_ok_and(|t| {
+                        c.m.kind(&names::qualify(ns, &t.base)) == Some(Kind::Tile)
+                    }) =>
+                {
+                    Ok(())
+                }
+                Err(_) if drawn.is_some() => Err(format!(
+                    "map `{map}` has no label `{w}`, and no tile or tileset has that name"
+                )),
                 Err(e) => Err(e),
             }
         };
@@ -629,13 +899,26 @@ impl Checker<'_> {
             [] => Err("`at` needs a target".to_string()),
             [w, ..] if is_pos(w) => match drawn {
                 Some(d) => {
-                    let (x, y) = w.split_once(',').map(|(x, y)| (x.parse::<usize>().unwrap(), y.parse::<usize>().unwrap())).unwrap();
-                    if x < d.width && y < d.height { Ok(()) } else { Err(format!("{w} is outside the {}x{} map `{map}`", d.width, d.height)) }
+                    let (x, y) = w
+                        .split_once(',')
+                        .map(|(x, y)| (x.parse::<usize>().unwrap(), y.parse::<usize>().unwrap()))
+                        .unwrap();
+                    if x < d.width && y < d.height {
+                        Ok(())
+                    } else {
+                        Err(format!(
+                            "{w} is outside the {}x{} map `{map}`",
+                            d.width, d.height
+                        ))
+                    }
                 }
                 None => Ok(()),
             },
             [_, rest @ ..] if rest.contains(&"from") => {
-                let anchor = rest.iter().position(|w| *w == "from").and_then(|i| rest.get(i + 1));
+                let anchor = rest
+                    .iter()
+                    .position(|w| *w == "from")
+                    .and_then(|i| rest.get(i + 1));
                 match anchor {
                     Some(a) => label_or_set(self, a),
                     None => Err("`from` needs an anchor label".into()),
@@ -646,7 +929,9 @@ impl Checker<'_> {
                 ["near", tail @ ..] => {
                     let anchor = tail.iter().find(|w| !is_int(w) && !fields::is_range(w));
                     match anchor {
-                        Some(a) if drawn.is_some_and(|d| !d.labels.contains(*a)) => Err(format!("`near`: map `{map}` has no label `{a}`")),
+                        Some(a) if drawn.is_some_and(|d| !d.labels.contains(*a)) => {
+                            Err(format!("`near`: map `{map}` has no label `{a}`"))
+                        }
                         _ => Ok(()),
                     }
                 }
@@ -664,12 +949,22 @@ impl Checker<'_> {
             let v = item.rest(1);
             let bad = match key.as_str() {
                 k if !SETTINGS.contains(&k) => Some(format!("unknown setting `{k}`")),
-                "language" | "style" if !names::is_vocabulary(v) => Some(format!("`{key}` takes a lower-case name")),
-                "round" | "external_timeout" if !is_time(v) => Some(format!("`{key}` takes a time such as `500ms` or `1s`")),
-                "external" if !["ask", "all", "none"].contains(&v) => Some("`external` is ask, all or none".into()),
+                "language" | "style" if !names::is_vocabulary(v) => {
+                    Some(format!("`{key}` takes a lower-case name"))
+                }
+                "round" | "external_timeout" if !is_time(v) => {
+                    Some(format!("`{key}` takes a time such as `500ms` or `1s`"))
+                }
+                "external" if !["ask", "all", "none"].contains(&v) => {
+                    Some("`external` is ask, all or none".into())
+                }
                 "mouse" if !["on", "off"].contains(&v) => Some("`mouse` is on or off".into()),
-                "targeting" if !["cursor", "list", "auto"].contains(&v) => Some("`targeting` is cursor, list or auto".into()),
-                "idle" if !item.word(1).is_some_and(is_time) => Some("`idle` starts with a time: `idle 4s [ai] [COMMAND]`".into()),
+                "targeting" if !["cursor", "list", "auto"].contains(&v) => {
+                    Some("`targeting` is cursor, list or auto".into())
+                }
+                "idle" if !item.word(1).is_some_and(is_time) => {
+                    Some("`idle` starts with a time: `idle 4s [ai] [COMMAND]`".into())
+                }
                 _ => None,
             };
             if let Some(msg) = bad {
@@ -681,18 +976,30 @@ impl Checker<'_> {
         }
         for key in ["style", "language"] {
             if !settings.contains_key(key) {
-                self.r.error(main, 0, format!("missing setting `{key}`: the engine does not guess it (D 3.2)"));
+                self.r.error(
+                    main,
+                    0,
+                    format!("missing setting `{key}`: the engine does not guess it (D 3.2)"),
+                );
             }
         }
         if let Some(lang) = settings.get("language").map(|i| i.rest(1))
-            && !self.m.languages.iter().any(|f| f.language == lang) {
-                let item = &settings["language"];
-                self.r.push(item.warn(format!("no language file has `language {lang}`: every text shows as its key")));
-            }
+            && !self.m.languages.iter().any(|f| f.language == lang)
+        {
+            let item = &settings["language"];
+            self.r.push(item.warn(format!(
+                "no language file has `language {lang}`: every text shows as its key"
+            )));
+        }
         if let Some(style) = settings.get("style").map(|i| i.rest(1)) {
-            let has = self.m.section_rows("tiles.glyphs").next().is_none() || self.m.sections.iter().any(|b| b.kind == "tiles.glyphs" && b.args.first().is_some_and(|a| a.text == style));
+            let has = self.m.section_rows("tiles.glyphs").next().is_none()
+                || self.m.sections.iter().any(|b| {
+                    b.kind == "tiles.glyphs" && b.args.first().is_some_and(|a| a.text == style)
+                });
             if !has {
-                self.r.push(settings["style"].warn(format!("no `tiles.glyphs {style}` section: every tile uses the default look")));
+                self.r.push(settings["style"].warn(format!(
+                    "no `tiles.glyphs {style}` section: every tile uses the default look"
+                )));
             }
         }
     }
@@ -701,14 +1008,33 @@ impl Checker<'_> {
     /// rows that are components.
     fn profiles(&mut self) {
         let game = self.m.named_game().map(|g| g.name.clone());
-        let named: Vec<&RawBlock> = self.m.profiles.iter().filter(|b| !b.name.is_empty()).collect();
+        let named: Vec<&RawBlock> = self
+            .m
+            .profiles
+            .iter()
+            .filter(|b| !b.name.is_empty())
+            .collect();
         for b in named.iter().skip(1) {
-            self.r.error(&b.file, b.line, format!("a second named `profile` block `{}`: a game has one (D 3.5)", b.name));
+            self.r.error(
+                &b.file,
+                b.line,
+                format!(
+                    "a second named `profile` block `{}`: a game has one (D 3.5)",
+                    b.name
+                ),
+            );
         }
         if let (Some(b), Some(g)) = (named.first(), game.as_deref())
             && b.name != g
         {
-            self.r.error(&b.file, b.line, format!("the `profile` block is named after the game: `profile {g}`, not `{}` (D 3.5)", b.name));
+            self.r.error(
+                &b.file,
+                b.line,
+                format!(
+                    "the `profile` block is named after the game: `profile {g}`, not `{}` (D 3.5)",
+                    b.name
+                ),
+            );
         }
         for b in self.m.profiles.clone() {
             for item in b.items.iter().filter(|i| !names::is_vocabulary(i.key())) {
@@ -724,9 +1050,15 @@ impl Checker<'_> {
             let words: Vec<&str> = item.tokens.iter().map(|t| t.text.as_str()).collect();
             let count = |w: Option<&&str>| w.is_some_and(|w| w.parse::<u32>().is_ok());
             let bad = match words.as_slice() {
-                ["slots", rest @ ..] if rest.len() != 1 || !count(rest.first()) => Some("`slots` takes a count: `slots 0`, `slots 1` or `slots N` (D 3.4)"),
-                ["manual", rest @ ..] if rest.len() != 1 || !count(rest.first()) => Some("`manual` takes a count, 0 for none (D 3.4)"),
-                ["quit", rest @ ..] if !matches!(rest, ["save"] | ["none"]) => Some("`quit` is save or none (D 3.4)"),
+                ["slots", rest @ ..] if rest.len() != 1 || !count(rest.first()) => {
+                    Some("`slots` takes a count: `slots 0`, `slots 1` or `slots N` (D 3.4)")
+                }
+                ["manual", rest @ ..] if rest.len() != 1 || !count(rest.first()) => {
+                    Some("`manual` takes a count, 0 for none (D 3.4)")
+                }
+                ["quit", rest @ ..] if !matches!(rest, ["save"] | ["none"]) => {
+                    Some("`quit` is save or none (D 3.4)")
+                }
                 ["on", "input"] => None,
                 ["on", "input", "every", n] if n.parse::<u32>().is_ok_and(|n| n >= 1) => None,
                 ["on", "input", ..] => Some("`on input` takes `every N` with N at least 1 (D 3.4)"),
@@ -734,7 +1066,8 @@ impl Checker<'_> {
                 ["on", ..] => Some("`on` is input, scene, checkpoint or arrive (D 3.4)"),
                 ["slots" | "manual" | "quit", ..] => None,
                 [k, ..] => {
-                    self.r.push(item.err(format!("unknown `autosave` row `{k}` (D 3.4)")));
+                    self.r
+                        .push(item.err(format!("unknown `autosave` row `{k}` (D 3.4)")));
                     continue;
                 }
                 [] => None,
@@ -751,15 +1084,31 @@ impl Checker<'_> {
             let mut i = 1;
             while i < row.tokens.len() {
                 let prop = row.tokens[i].text.as_str();
-                let end = (i + 1..row.tokens.len()).find(|&j| ["blocks", "only", "lit", "forget"].contains(&row.tokens[j].text.as_str())).unwrap_or(row.tokens.len());
+                let end = (i + 1..row.tokens.len())
+                    .find(|&j| {
+                        ["blocks", "only", "lit", "forget"].contains(&row.tokens[j].text.as_str())
+                    })
+                    .unwrap_or(row.tokens.len());
                 let args = &row.tokens[i + 1..end];
                 let res = match prop {
                     "blocks" => self.values(row.namespace.as_deref()).blocks(args),
-                    "only" if !args.is_empty() && args.iter().all(|a| names::is_name(&a.text)) => Ok(()),
+                    "only" if !args.is_empty() && args.iter().all(|a| names::is_name(&a.text)) => {
+                        Ok(())
+                    }
                     "only" => Err("`only` lists movement modes in upper case".to_string()),
-                    "lit" | "forget" if args.is_empty() || (args.len() == 1 && ["true", "false"].contains(&args[0].text.as_str())) => Ok(()),
-                    "lit" | "forget" => Err(format!("`{prop}` is a flag: `{prop}` or `{prop} false`")),
-                    p => Err(format!("unknown tile property `{p}` (blocks, only, lit, forget; the look is in `tiles.glyphs`)")),
+                    "lit" | "forget"
+                        if args.is_empty()
+                            || (args.len() == 1
+                                && ["true", "false"].contains(&args[0].text.as_str())) =>
+                    {
+                        Ok(())
+                    }
+                    "lit" | "forget" => {
+                        Err(format!("`{prop}` is a flag: `{prop}` or `{prop} false`"))
+                    }
+                    p => Err(format!(
+                        "unknown tile property `{p}` (blocks, only, lit, forget; the look is in `tiles.glyphs`)"
+                    )),
                 };
                 if let Err(e) = res {
                     self.r.push(item.err(e));
@@ -773,13 +1122,16 @@ impl Checker<'_> {
         for (_, item) in self.m.section_rows("colors") {
             let (_, row) = item.marker();
             if !row.word(1).is_some_and(is_hex) || row.tokens.len() != 2 {
-                self.r.push(item.err("a color is `- NAME hex`, with six lower-case hex digits and no `#`"));
+                self.r.push(
+                    item.err("a color is `- NAME hex`, with six lower-case hex digits and no `#`"),
+                );
             }
         }
         for b in self.m.sections.iter().filter(|b| b.kind == "tiles.glyphs") {
             let presentation = b.args.first().map(|t| t.text.as_str()).unwrap_or("");
             if presentation.is_empty() {
-                self.r.push(b.err("`tiles.glyphs` names its presentation: `tiles.glyphs ascii`"));
+                self.r
+                    .push(b.err("`tiles.glyphs` names its presentation: `tiles.glyphs ascii`"));
                 continue;
             }
             let ns = b.namespace.as_deref();
@@ -792,7 +1144,9 @@ impl Checker<'_> {
                             if let Ok(full) = self.m.resolve_tile(ns, tile) {
                                 self.used_tiles.insert(full);
                             }
-                            if row.word(1) == Some("series") && !matches!(t.index, Some(Index::Range(_, Some(_)))) {
+                            if row.word(1) == Some("series")
+                                && !matches!(t.index, Some(Index::Range(_, Some(_))))
+                            {
                                 self.r.push(item.err("a series row needs a closed index range such as `GLYPH.NKI.1..36` (D 9.2)"));
                             }
                         }
@@ -808,7 +1162,9 @@ impl Checker<'_> {
                 let rest = row.shift(1);
                 let colors_from = if rest.key() == "series" {
                     if !rest.tokens.get(1).is_some_and(|t| t.quoted) {
-                        self.r.push(item.err("`series` takes the characters in quotes: `series \"&*+?\"`"));
+                        self.r.push(
+                            item.err("`series` takes the characters in quotes: `series \"&*+?\"`"),
+                        );
                     }
                     2
                 } else {
@@ -816,28 +1172,46 @@ impl Checker<'_> {
                         Ok((c, _)) if is_joining(c) => {
                             self.r.push(item.err("combining character, joiner or variation selector as a glyph (D 9.2)"));
                         }
-                        Ok((c, _)) if c.width().unwrap_or(1) > 1 => self.r.push(item.warn(format!("wide character `{c}` as a glyph"))),
+                        Ok((c, _)) if c.width().unwrap_or(1) > 1 => self
+                            .r
+                            .push(item.warn(format!("wide character `{c}` as a glyph"))),
                         Ok(_) => {}
                         Err(e) => self.r.push(item.err(e)),
                     }
                     if rest.text.starts_with("' '") { 2 } else { 1 }
                 };
-                let words: Vec<&str> = rest.tokens.iter().skip(colors_from).map(|t| t.text.as_str()).collect();
+                let words: Vec<&str> = rest
+                    .tokens
+                    .iter()
+                    .skip(colors_from)
+                    .map(|t| t.text.as_str())
+                    .collect();
                 let mut i = 0;
                 while i < words.len() {
                     if !["fg", "bg"].contains(&words[i]) {
-                        self.r.push(item.err(format!("unexpected `{}`: expected `fg COLOR` or `bg COLOR`", words[i])));
+                        self.r.push(item.err(format!(
+                            "unexpected `{}`: expected `fg COLOR` or `bg COLOR`",
+                            words[i]
+                        )));
                         break;
                     }
                     let mut j = i + 1;
                     while j < words.len() && !["fg", "bg"].contains(&words[j]) {
-                        if !is_hex(words[j]) && self.m.resolve_kind(ns, words[j], &[Kind::Color]).is_err() {
-                            self.r.push(item.err(format!("`{}` is not a color name or a hex color", words[j])));
+                        if !is_hex(words[j])
+                            && self.m.resolve_kind(ns, words[j], &[Kind::Color]).is_err()
+                        {
+                            self.r.push(
+                                item.err(format!(
+                                    "`{}` is not a color name or a hex color",
+                                    words[j]
+                                )),
+                            );
                         }
                         j += 1;
                     }
                     if j == i + 1 {
-                        self.r.push(item.err(format!("`{}` needs a color", words[i])));
+                        self.r
+                            .push(item.err(format!("`{}` needs a color", words[i])));
                     }
                     i = j;
                 }
@@ -862,34 +1236,50 @@ impl Checker<'_> {
             }
             for (c, (x0, y0, x1, y1, n)) in &boxes {
                 if (x1 - x0 + 1) * (y1 - y0 + 1) != *n {
-                    self.r.push(b.err(format!("area `{c}` is not a rectangle (D 11.1)")));
+                    self.r
+                        .push(b.err(format!("area `{c}` is not a rectangle (D 11.1)")));
                 }
             }
             let mut legend = BTreeSet::new();
             let mut sources: Vec<String> = Vec::new();
             for item in b.sub("legend") {
                 let Ok((c, rest)) = glyph_char(item) else {
-                    self.r.push(item.err("a layout legend row starts with the area's character"));
+                    self.r
+                        .push(item.err("a layout legend row starts with the area's character"));
                     continue;
                 };
                 legend.insert(c);
                 if !boxes.contains_key(&c) {
-                    self.r.push(item.warn(format!("area `{c}` is not in the drawing")));
+                    self.r
+                        .push(item.warn(format!("area `{c}` is not in the drawing")));
                 }
                 let source = rest.key();
                 let name = source.split('(').next().unwrap_or(source);
                 if ["hover", "sentence"].contains(&name) && sources.iter().any(|s| s == name) {
-                    self.r.push(item.err(format!("a layout has one `{name}` area (D 11.1)")));
+                    self.r
+                        .push(item.err(format!("a layout has one `{name}` area (D 11.1)")));
                 }
                 sources.push(name.to_string());
                 if name == "tabs" {
                     // a tabs area: panels, docked menus and logs (D 11.1)
                     if rest.tokens.len() < 2 {
-                        self.r.push(item.err(format!("area `{c}`: `tabs` needs one or more panels, menus or logs")));
+                        self.r.push(item.err(format!(
+                            "area `{c}`: `tabs` needs one or more panels, menus or logs"
+                        )));
                     }
-                    for t in rest.tokens.iter().skip(1).map(|t| t.text.as_str()).take_while(|w| !w.starts_with("size")) {
+                    for t in rest
+                        .tokens
+                        .iter()
+                        .skip(1)
+                        .map(|t| t.text.as_str())
+                        .take_while(|w| !w.starts_with("size"))
+                    {
                         let tab = t.split('(').next().unwrap_or(t);
-                        if let Err(e) = self.m.resolve_kind(item.namespace.as_deref(), tab, &[Kind::Panel, Kind::Menu, Kind::Log]) {
+                        if let Err(e) = self.m.resolve_kind(
+                            item.namespace.as_deref(),
+                            tab,
+                            &[Kind::Panel, Kind::Menu, Kind::Log],
+                        ) {
                             self.r.push(item.err(format!("area `{c}`: {e}")));
                         }
                     }
@@ -897,27 +1287,43 @@ impl Checker<'_> {
                     // a docked menu (D 11.1)
                     match rest.word(1) {
                         Some(menu) => {
-                            if let Err(e) = self.m.resolve_kind(item.namespace.as_deref(), menu, &[Kind::Menu]) {
+                            if let Err(e) =
+                                self.m
+                                    .resolve_kind(item.namespace.as_deref(), menu, &[Kind::Menu])
+                            {
                                 self.r.push(item.err(format!("area `{c}`: {e}")));
                             }
                         }
-                        None => self.r.push(item.err(format!("area `{c}`: `menu` needs the menu's NAME"))),
+                        None => self
+                            .r
+                            .push(item.err(format!("area `{c}`: `menu` needs the menu's NAME"))),
                     }
                 } else if !["map", "hover", "sentence"].contains(&name)
-                    && let Err(e) = self.m.resolve_kind(item.namespace.as_deref(), name, &[Kind::Log, Kind::Panel])
+                    && let Err(e) = self.m.resolve_kind(
+                        item.namespace.as_deref(),
+                        name,
+                        &[Kind::Log, Kind::Panel],
+                    )
                 {
                     self.r.push(item.err(format!("area `{c}`: {e}")));
                 }
             }
             for c in boxes.keys().filter(|c| !legend.contains(c)) {
-                self.r.push(b.err(format!("area `{c}` of the drawing is not in the legend")));
+                self.r
+                    .push(b.err(format!("area `{c}` of the drawing is not in the legend")));
             }
         }
     }
 
     fn logs(&mut self) {
-        let messages: Vec<&str> = defs_of(self.m, Kind::Message).map(|d| d.full.as_str()).collect();
-        let selects = |row: &str| messages.iter().any(|m| *m == row || m.starts_with(&format!("{row}.")));
+        let messages: Vec<&str> = defs_of(self.m, Kind::Message)
+            .map(|d| d.full.as_str())
+            .collect();
+        let selects = |row: &str| {
+            messages
+                .iter()
+                .any(|m| *m == row || m.starts_with(&format!("{row}.")))
+        };
         let mut rows: Vec<(String, RawItem)> = Vec::new();
         for def in defs_of(self.m, Kind::Log) {
             if let Some(b) = def.block() {
@@ -931,32 +1337,51 @@ impl Checker<'_> {
             if row == "SPEECH" {
                 continue;
             }
-            let found = names::candidates(item.namespace.as_deref(), &row).iter().any(|c| selects(c));
+            let found = names::candidates(item.namespace.as_deref(), &row)
+                .iter()
+                .any(|c| selects(c));
             if !found {
-                self.r.push(item.err(format!("`{row}` is not the start of any message key (D 11.4)")));
+                self.r.push(item.err(format!(
+                    "`{row}` is not the start of any message key (D 11.4)"
+                )));
             }
         }
     }
 
     fn texts(&mut self) {
-        let languages: BTreeSet<&str> = self.m.languages.iter().map(|f| f.language.as_str()).collect();
+        let languages: BTreeSet<&str> = self
+            .m
+            .languages
+            .iter()
+            .map(|f| f.language.as_str())
+            .collect();
         for f in &self.m.languages {
             for t in &f.texts {
                 if !names::is_name(t.key()) {
-                    self.r.push(t.err(format!("text key `{}` is not a NAME", t.key())));
+                    self.r
+                        .push(t.err(format!("text key `{}` is not a NAME", t.key())));
                 }
             }
         }
         for lang in languages {
             let texts = self.m.texts(lang);
             for def in defs_of(self.m, Kind::Message) {
-                let Some(text) = texts.get(&def.full) else { continue };
-                let crate::model::Source::Row(row) = &def.source else { continue };
-                let params: Vec<&str> = row.tokens.iter().skip(1).map(|t| t.text.as_str()).collect();
+                let Some(text) = texts.get(&def.full) else {
+                    continue;
+                };
+                let crate::model::Source::Row(row) = &def.source else {
+                    continue;
+                };
+                let params: Vec<&str> =
+                    row.tokens.iter().skip(1).map(|t| t.text.as_str()).collect();
                 for p in placeholders(text.rest(1)) {
                     let name = p.split([':', '.']).next().unwrap_or(&p);
                     if !params.contains(&name) {
-                        self.r.push(text.err(format!("`{{{p}}}`: message `{}` has no parameter `{name}` (parameters: {})", def.full, params.join(", "))));
+                        self.r.push(text.err(format!(
+                            "`{{{p}}}`: message `{}` has no parameter `{name}` (parameters: {})",
+                            def.full,
+                            params.join(", ")
+                        )));
                     }
                 }
             }
@@ -964,12 +1389,15 @@ impl Checker<'_> {
             for (key, text) in &texts {
                 for r in refs(text.rest(1)) {
                     if !texts.contains_key(&r) {
-                        self.r.push(text.err(format!("`{{@{r}}}`: no text `{r}` in language `{lang}`")));
+                        self.r.push(
+                            text.err(format!("`{{@{r}}}`: no text `{r}` in language `{lang}`")),
+                        );
                     }
                 }
                 let mut path = vec![key.clone()];
                 if let Some(cycle) = ref_cycle(&texts, key, &mut path) {
-                    self.r.push(text.err(format!("text references form a cycle: {cycle}")));
+                    self.r
+                        .push(text.err(format!("text references form a cycle: {cycle}")));
                 }
             }
         }
@@ -977,8 +1405,15 @@ impl Checker<'_> {
 
     fn keys(&mut self) {
         let game = self.m.named_game();
-        let upper = game.and_then(|g| g.items.iter().find(|i| i.key() == "seats")).and_then(|i| i.word(1)).and_then(crate::rt::world::seat_range).map_or(1, |(_, b)| b);
-        let base = game.and_then(|g| g.items.iter().find(|i| i.key() == "keys")).and_then(|i| i.word(1)).and_then(|n| self.context(game.and_then(|g| g.namespace.as_deref()), n));
+        let upper = game
+            .and_then(|g| g.items.iter().find(|i| i.key() == "seats"))
+            .and_then(|i| i.word(1))
+            .and_then(crate::rt::world::seat_range)
+            .map_or(1, |(_, b)| b);
+        let base = game
+            .and_then(|g| g.items.iter().find(|i| i.key() == "keys"))
+            .and_then(|i| i.word(1))
+            .and_then(|n| self.context(game.and_then(|g| g.namespace.as_deref()), n));
         for (name, blocks) in &self.m.contexts {
             // keyboard parts (D 11.3): `keys K keyboard N`, part 1 unmarked
             let mut parts: BTreeMap<u8, (&RawBlock, bool)> = BTreeMap::new();
@@ -1010,7 +1445,9 @@ impl Checker<'_> {
             if upper == 1
                 && let Some((b, _)) = parts.values().next()
             {
-                self.r.push(b.warn(format!("keyboard parts in a one-seat game: context `{name}` (D 11.3)")));
+                self.r.push(b.warn(format!(
+                    "keyboard parts in a one-seat game: context `{name}` (D 11.3)"
+                )));
             }
             if base.as_deref() == Some(name.as_str()) {
                 for (part, (b, joins)) in &parts {
@@ -1033,7 +1470,8 @@ impl Checker<'_> {
                         }
                     };
                     if n >= row.tokens.len() {
-                        self.r.push(item.err("a key row names the action and then its keys"));
+                        self.r
+                            .push(item.err("a key row names the action and then its keys"));
                     }
                     let action = row.span(0, n.min(row.tokens.len())).to_string();
                     for k in &row.tokens[n.min(row.tokens.len())..] {
@@ -1044,7 +1482,9 @@ impl Checker<'_> {
                         }
                         let key = terminal_key(&k.text);
                         match terminal.get(&key) {
-                            Some((other, other_action, line)) if *other != k.text && *other_action != action => {
+                            Some((other, other_action, line))
+                                if *other != k.text && *other_action != action =>
+                            {
                                 self.r.push(item.warn(format!(
                                     "`{}` and `{other}` (line {line}) are the same key in a terminal, bound to `{action}` and `{other_action}` in context `{name}` (D 11.3)",
                                     k.text
@@ -1096,8 +1536,14 @@ impl Checker<'_> {
             return Ok(2);
         }
         if names::is_vocabulary(w) {
-            let dir = w.strip_prefix("cursor.").is_some_and(|d| fields::DIRS.contains(&d));
-            return if ENGINE_ACTIONS.contains(&w) || dir { Ok(1) } else { Err(format!("unknown engine action `{w}`")) };
+            let dir = w
+                .strip_prefix("cursor.")
+                .is_some_and(|d| fields::DIRS.contains(&d));
+            return if ENGINE_ACTIONS.contains(&w) || dir {
+                Ok(1)
+            } else {
+                Err(format!("unknown engine action `{w}`"))
+            };
         }
         self.m.resolve_kind(ns, w, &[Kind::Command])?;
         Ok(1)
@@ -1113,23 +1559,38 @@ impl Checker<'_> {
                 let (_, row) = item.marker();
                 let key = row.key();
                 if ["TITLE", "TEXT"].contains(&key) {
-                    self.r.push(item.err(format!("`{key}` is the menu's own text key and cannot be an item (D 11.2)")));
+                    self.r.push(item.err(format!(
+                        "`{key}` is the menu's own text key and cannot be an item (D 11.2)"
+                    )));
                     continue;
                 }
                 if !names::is_name(key) {
-                    self.r.push(item.err(format!("a menu item starts with its text key NAME, not `{key}`")));
+                    self.r.push(item.err(format!(
+                        "a menu item starts with its text key NAME, not `{key}`"
+                    )));
                     continue;
                 }
                 let rest = row.shift(1);
-                let has_action = !rest.tokens.is_empty() && !["hide", "disabled"].contains(&rest.key());
+                let has_action =
+                    !rest.tokens.is_empty() && !["hide", "disabled"].contains(&rest.key());
                 if rest.key() == "adjust" {
                     continue;
                 }
                 // a verbs menu's items are commands (D 11.2)
                 if b.has_arg("verbs") {
                     let command = if has_action { rest.key() } else { key };
-                    if self.m.resolve_kind(rest.namespace.as_deref().or(b.namespace.as_deref()), command, &[Kind::Command]).is_err() {
-                        self.r.push(item.err(format!("item `{key}` of a `verbs` menu runs no command (D 11.2)")));
+                    if self
+                        .m
+                        .resolve_kind(
+                            rest.namespace.as_deref().or(b.namespace.as_deref()),
+                            command,
+                            &[Kind::Command],
+                        )
+                        .is_err()
+                    {
+                        self.r.push(item.err(format!(
+                            "item `{key}` of a `verbs` menu runs no command (D 11.2)"
+                        )));
                     }
                     continue;
                 }
@@ -1139,7 +1600,10 @@ impl Checker<'_> {
                     }
                 } else {
                     // `- RESUME` runs the command RESUME, or the engine action `resume` (D 11.2)
-                    let command = self.m.resolve_kind(b.namespace.as_deref(), key, &[Kind::Command]).is_ok();
+                    let command = self
+                        .m
+                        .resolve_kind(b.namespace.as_deref(), key, &[Kind::Command])
+                        .is_ok();
                     if !command && !ENGINE_ACTIONS.contains(&key.to_lowercase().as_str()) {
                         self.r.push(item.err(format!("item `{key}` has no action: there is no command `{key}` and no engine action `{}`", key.to_lowercase())));
                     }
@@ -1156,13 +1620,19 @@ impl Checker<'_> {
             let event = d.event.as_deref().unwrap_or("");
             if names::is_vocabulary(event) {
                 if !ENGINE_EVENTS.contains(&event) {
-                    self.r.error(&d.file, d.line, format!("unknown engine event `{event}`"));
+                    self.r
+                        .error(&d.file, d.line, format!("unknown engine event `{event}`"));
                 }
                 continue;
             }
-            match self.m.resolve_kind(d.namespace.as_deref(), event, &[Kind::Event]) {
+            match self
+                .m
+                .resolve_kind(d.namespace.as_deref(), event, &[Kind::Event])
+            {
                 Ok(ev) => {
-                    let crate::model::Source::Decl(e) = &ev.source else { continue };
+                    let crate::model::Source::Decl(e) = &ev.source else {
+                        continue;
+                    };
                     let required = e.params.iter().filter(|p| p.default.is_none()).count();
                     if d.params.len() > e.params.len() || d.params.len() < required {
                         self.r.error(
@@ -1197,9 +1667,14 @@ impl Checker<'_> {
             if row.key() == "default" {
                 continue;
             }
-            let Ok(full) = self.m.resolve_tile(row.namespace.as_deref(), row.key()) else { continue };
+            let Ok(full) = self.m.resolve_tile(row.namespace.as_deref(), row.key()) else {
+                continue;
+            };
             if !self.used_tiles.contains(&full) {
-                self.r.push(item.warn(format!("tile `{}` is not used in a legend, a style or logic: a typo?", row.key())));
+                self.r.push(item.warn(format!(
+                    "tile `{}` is not used in a legend, a style or logic: a typo?",
+                    row.key()
+                )));
             }
         }
     }
@@ -1214,7 +1689,9 @@ fn terminal_key(k: &str) -> String {
 }
 
 fn is_hex(s: &str) -> bool {
-    s.len() == 6 && s.chars().all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
+    s.len() == 6
+        && s.chars()
+            .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
 }
 
 fn is_time(s: &str) -> bool {
@@ -1230,25 +1707,37 @@ fn is_joining(c: char) -> bool {
 /// `{NAME}`, `{NAME:SUFFIX}` and `{NAME.DESC}` placeholders; `{@KEY}`,
 /// `{^ACTION}` and `{#TILE}` are not parameters.
 pub(crate) fn placeholders(text: &str) -> Vec<String> {
-    braces(text).into_iter().filter(|p| !p.starts_with('@') && !p.starts_with('^') && !p.starts_with('#')).collect()
+    braces(text)
+        .into_iter()
+        .filter(|p| !p.starts_with('@') && !p.starts_with('^') && !p.starts_with('#'))
+        .collect()
 }
 
 fn refs(text: &str) -> Vec<String> {
-    braces(text).into_iter().filter_map(|p| p.strip_prefix('@').map(String::from)).collect()
+    braces(text)
+        .into_iter()
+        .filter_map(|p| p.strip_prefix('@').map(String::from))
+        .collect()
 }
 
 fn braces(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut rest = text;
     while let Some(open) = rest.find('{') {
-        let Some(close) = rest[open..].find('}') else { break };
+        let Some(close) = rest[open..].find('}') else {
+            break;
+        };
         out.push(rest[open + 1..open + close].to_string());
         rest = &rest[open + close + 1..];
     }
     out
 }
 
-fn ref_cycle(texts: &BTreeMap<String, &RawItem>, key: &str, path: &mut Vec<String>) -> Option<String> {
+fn ref_cycle(
+    texts: &BTreeMap<String, &RawItem>,
+    key: &str,
+    path: &mut Vec<String>,
+) -> Option<String> {
     let text = texts.get(key)?;
     for r in refs(text.rest(1)) {
         if r == path[0] {
@@ -1274,8 +1763,19 @@ mod tests {
     #[test]
     fn helpers() {
         assert!(is_hex("5a5a6e") && !is_hex("5A5A6E") && !is_hex("#5a5a6e"));
-        assert!(is_time("250ms") && is_time("1s") && is_time("0500ms") && !is_time("ms") && !is_time("5"));
-        assert_eq!(placeholders("{TARGET} ottaa {AMOUNT} {SOUND:DESC} {ITEM.DESC} {@GOLD.NAME} {^confirm}"), ["TARGET", "AMOUNT", "SOUND:DESC", "ITEM.DESC"]);
+        assert!(
+            is_time("250ms")
+                && is_time("1s")
+                && is_time("0500ms")
+                && !is_time("ms")
+                && !is_time("5")
+        );
+        assert_eq!(
+            placeholders(
+                "{TARGET} ottaa {AMOUNT} {SOUND:DESC} {ITEM.DESC} {@GOLD.NAME} {^confirm}"
+            ),
+            ["TARGET", "AMOUNT", "SOUND:DESC", "ITEM.DESC"]
+        );
         assert_eq!(refs("Löysit {@GOLD.NAME}!"), ["GOLD.NAME"]);
         assert!(is_joining('\u{0308}') && is_joining('\u{200D}') && !is_joining('a'));
     }

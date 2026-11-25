@@ -38,23 +38,50 @@ pub fn tokenize(s: &str) -> Result<Vec<Token>, TokenizeError> {
         }
         if c == '"' {
             let (text, next) = read_quoted(s, &bytes, i)?;
-            let end = if next < bytes.len() { bytes[next].0 } else { s.len() };
+            let end = if next < bytes.len() {
+                bytes[next].0
+            } else {
+                s.len()
+            };
             // A quoted string directly followed by more text (`"a"b`) is one
             // unquoted word, like in the shell.
             if next < bytes.len() && !bytes[next].1.is_whitespace() {
                 let (_, after) = read_bare(s, &bytes, next)?;
-                let end = if after < bytes.len() { bytes[after].0 } else { s.len() };
-                tokens.push(Token { text: s[start..end].to_string(), quoted: false, start, end });
+                let end = if after < bytes.len() {
+                    bytes[after].0
+                } else {
+                    s.len()
+                };
+                tokens.push(Token {
+                    text: s[start..end].to_string(),
+                    quoted: false,
+                    start,
+                    end,
+                });
                 i = after;
             } else {
-                tokens.push(Token { text, quoted: true, start, end });
+                tokens.push(Token {
+                    text,
+                    quoted: true,
+                    start,
+                    end,
+                });
                 i = next;
             }
             continue;
         }
         let (_, next) = read_bare(s, &bytes, i)?;
-        let end = if next < bytes.len() { bytes[next].0 } else { s.len() };
-        tokens.push(Token { text: s[start..end].to_string(), quoted: false, start, end });
+        let end = if next < bytes.len() {
+            bytes[next].0
+        } else {
+            s.len()
+        };
+        tokens.push(Token {
+            text: s[start..end].to_string(),
+            quoted: false,
+            start,
+            end,
+        });
         i = next;
     }
     Ok(tokens)
@@ -62,7 +89,11 @@ pub fn tokenize(s: &str) -> Result<Vec<Token>, TokenizeError> {
 
 /// Reads a quoted string starting at `bytes[i] == '"'`. Returns the unescaped
 /// content and the index after the closing quote.
-fn read_quoted(_s: &str, bytes: &[(usize, char)], i: usize) -> Result<(String, usize), TokenizeError> {
+fn read_quoted(
+    _s: &str,
+    bytes: &[(usize, char)],
+    i: usize,
+) -> Result<(String, usize), TokenizeError> {
     let mut out = String::new();
     let mut j = i + 1;
     while j < bytes.len() {
@@ -183,7 +214,10 @@ mod tests {
             words(r#"x $(echo "a )" $(date +%s)) y"#),
             ["x", r#"$(echo "a )" $(date +%s))"#, "y"]
         );
-        assert_eq!(words("x $(cut -d' ' -f1 /proc/loadavg)"), ["x", "$(cut -d' ' -f1 /proc/loadavg)"]);
+        assert_eq!(
+            words("x $(cut -d' ' -f1 /proc/loadavg)"),
+            ["x", "$(cut -d' ' -f1 /proc/loadavg)"]
+        );
     }
 
     #[test]
