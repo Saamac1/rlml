@@ -26,6 +26,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+          components: rustfmt
 
       - uses: Swatinem/rust-cache@v2
 
@@ -37,6 +38,10 @@ jobs:
       # gilrs, the terminal's pad reader, needs udev to build natively
       - name: System libraries
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
+
+      # the code is in rustfmt's default style (cargo fmt --all)
+      - name: Formatting
+        run: cargo fmt --all -- --check
 
       - name: Tests
         run: cargo test --workspace

@@ -1,0 +1,6 @@
+# Commits git blame skips: run once
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub reads this file by itself.
+
+# Format the workspace with rustfmt's default style
+fc906da0c962523db75bbda24eeb1b099ae6af98
