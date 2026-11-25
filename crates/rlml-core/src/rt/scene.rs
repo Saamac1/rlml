@@ -16,7 +16,7 @@ use super::input::Act;
 use super::rng::{Rng, mix, mix_name};
 use super::run::Runner;
 use super::state::{QueuedScene, SeatId};
-use super::value::CommandValue;
+use super::value::{CommandValue, EntityId};
 use super::world::{Pause, RtResult};
 use crate::rs::ast::{ItemKind, Stmt};
 
@@ -42,6 +42,8 @@ pub struct ActiveScene {
     stack: Vec<Level>,
     /// The seat that answers it (M 8.2).
     pub seat: Option<SeatId>,
+    /// The command that waits for it (M 6.1.6), woken when it ends.
+    command: Option<EntityId>,
 }
 
 impl<'m> Runner<'m> {
@@ -77,23 +79,99 @@ impl<'m> Runner<'m> {
     }
 
     /// The queue's next scenes start, one after another, until one waits for
-    /// the player or the queue is empty (M 6.1.7 step 6).
+    /// the player or the queue is empty, and then what a held command waits
+    /// for (M 6.1.6, M 6.1.7 step 6).
     pub(crate) fn start_scenes(&mut self) -> RtResult<()> {
-        while self.scene.is_none() && !self.w.s.scene_queue.is_empty() {
-            let q = self.w.s.scene_queue.remove(0);
+        loop {
+            if self.scene.is_some() {
+                break;
+            }
+            let held = if self.w.s.scene_queue.is_empty() { self.held() } else { None };
+            if self.w.s.scene_queue.is_empty() && held.is_none() {
+                break;
+            }
+            // `on scene`: the state before the scene, its start in the queue
+            // or in the waiting command (M 5.4)
+            if self.rules.on_scene && !self.auto_off && !self.scene_saved {
+                self.due.push(self.save());
+            }
+            self.scene_saved = false;
             let n = self.w.s.scene_starts;
             self.w.s.scene_starts += 1;
-            // the presentation stream: the seed, the scene's name and its
-            // start's number (M 4.1)
-            let rng = Rng::from_seed(mix(mix_name(self.w.s.game.seed, &q.call.name), n));
-            let draft = Box::new(self.snapshot());
-            let map = self.scene_map(&q);
-            let level = self.scene_level(&q.call, map, rng.clone(), q.opener)?;
-            let seat = q.opener.and_then(|o| self.w.s.seat_of(o));
-            self.scene = Some(Box::new(ActiveScene { started: q, rng, draft, log_len: self.w.log.len(), stack: vec![level], seat }));
-            self.run_scene()?;
+            match held {
+                Some(e) => {
+                    let name = self.waiting.get(&e).map(|s| s.command.clone()).unwrap_or_default();
+                    let draft = Box::new(self.snapshot());
+                    let log_len = self.w.log.len();
+                    let rng = self.scene_rng(&name, n);
+                    self.open_held(e, rng, draft, log_len)?;
+                }
+                None => {
+                    let q = self.w.s.scene_queue.remove(0);
+                    let rng = self.scene_rng(&q.call.name, n);
+                    let draft = Box::new(self.snapshot());
+                    let map = self.scene_map(&q);
+                    let level = self.scene_level(&q.call, map, rng.clone(), q.opener)?;
+                    let seat = q.opener.and_then(|o| self.w.s.seat_of(o));
+                    self.scene = Some(Box::new(ActiveScene { started: q, rng, draft, log_len: self.w.log.len(), stack: vec![level], seat, command: None }));
+                    self.run_scene()?;
+                }
+            }
         }
         Ok(())
+    }
+
+    /// The presentation stream of a scene's start `n`: the seed, the name
+    /// and the number (M 4.1).
+    fn scene_rng(&self, name: &str, n: u64) -> Rng {
+        Rng::from_seed(mix(mix_name(self.w.s.game.seed, name), n))
+    }
+
+    /// The command that waits, without a wake, for a scene, a confirmation,
+    /// a menu or a field. One action holds at most one, and its end opens
+    /// it; a loaded save opens it from its start (M 5.4).
+    fn held(&self) -> Option<EntityId> {
+        self.waiting.iter().find(|(e, st)| self.w.s.wake_of(**e).is_none() && self.w.is_held(st)).map(|(e, _)| *e)
+    }
+
+    /// Opens what command `e` waits for: the scene of its `wait scene`, or
+    /// its pause as a level of the command's own names, which a field's
+    /// answer goes into.
+    fn open_held(&mut self, e: EntityId, rng: Rng, draft: Box<Snapshot>, log_len: usize) -> RtResult<()> {
+        let state = self.waiting.get(&e).cloned().ok_or("no waiting command")?;
+        let mut env = state.env.clone();
+        let flow = self.w.held_wait(&state, &mut env)?;
+        let here = self.w.s.at(e).map(|p| p.map);
+        let seat = self.w.s.seat_of(e);
+        match flow {
+            Some(Flow::Sub(call)) => {
+                let started = QueuedScene { call: call.clone(), opener: Some(e), map: here };
+                let map = self.scene_map(&started);
+                let level = self.scene_level(&call, map, rng.clone(), Some(e))?;
+                self.scene = Some(Box::new(ActiveScene { started, rng, draft, log_len, stack: vec![level], seat, command: Some(e) }));
+                self.run_scene()
+            }
+            Some(Flow::Pause) => {
+                let started = QueuedScene { call: CommandValue { name: state.command.clone(), args: vec![] }, opener: Some(e), map: here };
+                self.scene = Some(Box::new(ActiveScene { started, rng, draft, log_len, stack: vec![Level { frames: vec![], env }], seat, command: Some(e) }));
+                Ok(())
+            }
+            // nothing to wait for: the command goes on
+            _ => {
+                self.wake_held(e);
+                Ok(())
+            }
+        }
+    }
+
+    /// A held command goes on as a new action now (M 6.1.6).
+    fn wake_held(&mut self, e: EntityId) {
+        if let Some(p) = self.w.s.at(e).filter(|_| self.w.s.get(e).alive) {
+            let now = self.clock(p.map);
+            self.w.s.schedule(e, now);
+        } else {
+            self.waiting.remove(&e);
+        }
     }
 
     /// Runs the scene on until it waits for the player or ends. Its end is
@@ -102,8 +180,12 @@ impl<'m> Runner<'m> {
         loop {
             let Some(scene) = self.scene.as_mut() else { return Ok(()) };
             let Some(top) = scene.stack.last_mut() else {
+                let command = scene.command;
                 self.scene = None;
                 self.w.scene_skipping = false;
+                if let Some(e) = command {
+                    self.wake_held(e);
+                }
                 return self.end_action();
             };
             let (mut frames, mut env) = (std::mem::take(&mut top.frames), top.env.clone());
@@ -123,6 +205,16 @@ impl<'m> Runner<'m> {
                 _ => {
                     let scene = self.scene.as_mut().expect("the scene runs");
                     let done = scene.stack.pop().expect("its level ran");
+                    // a held command's own level: its names, a field's
+                    // answer in them, go back to it
+                    if let (Some(e), BodyKind::Command, true) = (scene.command, done.env.kind, scene.stack.is_empty()) {
+                        let env = done.env.clone();
+                        if let Some(w) = self.waiting.get_mut(&e) {
+                            w.env = env;
+                        }
+                        continue;
+                    }
+                    let scene = self.scene.as_mut().expect("the scene runs");
                     // a sub-scene's presentation stream goes on in its caller
                     if let (Some(caller), Some(rng)) = (scene.stack.last_mut(), done.env.rng) {
                         caller.env.rng = Some(rng);
@@ -170,6 +262,9 @@ impl<'m> Runner<'m> {
         self.w.log.truncate(scene.log_len);
         self.w.pause = None;
         self.w.scene_skipping = false;
+        if let Some(e) = scene.command {
+            return self.open_held(e, scene.rng, scene.draft, scene.log_len);
+        }
         let map = self.scene_map(&scene.started);
         let level = self.scene_level(&scene.started.call, map, scene.rng.clone(), scene.started.opener)?;
         self.scene = Some(Box::new(ActiveScene { stack: vec![level], ..*scene }));

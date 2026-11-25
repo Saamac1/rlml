@@ -119,6 +119,23 @@ Alla on alkuperäinen tehtävälista.
 
 ### 3. Odottava komento ja vakiokirjasto
 
+Tehty 25.11.2026 haarassa `claude/kohtaukset-3`:
+- **Odottava komento.**
+  - Komennon `wait scene`, `wait confirm`, `open`, `wait number` ja `wait text` päättävät toiminnon (`Outcome::Held`).
+  - Komento jää odottamaan ilman herätystä.
+  - Toiminnon lopussa ajetaan ensin jonon kohtaukset ja sitten se, mitä komento odottaa.
+  - Kun se päättyy, komento herätetään samaan hetkeen, ja se jatkuu uutena toimintona. Kentän vastaus menee komennon omaan nimeen.
+- **Odotettava luetaan odotuskohdasta.** Mitä komento odottaa, luetaan sen omasta odotuskohdasta (`path::wait_stmt`), kun odotus avataan. Tallennus ei siksi tarvitse uutta kenttää, ja ladattu peli näyttää odotuksen alusta (M 5.4). `restart` näyttää odotuksen uudelleen.
+- **`on scene`.** Tallennus otetaan juuri ennen kuin kohtaus tai komennon odotus alkaa. Ladattu tila on sama kuin tallennuksen, joten sen ensimmäinen kohtaus ei tallenna toista kertaa.
+- **Vakiokirjasto.**
+  - `USE_EXIT` käynnistää dialogin `EXIT.LEAVE_OTHERS`.
+  - Viesti `MESSAGE.EXIT.OTHERS_AWAY` poistui kirjastosta, STD 5:stä, 9:stä ja 14:stä sekä ryhmäesimerkin lokista. Ryhmäesimerkin loki näyttää nyt repliikit (`SPEECH`).
+- **Testit:**
+  - `crates/rlml-core/tests/scene_waits.rs`: kohtaus, kuittaus ja kenttä komennossa; jonon kohtaus ennen valikkoa; tallennus ja lataus kummassakin odotuksessa; `restart`; toisto.
+  - `std_seats.rs`: kolmen istuimen ryhmä portailla, jossa `NO` jättää ryhmän paikalleen ja `YES` vie kaikki ilman ajan kulumista.
+
+Alla on alkuperäinen tehtävälista.
+
 - **Komennon odotukset:** `wait scene`, `wait confirm`, `open`, `wait number` ja `wait text` komennossa. Ne päättävät toiminnon, ja komento jatkuu kohtauksen jälkeen uutena toimintona (M 6.1.6). Polku ja tallennus ovat jo valmiina.
 - **Tallennus:**
   - `on scene` tallentaa kohtausta edeltävän tilan (M 5.4),

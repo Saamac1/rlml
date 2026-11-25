@@ -813,6 +813,7 @@ impl<'m> Runner<'m> {
         r.checkpoint = save.checkpoint.clone().map(Box::new);
         r.w.log = save.log.clone();
         r.inputs = InputLog { seed: r.w.s.game.seed, seats: r.w.s.seats.len() as u8, ..InputLog::default() };
+        r.scene_saved = true;
         Ok(r)
     }
 }

@@ -28,7 +28,6 @@ messages
 - MESSAGE.LOOT.ALLY_PICKUP WHO ITEM
 - MESSAGE.LOOT.ALLY_DROP WHO ITEM
 - MESSAGE.SENSE.HEARD SOUND
-- MESSAGE.EXIT.OTHERS_AWAY
 ```
 
 Peli valitsee ne lokiin ryhmittäin, esimerkiksi taistelu ja aistit päälokiin ja tavarat omaansa:
@@ -56,7 +55,6 @@ STD.MESSAGE.LOOT.PICKUP Poimit: {ITEM}.
 STD.MESSAGE.LOOT.DROP Pudotit: {ITEM}.
 STD.MESSAGE.LOOT.ALLY_PICKUP {WHO} poimii: {ITEM}.
 STD.MESSAGE.LOOT.ALLY_DROP {WHO} pudottaa: {ITEM}.
-STD.MESSAGE.EXIT.OTHERS_AWAY Muut jäävät jälkeen. Kokoontukaa ensin uloskäynnille.
 STD.EXIT.LEAVE_OTHERS.ASK Muut jäävät jälkeen. Lähdetäänkö koko ryhmänä?
 STD.EXIT.LEAVE_OTHERS.YES Kyllä
 STD.EXIT.LEAVE_OTHERS.NO Ei

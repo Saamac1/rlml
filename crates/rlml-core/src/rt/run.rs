@@ -77,6 +77,9 @@ pub struct Runner<'m> {
     seat_calls: Vec<(SeatId, bool)>,
     /// The foreground scene running now (RS 9).
     pub(crate) scene: Option<Box<super::scene::ActiveScene>>,
+    /// A loaded save's state is the one its `on scene` save took: the
+    /// scene it starts takes no second save (M 5.4).
+    pub(crate) scene_saved: bool,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -106,6 +109,7 @@ impl<'m> Runner<'m> {
             counted: None,
             seat_calls: vec![],
             scene: None,
+            scene_saved: false,
         };
         // calls in `begin` are its own: checkpoint 0 is taken here anyway
         r.w.saves = Default::default();
@@ -153,7 +157,7 @@ impl<'m> Runner<'m> {
     }
 
     /// The moment on a map's clock now.
-    fn clock(&self, map: MapId) -> i64 {
+    pub(crate) fn clock(&self, map: MapId) -> i64 {
         self.w.s.maps[map].clock(self.w.s.game.time)
     }
 
@@ -492,6 +496,12 @@ impl<'m> Runner<'m> {
             Outcome::Waiting { delay, state } => {
                 self.waiting.insert(e, *state);
                 self.w.s.schedule(e, now + delay);
+                true
+            }
+            // no wake: the action's end opens what it waits for, and its
+            // end wakes the command (M 6.1.6)
+            Outcome::Held { state } => {
+                self.waiting.insert(e, *state);
                 true
             }
         })

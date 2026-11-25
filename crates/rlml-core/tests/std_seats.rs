@@ -9,7 +9,7 @@ use rlml_core::rt::eval::{BodyKind, Env};
 use rlml_core::rt::run::{Runner, Status};
 use rlml_core::rt::state::Place;
 use rlml_core::rt::value::{CommandValue, Pos, Value};
-use rlml_core::rt::world::World;
+use rlml_core::rt::world::{Pause, World};
 
 fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<String, String>) {
     for e in std::fs::read_dir(dir).unwrap().flatten() {
@@ -217,9 +217,9 @@ fn three_seats_take_their_turns_in_order() {
 }
 
 #[test]
-fn the_group_gathers_before_it_takes_the_stairs() {
-    // with one member away the stairs wait for the group, without a turn
-    // spent (STD 5; the dialogue EXIT.LEAVE_OTHERS waits for scenes)
+fn the_group_is_asked_before_it_takes_the_stairs() {
+    // with members away the stairs ask the group, without a turn spent,
+    // and YES takes everyone (STD 5)
     let m = model();
     let mut r = start(&m, 3);
     let mover = r.w.s.active(r.awaiting().unwrap()).unwrap();
@@ -230,9 +230,21 @@ fn the_group_gathers_before_it_takes_the_stairs() {
         }
     }
     let (n, time) = (r.awaiting().unwrap(), r.w.s.game.time);
-    assert!(!r.input(n, &CommandValue { name: "STD.TAKE_EXIT".into(), args: vec![] }).unwrap());
+    let take = CommandValue { name: "STD.TAKE_EXIT".into(), args: vec![] };
+    assert!(!r.input(n, &take).unwrap());
     assert_eq!(r.w.s.game.time, time, "no time spent");
-    assert_eq!(r.w.log.last().map(|l| l.key.as_str()), Some("STD.MESSAGE.EXIT.OTHERS_AWAY"));
-    assert_eq!(r.w.text("fi", "STD.MESSAGE.EXIT.OTHERS_AWAY", &[]), "Muut jäävät jälkeen. Kokoontukaa ensin uloskäynnille.");
-    assert!(members(&r).iter().all(|&e| cell(&r, e).0 == "HALL"), "nobody went");
+    assert!(matches!(r.scene_pause(), Some(Pause::Say { key, .. }) if key == "STD.EXIT.LEAVE_OTHERS.ASK"), "{:?}", r.scene_pause());
+    assert_eq!(r.w.text("fi", "STD.EXIT.LEAVE_OTHERS.ASK", &[]), "Muut jäävät jälkeen. Lähdetäänkö koko ryhmänä?");
+    r.scene_confirm().unwrap();
+    assert!(r.scene_choose("NO").unwrap());
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert!(members(&r).iter().all(|&e| cell(&r, e).0 == "HALL"), "NO: nobody went");
+    assert_eq!(r.awaiting(), Some(n), "the seat is asked again");
+    assert!(!r.input(n, &take).unwrap());
+    r.scene_confirm().unwrap();
+    assert!(r.scene_choose("YES").unwrap());
+    assert!(!r.in_scene());
+    let cells: Vec<_> = members(&r).iter().map(|&e| cell(&r, e)).collect();
+    assert!(cells.iter().all(|c| c.0 == "CELLAR"), "YES: the group went down together: {cells:?}");
+    assert_eq!(r.w.s.game.time, time, "the confirmed travel took no time (STD 14)");
 }

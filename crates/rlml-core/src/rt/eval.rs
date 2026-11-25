@@ -12,7 +12,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use super::path::{PathLoop, body_hash, frames_at, path_of};
+use super::path::{PathLoop, body_hash, frames_at, path_of, wait_stmt};
 use super::rng::Rng;
 use super::state::{Place, SeatId};
 use super::value::{Area, Card, CommandValue, ComponentValue, Dir, EntityId, MapId, Pos as Cell, Side, Value};
@@ -113,6 +113,10 @@ pub enum Outcome {
     Done { cost: i64 },
     /// The body waits `delay` microsteps (already scaled by speed).
     Waiting { delay: i64, state: Box<Suspended> },
+    /// The body waits for a scene, a confirmation, a menu or a field
+    /// (`wait scene`, `wait confirm`, `open`, `wait number`): it goes on
+    /// as a new action when that ends (M 6.1.6).
+    Held { state: Box<Suspended> },
 }
 
 const CONTEXT: &[&str] = &["self", "holder", "actor", "it", "player", "players", "game", "map", "camera", "profile"];
@@ -296,19 +300,16 @@ impl World<'_> {
                 let n = self.number(n, env, e.pos)?;
                 return Ok(Some(Flow::Wait(n)));
             }
-            // a scene waits for the player's confirmation (RS 9.5); skipped,
-            // it goes on (RS 9.8)
-            StmtKind::Wait(WaitArg::Confirm) if env.kind == BodyKind::Scene => {
-                if !self.scene_skipping {
-                    self.pause = Some(super::world::Pause::Confirm);
-                    return Ok(Some(Flow::Pause));
-                }
+            // a command's wait for a scene, a confirmation, a menu or a
+            // field ends the action; the engine reads what it waits for
+            // from the wait point at the action's end (M 6.1.6)
+            StmtKind::Wait(WaitArg::Confirm | WaitArg::Scene(_)) | StmtKind::Open(_) | StmtKind::OpenValue { .. } | StmtKind::WaitInput { .. } if env.kind == BodyKind::Command => {
+                return Ok(Some(Flow::Pause));
             }
-            StmtKind::Wait(WaitArg::Scene(e)) if env.kind == BodyKind::Scene => {
-                return match self.eval(e, env)? {
-                    Value::Scene(call) => Ok(Some(Flow::Sub(call))),
-                    v => Err(self.rt_err(env, e.pos, format!("`wait scene` takes a scene, not `{v}`"))),
-                };
+            StmtKind::Wait(WaitArg::Confirm | WaitArg::Scene(_)) | StmtKind::Open(_) | StmtKind::OpenValue { .. } | StmtKind::WaitInput { .. } if env.kind == BodyKind::Scene => {
+                if let Some(flow) = self.wait_flow(s, env)? {
+                    return Ok(Some(flow));
+                }
             }
             // a dialogue's choice: every item's conditions now, once (RS 9.7);
             // a skip stops here, as a choice needs the player (RS 9.8)
@@ -316,33 +317,6 @@ impl World<'_> {
                 self.scene_skipping = false;
                 let items = self.choice_items(options, env)?;
                 self.pause = Some(super::world::Pause::Choice { scene: env.name.clone(), items, options: options.clone() });
-                return Ok(Some(Flow::Pause));
-            }
-            StmtKind::Open(call) | StmtKind::OpenValue { call, .. } if env.kind == BodyKind::Scene => {
-                let into = match &s.kind {
-                    StmtKind::OpenValue { name, .. } => Some(name.clone()),
-                    _ => None,
-                };
-                let name = match &call.kind {
-                    ExprKind::Call(f, _) => f.as_ref(),
-                    _ => call,
-                };
-                let ExprKind::Name { name, .. } = &name.kind else { return Err(self.rt_err(env, s.pos, "`open` takes a menu or a panel")) };
-                let full = self.resolve(env, name).map(|d| d.full.clone()).ok_or_else(|| self.rt_err(env, s.pos, format!("no menu or panel `{name}`")))?;
-                self.scene_skipping = false;
-                self.pause = Some(super::world::Pause::Open { name: full, into });
-                return Ok(Some(Flow::Pause));
-            }
-            StmtKind::WaitInput { name, kind, arg } if env.kind == BodyKind::Scene => {
-                let v = self.eval(arg, env)?;
-                let kind = match (kind.as_str(), v) {
-                    ("number", Value::Range(lo, Some(hi))) => super::world::AskKind::Number { lo, hi },
-                    ("number", Value::Number(hi)) => super::world::AskKind::Number { lo: 0, hi },
-                    ("text", Value::Number(n)) => super::world::AskKind::Text { max: n.max(1) as usize },
-                    (k, v) => return Err(self.rt_err(env, arg.pos, format!("`wait {k}` does not take `{v}`"))),
-                };
-                self.scene_skipping = false;
-                self.pause = Some(super::world::Pause::Ask { into: name.clone(), kind });
                 return Ok(Some(Flow::Pause));
             }
             StmtKind::Wait(_) | StmtKind::WaitInput { .. } | StmtKind::Open(_) | StmtKind::OpenValue { .. } | StmtKind::Choice(_) => {
@@ -1267,6 +1241,57 @@ impl World<'_> {
         })
     }
 
+    /// What a scene's or a waiting command's wait point waits for: a
+    /// confirmation, a sub-scene (`Flow::Sub`), a menu or a field. A
+    /// skipped `wait confirm` waits for nothing (RS 9.8).
+    pub(crate) fn wait_flow(&mut self, s: &Stmt, env: &mut Env) -> RtResult<Option<Flow>> {
+        match &s.kind {
+            // a scene waits for the player's confirmation (RS 9.5); skipped,
+            // it goes on (RS 9.8)
+            StmtKind::Wait(WaitArg::Confirm) => {
+                if !self.scene_skipping {
+                    self.pause = Some(super::world::Pause::Confirm);
+                    return Ok(Some(Flow::Pause));
+                }
+            }
+            StmtKind::Wait(WaitArg::Scene(e)) => {
+                return match self.eval(e, env)? {
+                    Value::Scene(call) => Ok(Some(Flow::Sub(call))),
+                    v => Err(self.rt_err(env, e.pos, format!("`wait scene` takes a scene, not `{v}`"))),
+                };
+            }
+            StmtKind::Open(call) | StmtKind::OpenValue { call, .. } => {
+                let into = match &s.kind {
+                    StmtKind::OpenValue { name, .. } => Some(name.clone()),
+                    _ => None,
+                };
+                let name = match &call.kind {
+                    ExprKind::Call(f, _) => f.as_ref(),
+                    _ => call,
+                };
+                let ExprKind::Name { name, .. } = &name.kind else { return Err(self.rt_err(env, s.pos, "`open` takes a menu or a panel")) };
+                let full = self.resolve(env, name).map(|d| d.full.clone()).ok_or_else(|| self.rt_err(env, s.pos, format!("no menu or panel `{name}`")))?;
+                self.scene_skipping = false;
+                self.pause = Some(super::world::Pause::Open { name: full, into });
+                return Ok(Some(Flow::Pause));
+            }
+            StmtKind::WaitInput { name, kind, arg } => {
+                let v = self.eval(arg, env)?;
+                let kind = match (kind.as_str(), v) {
+                    ("number", Value::Range(lo, Some(hi))) => super::world::AskKind::Number { lo, hi },
+                    ("number", Value::Number(hi)) => super::world::AskKind::Number { lo: 0, hi },
+                    ("text", Value::Number(n)) => super::world::AskKind::Text { max: n.max(1) as usize },
+                    (k, v) => return Err(self.rt_err(env, arg.pos, format!("`wait {k}` does not take `{v}`"))),
+                };
+                self.scene_skipping = false;
+                self.pause = Some(super::world::Pause::Ask { into: name.clone(), kind });
+                return Ok(Some(Flow::Pause));
+            }
+            _ => return Err(self.rt_err(env, s.pos, "not a wait point")),
+        }
+        Ok(None)
+    }
+
     // ---- commands (RS 7.1, M 6.1.5) ----
 
     /// Starts a command for an actor. A continuation (`return ATTACK(x)`)
@@ -1314,6 +1339,26 @@ impl World<'_> {
         self.command_body(&state.command).is_some_and(|b| body_hash(&b) == state.hash)
     }
 
+    /// The wait statement a held command stopped at; `None` for a command
+    /// waiting at `wait N` or one that changed.
+    fn held_stmt(&self, state: &Suspended) -> Option<Stmt> {
+        let body = self.command_body(&state.command).filter(|b| body_hash(b) == state.hash)?;
+        wait_stmt(&body, state.point).filter(|s| !matches!(s.kind, StmtKind::Wait(WaitArg::Time(_))))
+    }
+
+    /// Does the command wait for a scene, a confirmation, a menu or a
+    /// field rather than for time (M 6.1.6)?
+    pub fn is_held(&self, state: &Suspended) -> bool {
+        self.held_stmt(state).is_some()
+    }
+
+    /// What a held command waits for, read from its wait point in `env`, a
+    /// copy of its own (M 5.4): the pause it sets, or the scene to run.
+    pub(crate) fn held_wait(&mut self, state: &Suspended, env: &mut Env) -> RtResult<Option<Flow>> {
+        let s = self.held_stmt(state).ok_or_else(|| format!("the waiting command `{}` waits for no scene", state.command))?;
+        self.wait_flow(&s, env)
+    }
+
     /// Runs a waiting command on from its wait point (M 6.1.6).
     pub fn continue_command(&mut self, actor: EntityId, state: Suspended, waited: bool) -> RtResult<Outcome> {
         let body = self.command_body(&state.command).filter(|b| body_hash(b) == state.hash).ok_or_else(|| format!("the waiting command `{}` has changed", state.command))?;
@@ -1341,9 +1386,12 @@ impl World<'_> {
             }
             Flow::Done(_) => Ok(Outcome::Done { cost }),
             Flow::Cancel => Err(format!("{}: runtime error: `cancel` in a command", env.file)),
-            // a command's `wait scene` and `wait confirm` come with step 3
-            // of RLML-kohtaukset.md; the checker keeps `say` out of commands
-            Flow::Pause | Flow::Sub(_) => Err(format!("{}: runtime error: a command does not wait for a scene yet", env.file)),
+            Flow::Pause => {
+                let (point, loops) = path_of(body, &frames)?;
+                let state = Suspended { command: name.to_string(), hash: body_hash(body), cost, point, loops, env };
+                Ok(Outcome::Held { state: Box::new(state) })
+            }
+            Flow::Sub(_) => Err(format!("{}: runtime error: a command's `wait scene` runs at the action's end", env.file)),
         }
     }
 

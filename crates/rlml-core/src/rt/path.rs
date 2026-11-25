@@ -137,6 +137,22 @@ fn route(body: &[Stmt], target: Pos) -> Option<Vec<(usize, Option<usize>)>> {
     None
 }
 
+/// The statement of wait point `point`: what a waiting command waits for
+/// is read from it (M 5.4).
+pub fn wait_stmt(body: &[Stmt], point: usize) -> Option<Stmt> {
+    let mut waits = Vec::new();
+    numbered(body, is_wait, &mut waits);
+    let target = *waits.get(point)?;
+    let mut cur = body;
+    for (i, child) in route(body, target)? {
+        let Some(k) = child else {
+            return cur.get(i).cloned();
+        };
+        cur = *children(&cur[i]).get(k)?;
+    }
+    None
+}
+
 /// Frames that go on after wait point `point`, the loops in their saved
 /// states. The body must be the one the path was taken in: the caller
 /// checks its hash.
