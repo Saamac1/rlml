@@ -5,6 +5,7 @@ pub mod checkpoint;
 pub mod eval;
 pub mod input;
 pub mod rng;
+pub mod path;
 pub mod play;
 pub mod run;
 pub mod senses;

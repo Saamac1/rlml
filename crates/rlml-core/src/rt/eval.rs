@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use super::path::{PathLoop, body_hash, frames_at, path_of};
 use super::rng::Rng;
 use super::state::{Place, SeatId};
 use super::value::{Area, Card, CommandValue, ComponentValue, Dir, EntityId, MapId, Pos as Cell, Side, Value};
@@ -64,7 +65,7 @@ pub enum Frame {
     Block { stmts: Vec<Stmt>, i: usize },
     For { var: String, items: Vec<Value>, k: usize, body: Vec<Stmt> },
     While { cond: Expr, body: Vec<Stmt> },
-    Repeat { left: i64, body: Vec<Stmt> },
+    Repeat { left: i64, count: i64, body: Vec<Stmt> },
 }
 
 impl Frame {
@@ -83,12 +84,18 @@ pub enum Flow {
     Cancel,
 }
 
-/// A command waiting at `wait`: its frames and context (M 6.1.6).
+/// A command waiting at `wait` (M 6.1.6, RS 11.1): its name, the hash of
+/// its body, its cost, where it waits as a structural path and its
+/// context with the arguments and local names.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Suspended {
     pub command: String,
+    pub hash: u64,
     pub cost: i64,
-    pub frames: Vec<Frame>,
+    /// The wait point's number in the body.
+    pub point: usize,
+    /// The loops around it, outer to inner.
+    pub loops: Vec<PathLoop>,
     pub env: Env,
 }
 
@@ -170,7 +177,7 @@ impl World<'_> {
                         frames.pop();
                     }
                 }
-                Frame::Repeat { left, body } => {
+                Frame::Repeat { left, body, .. } => {
                     if *left <= 0 {
                         frames.pop();
                         continue;
@@ -234,7 +241,7 @@ impl World<'_> {
             StmtKind::Repeat { count, body } => {
                 let n = self.eval(count, env)?;
                 let n = self.number(n, env, count.pos)?;
-                frames.push(Frame::Repeat { left: n, body: body.clone() });
+                frames.push(Frame::Repeat { left: n, count: n, body: body.clone() });
             }
             StmtKind::While { cond, body } => frames.push(Frame::While { cond: cond.clone(), body: body.clone() }),
             StmtKind::Break => {
@@ -1132,30 +1139,55 @@ impl World<'_> {
             }
             ItemKind::Command { params, cost, body, .. } => {
                 self.bind(params, cmd.args.clone(), &mut env, ns.as_deref(), item.pos)?;
-                let state = Suspended { command: cmd.name.clone(), cost: cost.unwrap_or(DEFAULT_COST), frames: vec![Frame::Block { stmts: body.clone(), i: 0 }], env };
-                self.continue_command(actor, state, false)
+                let frames = vec![Frame::Block { stmts: body.clone(), i: 0 }];
+                self.run_command(actor, &cmd.name, cost.unwrap_or(DEFAULT_COST), body, frames, env, false)
             }
             _ => Err(format!("`{}` is not a command", cmd.name)),
         }
     }
 
-    /// Runs a command's frames on: from the start or after `wait`.
-    pub fn continue_command(&mut self, actor: EntityId, mut state: Suspended, waited: bool) -> RtResult<Outcome> {
-        let flow = self.run_frames(&mut state.frames, &mut state.env)?;
+    /// A command's body as it is now, if `name` is still a command.
+    fn command_body(&self, name: &str) -> Option<Vec<Stmt>> {
+        let (item, _, _) = self.decl_of(name)?;
+        match &item.kind {
+            ItemKind::Command { body, .. } => Some(body.clone()),
+            _ => None,
+        }
+    }
+
+    /// Can a waiting command go on: is its command there with the same
+    /// body (M 6.1.6)? A save from before a change to the game fails this.
+    pub fn waiting_fits(&self, state: &Suspended) -> bool {
+        self.command_body(&state.command).is_some_and(|b| body_hash(&b) == state.hash)
+    }
+
+    /// Runs a waiting command on from its wait point (M 6.1.6).
+    pub fn continue_command(&mut self, actor: EntityId, state: Suspended, waited: bool) -> RtResult<Outcome> {
+        let body = self.command_body(&state.command).filter(|b| body_hash(b) == state.hash).ok_or_else(|| format!("the waiting command `{}` has changed", state.command))?;
+        let frames = frames_at(&body, state.point, &state.loops)?;
+        self.run_command(actor, &state.command, state.cost, &body, frames, state.env, waited)
+    }
+
+    /// Runs a command's frames to its end or its next wait.
+    #[allow(clippy::too_many_arguments)]
+    fn run_command(&mut self, actor: EntityId, name: &str, cost: i64, body: &[Stmt], mut frames: Vec<Frame>, mut env: Env, waited: bool) -> RtResult<Outcome> {
+        let flow = self.run_frames(&mut frames, &mut env)?;
         match flow {
             Flow::Wait(n) => {
                 let d = delay(n, self.speed(actor)).unwrap_or(n.max(1));
+                let (point, loops) = path_of(body, &frames)?;
+                let state = Suspended { command: name.to_string(), hash: body_hash(body), cost, point, loops, env };
                 Ok(Outcome::Waiting { delay: d, state: Box::new(state) })
             }
             Flow::Done(Some(Value::Bool(false))) => Ok(Outcome::Failed { waited }),
             Flow::Done(Some(Value::Command(next))) => {
-                self.enter(&state.env)?;
+                self.enter(&env)?;
                 let r = self.start_command(actor, &next);
                 self.leave();
                 r
             }
-            Flow::Done(_) => Ok(Outcome::Done { cost: state.cost }),
-            Flow::Cancel => Err(format!("{}: runtime error: `cancel` in a command", state.env.file)),
+            Flow::Done(_) => Ok(Outcome::Done { cost }),
+            Flow::Cancel => Err(format!("{}: runtime error: `cancel` in a command", env.file)),
         }
     }
 

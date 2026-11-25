@@ -140,6 +140,7 @@ impl<'m> Runner<'m> {
                 && wake.at <= now
             {
                 let e = wake.entity;
+                self.drop_changed_wait(e);
                 if let Some(n) = self.w.s.seat_of(e).filter(|_| self.w.s.get(e).alive && !self.waiting.contains_key(&e)) {
                     // a member: `wake` first, then the choice (M 6.1.10)
                     if self.woke.get(&e) != Some(&wake) {
@@ -198,6 +199,20 @@ impl<'m> Runner<'m> {
                 self.round()?;
                 seen(&mut self.w);
             }
+        }
+    }
+
+    /// A waiting command whose command is gone or whose body changed, as
+    /// after loading a save from before a change, is dropped (M 6.1.6):
+    /// its changes stay, no cost is paid, and its wake is the actor's
+    /// ordinary turn.
+    fn drop_changed_wait(&mut self, e: EntityId) {
+        if let Some(state) = self.waiting.get(&e)
+            && !self.w.waiting_fits(state)
+        {
+            let name = state.command.clone();
+            self.waiting.remove(&e);
+            self.w.warnings.push(format!("the waiting command `{name}` has changed or is gone: it is dropped (M 6.1.6)"));
         }
     }
 

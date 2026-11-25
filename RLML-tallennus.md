@@ -99,6 +99,15 @@ Alla on alkuperäinen tehtävälista.
 
 ### 3. Odottavan komennon polku
 
+Tehty 25.11.2026 haarassa `claude/odotuksen-polku`:
+- **Polku.** `rt::path` muuttaa tulkin kehykset odotuksessa poluksi (`path_of`) ja polun takaisin kehyksiksi nykyisen rungon päälle (`frames_at`). Polku on odotuskohdan numero ja silmukoiden tilat: `repeat`-silmukan kierros ja määrä, `for`-silmukan joukko ja indeksi sekä `while`.
+- **Suspended** sisältää nyt kehysten sijaan komennon nimen, rungon tiivisteen, hinnan, polun ja ympäristön.
+- **Tiiviste** on FNV-1a rungon jäsennyspuusta (`Debug`-muoto) ilman sijainteja. Tiiviste riippuu siis jäsennyspuun rakenteesta: moottorin päivitys, joka muuttaa puuta, hylkää vanhat odotukset varoituksen kera.
+- **Muuttunut runko.** `Runner::drop_changed_wait` hylkää odotuksen herätyksessä, ja jatkoherätyksestä tulee toimijan tavallinen vuoro.
+- **Testit** ovat tiedostossa `crates/rlml-core/tests/waiting.rs`: RS 11.1:n DIG (odotus 0, `repeat`-kierros 2), sisäkkäiset `for`- ja `repeat`-silmukat `if`-haaran sisällä, kommentit ja tyhjät rivit eivät muuta tiivistettä, ja muuttunut runko hylkää odotuksen.
+
+Alla on alkuperäinen tehtävälista.
+
 - Lataus numeroi jokaisen komennon rungon odotuskohdat ja silmukat lähdejärjestyksessä (RS 11.1) ja laskee rungon tiivisteen jäsennyspuusta. Kommentit ja välilyönnit eivät vaikuta siihen. Tiiviste on oma FNV- tai SplitMix-pohjainen, koska riippuvuuksia ei lisätä.
 - `Suspended` muutetaan muotoon: komennon nimi, tiiviste, argumentit, paikalliset nimet, odotuskohdan numero, silmukoiden tilat ulkoa sisään (`repeat`: kierros, `for`: kiinnitetty joukko ja indeksi, `while`: ei mitään) ja `wait N`:n jatkoherätys. Kehyspino rakennetaan polusta uudelleen jatkettaessa (M 6.1.6, "Jatkaminen").
 - **Muuttunut runko.** Jos tiiviste tai komento puuttuu, odotus hylätään: muutokset jäävät, hintaa ei peritä, ja ajo antaa varoituksen. `wait N`:n jatkoherätys säilyy.

@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (odotuksen polku):** odotuskohtiin kuuluvat myös sijoitukset `x = wait number(…)`, `x = wait text(…)` ja `x = open VALIKKO(…)`. Numerointijärjestys ja tiivisteen laskenta ilman sijainteja on kirjattu (luku [6.1.6](06-ajo.md#616-monivaiheinen-komento)).
+
 **Muutokset 25.11.2026 (checkpoint):** `rollback()` ei palauta viestilokia, ja se päättää matkat ja ennakkokäskyt (luku [5.3](05-aloitus-tallennus-ja-checkpointit.md#53-checkpointit)).
 
 **Muutokset 25.11.2026 (syöteloki, toteutus):** toteutus tarkensi lukua [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki):

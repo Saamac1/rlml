@@ -153,7 +153,7 @@ Normaalinopeudella DIG vie 5 × 120 + 60 = 660 mikroaskelta. Toimija ei saa väl
 
 **Missä odotus on sallittu.** `wait N`, `wait scene`, `wait confirm` ja `open` ovat komennossa sallittuja vain sen omassa rungossa, myös silmukoiden ja `if`-haarojen sisällä. Käsittelijässä, `fn`-funktiossa ja `query`-funktiossa ne ovat latausvirhe (luku [2.5](02-lataus.md#25-tarkistukset)). Odottava komento on siksi aina yksi kehys, komennon oma runko, eikä kutsupinoa tallenneta. Korutiinikohtauksissa odotukset ovat sallittuja, mutta ne eivät kuulu tähän, koska etualan kohtausta ei tallenneta (luku [5.2](05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)).
 
-**Suorituskohta.** Lataus numeroi kunkin komennon rungon silmukat (`repeat`, `for`, `while`) ja odotuskohdat (`wait N`, `wait scene`, `wait confirm`, `open`) lähdejärjestyksessä nollasta alkaen. Suorituskohta on rakenteellinen polku, jossa on kaksi osaa:
+**Suorituskohta.** Lataus numeroi kunkin komennon rungon silmukat (`repeat`, `for`, `while`) ja odotuskohdat (`wait N`, `wait scene`, `wait confirm`, `open` sekä sijoitukset `x = wait number(…)`, `x = wait text(…)` ja `x = open VALIKKO(…)`) lähdejärjestyksessä nollasta alkaen. Järjestys kulkee lauseittain, ja lauseen sisällä `if`-haarat, `else`, `match`-tapaukset ja silmukan runko ovat kirjoitusjärjestyksessä. Suorituskohta on rakenteellinen polku, jossa on kaksi osaa:
 
 - **Odotuskohdan numero.** Se on staattinen: jokainen odotus on koodissa tasan yhdessä paikassa, joten numero kertoo lauseen sekä kaikki sitä ympäröivät silmukat ja `if`-haarat.
 - **Silmukoiden tila** ulkoa sisään, yksi jokaiselle odotuskohtaa ympäröivälle silmukalle:
@@ -196,7 +196,7 @@ resume: 840 #57            // vain wait N
 
 **Jatkaminen.** Moottori ei aja runkoa alusta. Se laskeutuu polkua pitkin: jokainen polun silmukka alkaa tallennetusta tilastaan, ja suoritus jatkuu odotuskohdan jälkeisestä lauseesta. `wait N` jatkuu jatkoherätyksessä, ja muut odotukset jatkuvat, kun kohtaus tai valikko päättyy. Sen jälkeen kaikki on tavallista ajoa: kierros loppuun, seuraavat kierrokset ja seuraavat jäsenet. Polku kuvataan kielen käsittein, joten se ei riipu tulkin toteutuksesta.
 
-**Muuttunut runko.** Tiiviste lasketaan rungon jäsennyspuusta, joten kommentit ja välilyönnit eivät vaikuta siihen. Jos ladatun pelin komento puuttuu tai sen tiiviste ei vastaa tallennettua, odottava komento hylätään kuten keskeytymisessä: kesken jääneet muutokset jäävät voimaan, hintaa ei peritä, ja moottori kirjaa ajon varoituksen. `wait N` -odotuksen jatkoherätys säilyy ja on toimijan tavallinen vuoro. Muissa odotuksissa toimija saa vuoron samalla hetkellä.
+**Muuttunut runko.** Tiiviste lasketaan rungon jäsennyspuusta ilman lauseiden sijainteja, joten kommentit, tyhjät rivit ja välilyönnit eivät vaikuta siihen. Jos ladatun pelin komento puuttuu tai sen tiiviste ei vastaa tallennettua, odottava komento hylätään kuten keskeytymisessä: kesken jääneet muutokset jäävät voimaan, hintaa ei peritä, ja moottori kirjaa ajon varoituksen. `wait N` -odotuksen jatkoherätys säilyy ja on toimijan tavallinen vuoro. Muissa odotuksissa toimija saa vuoron samalla hetkellä.
 
 ### 6.1.7 Toiminto
 
