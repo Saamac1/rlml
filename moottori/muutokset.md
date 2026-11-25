@@ -4,6 +4,11 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (kohtaukset, vaihe 0):**
+- Syötelokin rivit kohtauksen vastauksille: `scene.confirm`, `scene.choose KOHTA`, `scene.adjust`, `scene.answer`, `scene.close`, `skip`, `restart` ja `rewind`. Aikajanan kello ei ole syöte (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)).
+- Sama kohtaus voi olla jonossa useaan kertaan (luku [6.1.7](06-ajo.md#617-toiminto)).
+- Kohtausten käynnistyslaskuri kuuluu tilaan ja tallennukseen (luvut [3.1](03-pelin-tila.md#31-tilan-osat) ja [5.2](05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)).
+
 **Muutokset 25.11.2026 (liittymisruutu):**
 - Laitteet tulevat liittymisruudusta, kun istuimia voi olla useampi. Kytketty peliohjain ei silloin ota istuinta, ja irrotettu ohjain jättää istuimensa näppäimistöosalle 1.
 - Kontekstin `JOIN` oletussidonnat ja tekstiavaimet `ENGINE.JOIN.*` (luku [8.2](08-syote.md#82-istuimet-ja-laitteet)).

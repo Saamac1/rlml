@@ -220,7 +220,7 @@ Toiminto sisältää kaikki tapahtumat, jotka se lähettää (`emit` on synkroni
 3. **`checkpoint`.** Tilannekuva otetaan siirtojen jälkeen, joten se näkee entiteetit kohdekartoillaan.
 4. **`delete_save`.**
 5. **`autosave` ja profiilin kirjoitus.** Myös `on arrive` ja `on checkpoint` -kohdat (luku [5.4](05-aloitus-tallennus-ja-checkpointit.md#54-automaattinen-tallennus)).
-6. **Etualan kohtaukset** jonojärjestyksessä, myös vaiheissa 1–5 jonoon laitetut. Kohtaus, valikko tai paneeli, jota komento odottaa, alkaa niiden jälkeen (luku [6.1.6](#616-monivaiheinen-komento)). Pelin aika on pysähdyksissä, ja kohtauksen jälkeen ajo jatkuu saman mikroaskeleen seuraavasta toiminnosta.
+6. **Etualan kohtaukset** jonojärjestyksessä, myös vaiheissa 1–5 jonoon laitetut. Jokainen `start` on oma kohtauksensa, joten sama kohtaus voi olla jonossa useaan kertaan, ja se ajetaan joka kerta. Kohtaus, valikko tai paneeli, jota komento odottaa, alkaa niiden jälkeen (luku [6.1.6](#616-monivaiheinen-komento)). Pelin aika on pysähdyksissä, ja kohtauksen jälkeen ajo jatkuu saman mikroaskeleen seuraavasta toiminnosta.
 
 Järjestyksen ansiosta käsittelijä voi siirtää pelaajan ja käynnistää kohdekartalla pelattavan kohtauksen samassa kutsussa: `travel` ja `start` peräkkäin ([RS 4](../roguescript/04-tapahtumat-ja-kasittelijat.md) ja [9](../roguescript/09-kohtaukset-ja-aikajanat.md)).
 

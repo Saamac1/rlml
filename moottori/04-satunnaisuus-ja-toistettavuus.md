@@ -67,8 +67,14 @@ Syöteloki kirjaa pelikerran syötteet siinä järjestyksessä kuin moottori aja
 | ennakkokäsky | käskyn matka tai seuraaminen silloin, kun moottori ajaa sen, ei silloin, kun käsky annettiin |
 | istuimet | `join` ja `leave_seat` (luku [8.2](08-syote.md#82-istuimet-ja-laitteet)) |
 | valikon kohta, joka ajaa komennon tai pelin toiminnon | ajettu komento tai toiminto kuten pelaajan komento |
+| kohtauksen kuittaus (`say`, `wait confirm`, modaalinen paneeli) | `scene.confirm` |
+| dialogin valinta | `scene.choose KOHTA` kohdan nimellä eikä järjestysnumerolla, koska piilotetut kohdat muuttavat numeroita ([RS 9.7](../roguescript/09-kohtaukset-ja-aikajanat.md#97-dialogit)) |
+| säädettävä kohta | `scene.adjust KOHTA +1` tai `-1` |
+| luku- ja tekstikenttä | `scene.answer ARVO`, peruutus `scene.answer none` |
+| `open`-valikon sulkeminen kohtauksessa | `scene.close`; valikon kohdat kirjataan kuten muutkin valikon toiminnot |
+| ohitus, alusta aloitus ja kelaus | `skip`, `restart` ja `rewind` ([RS 9.8](../roguescript/09-kohtaukset-ja-aikajanat.md#98-luonnos-ohitus-ja-alusta-aloitus)) |
 
-**Mitä ei kirjata.** Esitys ei kuulu lokiin, koska se ei muuta tilaa: osoitin ja hover, kursorin liike, valikkojen selaus, lukunäkymä, välilehdet, kamera, valittu verbi ennen komentoa ja ennakkokäsky ennen ajoa. Moottorin toiminnot, jotka eivät muuta pelin kulkua, eivät myöskään kuulu lokiin: `save`, `help` ja taukovalikon avaus ja sulku. Logiikan omat kutsut (`rollback`, `checkpoint`, `autosave`) seuraavat lokin riveistä, joten niistä ei kirjata rivejä.
+**Mitä ei kirjata.** Esitys ei kuulu lokiin, koska se ei muuta tilaa: osoitin ja hover, kursorin liike, valikkojen selaus, lukunäkymä, välilehdet, kamera, valittu verbi ennen komentoa ja ennakkokäsky ennen ajoa. Moottorin toiminnot, jotka eivät muuta pelin kulkua, eivät myöskään kuulu lokiin: `save`, `help` ja taukovalikon avaus ja sulku. Logiikan omat kutsut (`rollback`, `checkpoint`, `autosave`) seuraavat lokin riveistä, joten niistä ei kirjata rivejä. Etualan aikajanan kello ei ole syöte: toisto ajaa aikajanan rivit niiden järjestyksessä, ja vain pelaajan vastaukset ovat rivejä. Siksi kohtaus toistuu samanlaisena, vaikka pelaaja katsoi sen eri tahdissa.
 
 **Lokin loppu.** `quit`, `new_game` ja `load_game` päättävät lokin. Ladattu peli aloittaa uuden lokin, jonka lähtötila on ladattu tallennus. Profiili kirjoitetaan tiedostoon pelikerran aikana (luku [5.6](05-aloitus-tallennus-ja-checkpointit.md#56-profiili)), mutta toisto käyttää lähtötilan tilannekuvaa. Siksi toisto ei riipu koneen profiilista, eikä se kirjoita profiilia.
 

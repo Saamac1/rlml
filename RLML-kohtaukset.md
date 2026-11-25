@@ -30,6 +30,14 @@ Jokainen vaihe on oma haaransa ja commitinsa.
 
 ### 0. Speksin aukot
 
+Tehty 25.11.2026:
+- **Syötelokin rivit** M 4.4:ään. Valinta kirjataan kohdan nimellä eikä järjestysnumerolla, koska piilotetut kohdat muuttavat numeroita. Aikajanan kello ei ole syöte.
+- **Sama kohtaus** voi olla jonossa useaan kertaan (M 6.1.7).
+- **Käynnistyslaskuri** kuuluu tilaan ja tallennukseen (M 3.1 ja M 5.2).
+- **Kohtaus ilman pelaajaa:** M 8.2 sanoo jo, että kohtausta ohjaa avaajan istuin, ja jos avaaja ei ole jäsen, mikä tahansa istuin. Esimerkkipelin `begin`-käsittelijän käynnistämää kohtausta ohjaa siis mikä tahansa istuin.
+
+Alla on alkuperäinen tehtävälista.
+
 - **Sama kohtaus jonossa kahdesti.** Speksi ei sano, mitä tapahtuu, kun samaa kohtausta pyydetään jonoon toistamiseen ennen kuin edellinen on alkanut. Ehdotus: molemmat ajetaan, koska jono on aloitusjärjestyksessä.
 - **Kohtaus pelaajan kuoltua.** Kenen istuin ohjaa kohtausta, kun avaajaa ei ole (M 8.2 sanoo: mikä tahansa istuin)? Tarkistetaan, että `say` toimii ilman pelaajaa.
 - **Syötelokin rivit kohtauksessa** M 4.4:ään (yllä).
