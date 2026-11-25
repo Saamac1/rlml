@@ -491,7 +491,7 @@ Tehty 25.11.2026 haarassa `claude/moninpeli-istuimet`:
   - uudet istuimet ylärajaan asti.
 - **Pelin aikana.** Vapaan laitteen `join` liittää istuimen kesken pelin, ja taukovalikon `leave_seat` poistaa valikon avanneen istuimen. Kohta näkyy vain, kun istuimia on yli alarajan.
 - **Ryhmäesimerkki** alkaa liittymisruudusta. Osa 2 liittyy näppäimellä `e`, ja tekstit ovat suomeksi.
-- **Ei tehty:** `idle` istuinkohtaisena. Ajastin on yhä yhteinen, ja mikä tahansa painallus nollaa sen.
+- **`idle` istuinkohtaisena** tehtiin 26.11.2026 haarassa `claude/istuin-idle`. Ajastin alkaa, kun ajo alkaa odottaa istuimen syötettä (uusi istuin, hetki tai jäsen), ja vain vuorossa olevan istuimen laitteen painallus nollaa sen. Hiiri reititetään vuorossa olevalle istuimelle, joten sekin nollaa ajastimen. Testi `idle_is_each_seats_own`.
 
 - Käyttöliittymän puolella `DeviceId`: näppäimistöosa tai peliohjain. Reititin kuvaa laitteen istuimeksi ja hylkää muiden istuinten painallukset (luku 6.5). Hiiri reititetään odotetulle istuimelle.
 - Liittymisruutu (konteksti `JOIN`), `join` kesken pelin, `leave_seat` ja latauksen uudelleenliittyminen.

@@ -171,7 +171,11 @@ pub struct App<'m> {
     idle: Option<Idle>,
     frame: Duration,
     last_round: Duration,
+    /// When the `idle` timer started: the awaited seat's last press, or
+    /// when its wait began (M 6.1.10).
     last_key: Duration,
+    /// The wait the timer is for: the seat, the moment and the member.
+    idle_wait: Option<(SeatId, i64, Option<rlml_core::rt::value::EntityId>)>,
     /// In-between frames waiting to be shown, `frame` apart.
     pub frames: Vec<Frame>,
     /// The last in-between frame, to keep only changed moments.
@@ -408,6 +412,7 @@ impl<'m> App<'m> {
             frame,
             last_round: Duration::ZERO,
             last_key: Duration::ZERO,
+            idle_wait: None,
             frames: vec![],
             last_frame: None,
             clock: Duration::ZERO,
@@ -1476,14 +1481,31 @@ impl<'m> App<'m> {
             }
         })?;
         self.write_saves();
+        // `idle` counts from when the seat's wait begins (M 6.1.10)
+        let wait = self
+            .r
+            .awaiting()
+            .map(|n| (n, self.r.w.s.game.time, self.r.w.s.player));
+        if wait != self.idle_wait {
+            self.idle_wait = wait;
+            self.last_key = self.clock;
+        }
         self.sync_scene()
+    }
+
+    /// Does a press from `device` start the `idle` timer again? Only the
+    /// awaited seat's does (M 6.1.10).
+    fn resets_idle(&self, device: Device) -> bool {
+        self.r.awaiting().is_none_or(|n| self.drives(device, n))
     }
 
     /// A key at time `now` (M 8).
     pub fn key(&mut self, b: Binding, now: Duration) -> RtResult<()> {
         self.typed_out(now);
         self.keyboard = true;
-        self.last_key = now;
+        if self.resets_idle(Device::Keyboard(self.input.keys.part_of(&b))) {
+            self.last_key = now;
+        }
         self.clock = now;
         self.note = None;
         // ctrl+c always leaves, as in every terminal program
@@ -1647,7 +1669,9 @@ impl<'m> App<'m> {
     /// A pad press at time `now` (M 8.2).
     pub fn pad(&mut self, id: usize, p: PadPress, now: Duration) -> RtResult<()> {
         self.typed_out(now);
-        self.last_key = now;
+        if self.resets_idle(Device::Pad(id)) {
+            self.last_key = now;
+        }
         self.clock = now;
         self.note = None;
         self.pad_connected(id);

@@ -355,6 +355,43 @@ fn ryhma() -> MemFiles {
 }
 
 #[test]
+fn idle_is_each_seats_own() {
+    let mut f = ryhma();
+    let g = f.game.get_mut("game.rlml").unwrap();
+    *g = g.replace("- round 250ms\n", "- round 250ms\n- idle 1s STD.WAIT\n");
+    let m = model(&f);
+    let mut app = joined(&m, 7, (80, 24)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(1));
+    // seat 2's press on seat 1's turn does not start seat 1's timer again
+    app.key(key("x"), ms(800)).unwrap();
+    app.tick(ms(999)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(1), "still seat 1's wait");
+    app.tick(ms(1000)).unwrap();
+    assert_ne!(
+        app.r.awaiting(),
+        Some(1),
+        "`idle` ended seat 1's turn after 1s from its wait (M 6.1.10)"
+    );
+    // seat 2's wait began at 1000 ms: its own timer
+    let n = app.r.awaiting().unwrap();
+    assert_eq!(n, 2);
+    app.tick(ms(1900)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(2), "seat 2 has its own second");
+    // seat 2's own press starts its timer again
+    app.key(key("x"), ms(1950)).unwrap();
+    app.key(key("x"), ms(1960)).unwrap();
+    app.tick(ms(2500)).unwrap();
+    assert_eq!(
+        app.r.awaiting(),
+        Some(2),
+        "the awaited seat's press starts its timer again"
+    );
+    app.tick(ms(2960)).unwrap();
+    assert_eq!(app.r.awaiting(), Some(1), "and then `idle` ends its turn");
+    replays_the_same(&m, &app);
+}
+
+#[test]
 fn the_turn_marker_flashes_and_blinks() {
     let f = ryhma();
     let m = model(&f);
