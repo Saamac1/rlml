@@ -240,6 +240,9 @@ pub struct State {
     /// The map the player was last on; the active map without a player
     /// (M 6.1.8).
     pub last_player_map: Option<MapId>,
+    /// The session's view of the profile (M 5.6): its snapshot at the
+    /// start and the session's own writes.
+    pub profile: Vec<ComponentValue>,
 }
 
 impl State {

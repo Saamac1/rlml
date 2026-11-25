@@ -46,6 +46,7 @@ pub fn check(m: &Model, main: &str, r: &mut Report) {
     c.game(main);
     c.settings(main);
     c.autosave();
+    c.profiles();
     c.tiles_section();
     c.style();
     c.layouts();
@@ -692,6 +693,26 @@ impl Checker<'_> {
             let has = self.m.section_rows("tiles.glyphs").next().is_none() || self.m.sections.iter().any(|b| b.kind == "tiles.glyphs" && b.args.first().is_some_and(|a| a.text == style));
             if !has {
                 self.r.push(settings["style"].warn(format!("no `tiles.glyphs {style}` section: every tile uses the default look")));
+            }
+        }
+    }
+
+    /// The `profile` blocks (D 3.5): one named one, the game's name, and
+    /// rows that are components.
+    fn profiles(&mut self) {
+        let game = self.m.named_game().map(|g| g.name.clone());
+        let named: Vec<&RawBlock> = self.m.profiles.iter().filter(|b| !b.name.is_empty()).collect();
+        for b in named.iter().skip(1) {
+            self.r.error(&b.file, b.line, format!("a second named `profile` block `{}`: a game has one (D 3.5)", b.name));
+        }
+        if let (Some(b), Some(g)) = (named.first(), game.as_deref())
+            && b.name != g
+        {
+            self.r.error(&b.file, b.line, format!("the `profile` block is named after the game: `profile {g}`, not `{}` (D 3.5)", b.name));
+        }
+        for b in self.m.profiles.clone() {
+            for item in b.items.iter().filter(|i| !names::is_vocabulary(i.key())) {
+                self.component_row(item, b.namespace.as_deref());
             }
         }
     }

@@ -403,8 +403,11 @@ impl World<'_> {
                 let full = if names::is_vocabulary(component) { component.clone() } else { self.resolve(env, component).map(|d| d.full.clone()).unwrap_or_else(|| component.clone()) };
                 // `game has PERMADEATH` asks the game record (D 5.5)
                 let is_game = matches!(&subject.kind, Word(w) if w == "game" && !env.locals.contains_key(w));
+                let is_profile = matches!(&subject.kind, Word(w) if w == "profile" && !env.locals.contains_key(w));
                 let has = if is_game {
                     self.s.game.components.iter().any(|c| c.name == full)
+                } else if is_profile {
+                    self.s.profile.iter().any(|c| c.name == full)
                 } else {
                     match self.eval(subject, env)? {
                         Value::Entity(x) => self.s.get(x).alive && self.s.get(x).has(&full),
@@ -676,6 +679,13 @@ impl World<'_> {
                     let Some(cv) = cv else { return Ok(Value::None) };
                     return self.component_fields_of(cv, crate::rt::world::GAME, &parts[n..], env, e.pos);
                 }
+                "profile" => {
+                    let first = &parts[0];
+                    let (comp, n) = self.component_at(&parts, env).ok_or_else(|| self.rt_err(env, e.pos, format!("`profile` has no component `{first}`")))?;
+                    let cv = self.s.profile.iter().find(|c| c.name == comp).cloned();
+                    let Some(cv) = cv else { return Ok(Value::None) };
+                    return self.component_fields_of(cv, crate::rt::world::GAME, &parts[n..], env, e.pos);
+                }
                 "map" => {
                     let Some(m) = env.map else { return Ok(Value::None) };
                     let var = parts[0].clone();
@@ -828,8 +838,22 @@ impl World<'_> {
                     && !env.locals.contains_key(w)
                 {
                     let (comp, _) = self.component_at(&parts, env).ok_or_else(|| self.rt_err(env, target.pos, "no such `game` component"))?;
+                    let v = self.keep_list(&comp, &last, v);
                     let c = self.s.game.components.iter_mut().find(|c| c.name == comp).ok_or_else(|| format!("`game` has no `{comp}`; add it in the `game` block"))?;
                     c.set(&last, v);
+                    return Ok(());
+                }
+                // `profile.COMP.field`: the session's view, and the file at
+                // the action's end (M 5.6)
+                if let ExprKind::Word(w) = &root.kind
+                    && w == "profile"
+                    && !env.locals.contains_key(w)
+                {
+                    let (comp, _) = self.component_at(&parts, env).ok_or_else(|| self.rt_err(env, target.pos, "no such `profile` component"))?;
+                    let v = self.keep_list(&comp, &last, v);
+                    let c = self.s.profile.iter_mut().find(|c| c.name == comp).ok_or_else(|| format!("`profile` has no `{comp}`; add it in the `profile` block"))?;
+                    c.set(&last, v);
+                    self.profile_touched.insert((comp, last));
                     return Ok(());
                 }
                 if let ExprKind::Word(w) = &root.kind
@@ -871,6 +895,7 @@ impl World<'_> {
                 match base_val {
                     (Value::Entity(e), Some(comp)) => {
                         let kind = self.s.get(e).kind.clone();
+                        let v = self.keep_list(&comp, &last, v);
                         let c = self.s.get_mut(e).get_mut(&comp).ok_or_else(|| format!("{}:{}: runtime error: `{kind}` has no `{comp}`; add it with `add` (RS 5.3)", env.file, target.pos.line))?;
                         c.set(&last, v);
                         Ok(())

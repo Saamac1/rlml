@@ -664,6 +664,8 @@ impl Put for State {
         (self.player, &self.seats).put(w);
         (self.party_each, (self.leash, self.seat_range)).put(w);
         (self.acting, self.last_player_map).put(w);
+        w.line();
+        self.profile.put(w);
         w.close();
     }
 }
@@ -690,8 +692,9 @@ impl Get for State {
         let (player, seats) = Get::get(r)?;
         let (party_each, (leash, seat_range)) = Get::get(r)?;
         let (acting, last_player_map) = Get::get(r)?;
+        let profile = Get::get(r)?;
         r.close()?;
-        Ok(State { entities, game, maps, wakes, next_seq, decks, player, seats, party_each, acting, leash, seat_range, last_player_map })
+        Ok(State { entities, game, maps, wakes, next_seq, decks, player, seats, party_each, acting, leash, seat_range, last_player_map, profile })
     }
 }
 
@@ -799,11 +802,31 @@ impl<'m> Runner<'m> {
         }
         let mut r = Runner::new(World::new(m, save.now.s.game.seed));
         r.restore(&save.now);
+        // the session's own view of the profile comes back (M 5.6)
+        r.w.s.profile = save.now.s.profile.clone();
+        r.w.profile_start = save.now.s.profile.clone();
         r.checkpoint = save.checkpoint.clone().map(Box::new);
         r.w.log = save.log.clone();
         r.inputs = InputLog { seed: r.w.s.game.seed, seats: r.w.s.seats.len() as u8, ..InputLog::default() };
         Ok(r)
     }
+}
+
+/// `v` in the save's text form, on one line.
+pub fn write_value<T: Put>(v: &T) -> String {
+    let mut w = Out::default();
+    v.put(&mut w);
+    w.text.replace('\n', " ")
+}
+
+/// A value in the save's text form.
+pub fn read_value<T: Get>(text: &str) -> RtResult<T> {
+    let mut r = In::new(text)?;
+    let v = T::get(&mut r)?;
+    if r.peek().is_some() {
+        return Err(r.err("text after the value".into()));
+    }
+    Ok(v)
 }
 
 // ---- reading ----

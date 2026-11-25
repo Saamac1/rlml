@@ -4,6 +4,10 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (profiili):**
+- Profiilitiedostoon kirjoitetaan vain pelikerran muuttamat kentät (luku [5.6](05-aloitus-tallennus-ja-checkpointit.md#56-profiili)).
+- Moottorin valikossa on kohta `ENGINE.RESET_PROFILE` (luku [8](08-syote.md)).
+
 **Muutokset 25.11.2026 (tallennuspaikat):**
 - Moottorin valikossa on kohta `ENGINE.LOAD_GAME`, kun tallennuksia on, ja se avaa tallennusten luettelon (luku [8](08-syote.md)).
 - Oma tallennus menee ensimmäiseen vapaaseen omaan paikkaan ja muuten vanhimpaan (luku [5.4](05-aloitus-tallennus-ja-checkpointit.md#54-automaattinen-tallennus)).

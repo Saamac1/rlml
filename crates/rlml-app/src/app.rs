@@ -18,6 +18,7 @@ use std::time::Duration;
 use rlml_core::model::Model;
 use rlml_core::rt::run::{Runner, Status};
 use rlml_core::rt::state::SeatId;
+use rlml_core::rt::profile::Profile;
 use rlml_core::rt::store::{AutosaveRules, Saved, Saves, Slot, Store};
 use rlml_core::rt::travel::OrderGoal;
 use rlml_core::rt::verbs::{Ask, Target};
@@ -84,11 +85,14 @@ const HOLD_REPEAT: Duration = Duration::from_millis(140);
 
 /// The engine's menu: a new game, the saves when there are some, and
 /// leaving (M 8).
-fn engine_menu(saves: bool) -> Menu {
+fn engine_menu(saves: bool, profile: bool) -> Menu {
     let item = |key: &str, action: &str| Item { key: key.into(), action: ItemAction::Engine(action.into()), hide: None, disabled: None, label: None };
     let mut items = vec![item("NEW_GAME", "new_game")];
     if saves {
         items.push(item("LOAD_GAME", "load_game"));
+    }
+    if profile {
+        items.push(item("RESET_PROFILE", "reset_profile"));
     }
     items.push(item("EXIT", "exit"));
     Menu { full: ENGINE_MENU.into(), ns: None, context: "MENU".into(), is_final: true, width: None, height: None, items, verbs: false }
@@ -198,6 +202,8 @@ pub struct App<'m> {
     pub keyboard: bool,
     /// The game's save slots, when the front end gives a store (M 5.4).
     pub saves: Option<Saves<Box<dyn Store>>>,
+    /// The game's profile file, when the front end gives a store (M 5.6).
+    pub profile: Option<Profile<Box<dyn Store>>>,
 }
 
 /// The asked parameters' list menu as a layer.
@@ -348,6 +354,7 @@ impl<'m> App<'m> {
             baud: None,
             keyboard: false,
             saves: None,
+            profile: None,
         };
         app.baud = crate::draw::log_baud(&app.r.w, "");
         match app.title() {
@@ -372,10 +379,32 @@ impl<'m> App<'m> {
         self.saves = Some(Saves::new(store, AutosaveRules::read(self.m)));
     }
 
+    /// The profile is kept in `store` from now on (M 5.6). The next new
+    /// game reads it; `restart` starts the game being played over with it.
+    pub fn set_profile_store(&mut self, store: Box<dyn Store>, restart: bool) -> RtResult<()> {
+        self.profile = Some(Profile::new(store, self.m));
+        if restart && self.playing {
+            self.games -= 1;
+            self.start(self.seed)?;
+        }
+        Ok(())
+    }
+
     /// Starts a new game with `seed` and runs it to the player's first turn
-    /// (M 5.1); the menus close.
+    /// (M 5.1); the menus close. The profile's snapshot is taken from its
+    /// file now.
     fn start(&mut self, seed: u64) -> RtResult<()> {
-        let mut w = World::new_game(self.m, seed)?;
+        let file = match self.profile.as_mut() {
+            Some(p) => {
+                let (file, warning) = p.load();
+                if let Some(w) = warning {
+                    self.note = Some(w);
+                }
+                Some(file)
+            }
+            None => None,
+        };
+        let mut w = World::new_game_with(self.m, seed, None, file.as_deref())?;
         w.begin()?;
         if let Some(saves) = self.saves.as_mut() {
             saves.new_session(self.m);
@@ -411,6 +440,12 @@ impl<'m> App<'m> {
     /// The runner's automatic saves and `delete_save(auto)`, to the store
     /// (M 5.4, M 5.5). Without a store they go nowhere.
     fn write_saves(&mut self) {
+        let writes = self.r.take_profile_writes();
+        if let Some(p) = self.profile.as_mut()
+            && let Err(e) = p.write(&writes)
+        {
+            self.note = Some(format!("the profile was not written: {e}"));
+        }
         let due = std::mem::take(&mut self.r.due);
         let delete = std::mem::take(&mut self.r.delete_auto);
         let Some(saves) = self.saves.as_mut() else { return };
@@ -524,7 +559,8 @@ impl<'m> App<'m> {
             }
             None => {
                 let has_saves = self.saves.as_ref().is_some_and(|s| !s.list().is_empty());
-                let layer = menu::Layer::open(&mut self.r.w, engine_menu(has_saves));
+                let has_profile = self.profile.is_some() && !self.m.profiles.is_empty();
+                let layer = menu::Layer::open(&mut self.r.w, engine_menu(has_saves, has_profile));
                 self.menus.layers.push(layer);
             }
         }
@@ -1114,6 +1150,12 @@ impl<'m> App<'m> {
                 self.last_round = now;
             }
             "save" => self.save_game(),
+            "reset_profile" => {
+                if let Some(p) = self.profile.as_mut() {
+                    p.reset();
+                    self.note = Some("the profile was reset".into());
+                }
+            }
             "load_game" => self.open_load_menu(),
             a if a.starts_with("load:") => {
                 if let Some(slot) = Slot::parse(&a["load:".len()..]) {

@@ -1539,3 +1539,39 @@ fn automatic_saves_fill_the_stack() {
     let list = app.saves.as_ref().unwrap().list();
     assert_eq!(list[0].save.now.s.game.turn(), 5, "the newest is the last even wait");
 }
+
+// ---- the profile (M 5.6) ----
+
+#[test]
+fn the_profile_lives_over_games_and_the_engine_menu_resets_it() {
+    use rlml_core::rt::profile::FILE;
+    use rlml_core::rt::store::{MemStore, Store};
+    let mut f = mini_with(|g| {
+        *g = g.replace("- PLAYER HERO\n", "- PLAYER HERO\n\nprofile MINI\n- UNLOCKS\n");
+        g.push_str("\ncomponent UNLOCKS\n- wins number\n\n```roguescript\ncommand WIN() cost 0:\n    profile.UNLOCKS.wins += 1\n    return true\n```\n");
+    });
+    let ui = f.game.get_mut("ui/main.rlml").unwrap();
+    *ui = ui.replace("- pass z", "- pass z\n- WIN w");
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    app.set_store(Box::new(MemStore::default()));
+    app.set_profile_store(Box::new(MemStore::default()), true).unwrap();
+    let wins = |app: &App| app.r.w.s.profile.iter().find(|c| c.name == "UNLOCKS").and_then(|c| c.get("wins")).and_then(|v| v.as_number());
+    assert_eq!(wins(&app), Some(0));
+    press(&mut app, "w w");
+    assert_eq!(wins(&app), Some(2));
+    assert!(app.profile.as_ref().unwrap().store.read(FILE).is_some_and(|t| t.contains("(n 2)")), "written after the action");
+    // a new game from the engine's menu sees it
+    press(&mut app, "esc j enter");
+    let s = screen(&mut app);
+    assert!(s.contains("Reset profile"), "{s}");
+    press(&mut app, "enter");
+    assert!(app.playing);
+    assert_eq!(wins(&app), Some(2), "the next game's snapshot (M 5.1)");
+    // reset from the engine's menu: New game, Load game, Reset profile, Exit
+    press(&mut app, "esc j enter j j enter");
+    assert_eq!(app.note.as_deref(), Some("the profile was reset"));
+    assert!(app.profile.as_ref().unwrap().store.read(FILE).is_none());
+    press(&mut app, "k k enter");
+    assert_eq!(wins(&app), Some(0), "the profile starts over");
+}

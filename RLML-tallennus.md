@@ -199,6 +199,24 @@ Alla on alkuperäinen tehtävälista.
 
 ### 6. Profiili
 
+Tehty 25.11.2026 haarassa `claude/profiili`:
+- **Profiilin näkymä tilassa (`State::profile`).** Uuden pelin vaihe 2 laskee sen `profile`-lohkoista ja tiedoston arvoista (`World::new_game_with`):
+  - datan lisäämä kenttä saa alkuarvonsa,
+  - datasta poistettu komponentti jää tiedostoon näkymättömänä.
+- **Logiikka.** `profile.X.kenttä` luetaan ja kirjoitetaan kuten `game`, ja `profile has X` toimii. Kirjoitetut kentät kerätään (`World::profile_touched`), ja sovellus yhdistää ne tiedostoon toiminnon jälkeen (`Runner::take_profile_writes`, `Profile::write`).
+- **`rollback`** ei peru profiilin näkymää. Tallennus sisältää pelikerran näkymän, ja lataus palauttaa sen.
+- **Tiedosto (`rt::profile`).** Tiedostossa on tarkistussumma sisällöstä ja pelin nimestä. Muokattu tiedosto siirretään nimelle `profile.bak` varoituksen kera, ja profiili alkaa alkuarvoista. Moottorin valikon `RESET_PROFILE` nollaa sen.
+- **Syöteloki.** Lokin otsikossa on profiilin tilannekuva (`profile …`), joten toisto ei lue koneen profiilia.
+- **Listat.** `list T N sort KENTTÄ desc` järjestää ja leikkaa listan kirjoitettaessa (`World::keep_list`, D 5.1). Tämä puuttui kokonaan, ja se koskee nyt myös `game`- ja entiteettikenttiä.
+- **Latauksen tarkistukset:** toinen nimetty `profile`-lohko, nimi joka ei ole pelin nimi, ja rivit jotka eivät ole komponentteja.
+- **Pääte.** `rlml play --data DIR` korvaa vaiheen 5 valitsimen `--saves`: tallennukset ovat kansiossa `DIR/saves/` ja profiili tiedostossa `DIR/profile`.
+- **Ei tehty:**
+  - `profile`-lohkon tarkistus kirjastossa ja `overrides/`-kansiossa, koska `overrides/`-kansiota ei vielä lueta,
+  - profiilin kirjoitus etualan kohtauksen luonnoksen kirjauksessa, koska kohtauksia ei vielä ole.
+- **Testit:** `crates/rlml-core/tests/profile.rs` (9 testiä) ja sovelluksen testi, jossa profiili säilyy pelikerrasta toiseen ja moottorin valikko nollaa sen.
+
+Alla on alkuperäinen tehtävälista.
+
 - `profile`-lohkot malliin ja profiilin näkymä tilaan: aloitushetken tilannekuva ja pelikerran omat kirjoitukset (M 5.6).
 - Profiilitiedosto `<käyttäjädata>/PELI/profile` `Store`-traitin kautta.
   - Tarkistussumma lasketaan sisällöstä ja pelin nimestä. Jos summa ei täsmää, tiedosto nimetään varmuuskopioksi, ja profiili alkaa alkuarvoista ajon varoituksen kera.

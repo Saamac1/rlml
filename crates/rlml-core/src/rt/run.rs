@@ -78,7 +78,7 @@ fn engine_env(name: &str) -> Env {
 impl<'m> Runner<'m> {
     pub fn new(w: World<'m>) -> Runner<'m> {
         let fields = TravelFields::read(w.m);
-        let inputs = InputLog { seed: w.s.game.seed, seats: w.s.seats.len() as SeatId, ..InputLog::default() };
+        let inputs = InputLog { seed: w.s.game.seed, seats: w.s.seats.len() as SeatId, profile: w.profile_start.clone(), ..InputLog::default() };
         let rules = AutosaveRules::read(w.m);
         let mut r = Runner {
             w,
@@ -234,6 +234,19 @@ impl<'m> Runner<'m> {
                 seen(&mut self.w);
             }
         }
+    }
+
+    /// The profile's fields written since the last call, with their values
+    /// now: the front end merges them into the profile file (M 5.6).
+    pub fn take_profile_writes(&mut self) -> Vec<(String, String, Value)> {
+        let touched = std::mem::take(&mut self.w.profile_touched);
+        touched
+            .into_iter()
+            .filter_map(|(c, f)| {
+                let v = self.w.s.profile.iter().find(|x| x.name == c)?.get(&f)?.clone();
+                Some((c, f, v))
+            })
+            .collect()
     }
 
     /// `on input every N` (M 5.4): a save at every Nth wait for input,

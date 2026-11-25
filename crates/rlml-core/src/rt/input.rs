@@ -25,7 +25,7 @@ use std::fmt;
 
 use super::run::{Runner, Status};
 use super::state::{SeatId, State};
-use super::value::{CommandValue, Dir, EntityId, Pos, Side, Value};
+use super::value::{CommandValue, ComponentValue, Dir, EntityId, Pos, Side, Value};
 use super::world::{RtResult, World};
 use crate::model::Model;
 
@@ -75,6 +75,9 @@ pub struct InputLog {
     pub seed: u64,
     /// Seats joined at the start (M 5.1).
     pub seats: u8,
+    /// The profile's snapshot at the start (M 5.1 step 2), so a replay
+    /// does not depend on this computer's profile.
+    pub profile: Vec<ComponentValue>,
     pub rows: Vec<Row>,
     /// An input the log cannot hold, such as an argument of a kind it has
     /// no text form for. Such a log is not written.
@@ -320,6 +323,9 @@ impl InputLog {
             return Err(e.clone());
         }
         let mut out = format!("rlml-input 1\nseed {}\nseats {}\n", self.seed, self.seats);
+        if !self.profile.is_empty() {
+            out.push_str(&format!("profile {}\n", super::save::write_value(&self.profile)));
+        }
         for r in &self.rows {
             out.push_str(&r.to_string());
             out.push('\n');
@@ -343,6 +349,13 @@ impl InputLog {
         };
         log.seed = header("seed")?.parse().map_err(|_| "a bad seed".to_string())?;
         log.seats = header("seats")?.parse().map_err(|_| "a bad seat count".to_string())?;
+        let mut lines = lines.peekable();
+        if let Some((i, l)) = lines.peek().copied()
+            && let Some(p) = l.trim().strip_prefix("profile ")
+        {
+            log.profile = super::save::read_value(p).map_err(|e| at(i, e))?;
+            lines.next();
+        }
         for (i, l) in lines {
             log.rows.push(read_row(l.trim()).map_err(|e| at(i, e))?);
         }
@@ -396,7 +409,7 @@ impl<'m> Replay<'m> {
     /// The log's start: a new game with its seed and seats, run to the
     /// first turn.
     pub fn start(m: &'m Model, log: &InputLog) -> RtResult<Replay<'m>> {
-        let mut w = World::new_game_seats(m, log.seed, Some(log.seats))?;
+        let mut w = World::new_game_with(m, log.seed, Some(log.seats), Some(&log.profile))?;
         w.begin()?;
         let mut r = Runner::new(w);
         let status = r.run(0)?;

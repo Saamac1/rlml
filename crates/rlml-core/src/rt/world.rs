@@ -66,6 +66,12 @@ pub struct World<'m> {
     /// Tile flags (`lit`, `forget`) by tile name and flag, resolved once
     /// for the same reason (D 7.5).
     pub(crate) flags: std::cell::RefCell<std::collections::HashMap<(String, String), bool>>,
+    /// The profile's fields written since the front end last took them
+    /// (M 5.6), component and field.
+    pub profile_touched: std::collections::BTreeSet<(String, String)>,
+    /// The profile's snapshot at the session's start, for the input log
+    /// (M 4.4).
+    pub profile_start: Vec<ComponentValue>,
     /// The shared view held while the presentation evaluates queries,
     /// which cannot change the state: `in_view` reads it instead of
     /// casting the view again for each call (M 7.7).
@@ -119,6 +125,17 @@ pub struct Travel {
     pub align: bool,
 }
 
+/// The order of two values for a sorted list: numbers, texts and names;
+/// other values are equal, so they keep their order.
+fn order(a: &Value, b: &Value) -> std::cmp::Ordering {
+    match (a, b) {
+        (Value::Number(x), Value::Number(y)) => x.cmp(y),
+        (Value::Text(x), Value::Text(y)) | (Value::Name(x), Value::Name(y)) => x.cmp(y),
+        (Value::Bool(x), Value::Bool(y)) => x.cmp(y),
+        _ => std::cmp::Ordering::Equal,
+    }
+}
+
 /// `viive = max(1, ceil(hinta × 10 / nopeus))`; no wake at speed 0 or less
 /// (M 6.1.3).
 pub fn delay(cost: i64, speed: i64) -> Option<i64> {
@@ -133,7 +150,7 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], saves: SaveCalls::default(), depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area(), looks: Default::default(), flags: Default::default(), held_view: None }
+        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], saves: SaveCalls::default(), depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area(), looks: Default::default(), flags: Default::default(), profile_touched: Default::default(), profile_start: vec![], held_view: None }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {
@@ -216,6 +233,80 @@ impl<'m> World<'m> {
     }
 
     /// The zero of a type: 0, `false`, `0,0`, `none`, empty (D 5.1).
+    /// The profile as the data has it, with `file`'s values for the
+    /// components and fields both have. A component or field the data
+    /// added gets its start value; one the data dropped stays out of the
+    /// view (D 3.5).
+    fn profile_view(&mut self, file: &[ComponentValue]) -> RtResult<Vec<ComponentValue>> {
+        let mut out: Vec<ComponentValue> = Vec::new();
+        let m = self.m;
+        for b in &m.profiles {
+            for item in b.items.iter().filter(|i| !names::is_vocabulary(i.key())) {
+                let ns = item.namespace.as_deref();
+                let row = Values { m, ns }.row(item)?;
+                let mut cv = self.given_fields(&row.component, &row.values[..row.given], ns, item)?;
+                for f in self.field_defs(&row.component) {
+                    if cv.get(&f.name).is_none() {
+                        let ty = self.field_ty(&row.component, &f.name);
+                        let v = match &f.default {
+                            Some(d) => self.data_value(&ty, d, ns)?,
+                            None => Self::zero(&ty),
+                        };
+                        cv.set(&f.name, v);
+                    }
+                }
+                if let Some(saved) = file.iter().find(|c| c.name == cv.name) {
+                    for (f, v) in cv.fields.iter_mut() {
+                        if let Some(sv) = saved.get(f) {
+                            *v = sv.clone();
+                        }
+                    }
+                }
+                match out.iter_mut().find(|c| c.name == cv.name) {
+                    Some(old) => *old = cv,
+                    None => out.push(cv),
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// A list field as its type keeps it (D 5.1): `list T N sort F desc`
+    /// keeps the list in order of F, largest first with `desc`, and at most
+    /// N long, dropping the last in order or, without `sort`, the oldest.
+    pub fn keep_list(&self, component: &str, field: &str, v: Value) -> Value {
+        let Value::List(mut items) = v else { return v };
+        let Some(f) = self.field_defs(component).into_iter().find(|f| f.name == field) else { return Value::List(items) };
+        let words: Vec<&str> = f.ty.split_whitespace().collect();
+        if words.first() != Some(&"list") {
+            return Value::List(items);
+        }
+        let max = words.iter().skip(2).take_while(|w| **w != "sort").find_map(|w| w.parse::<usize>().ok());
+        let sort = words.iter().position(|w| *w == "sort");
+        if let Some(i) = sort {
+            let by = words.get(i + 1).filter(|w| **w != "desc").map(|w| w.to_string());
+            let desc = words[i..].contains(&"desc");
+            let key = |v: &Value| match (&by, v) {
+                (Some(k), Value::Component(c)) => c.get(k).cloned().unwrap_or(Value::None),
+                _ => v.clone(),
+            };
+            items.sort_by(|a, b| {
+                let o = order(&key(a), &key(b));
+                if desc { o.reverse() } else { o }
+            });
+        }
+        if let Some(n) = max
+            && items.len() > n
+        {
+            if sort.is_some() {
+                items.truncate(n);
+            } else {
+                items.drain(..items.len() - n);
+            }
+        }
+        Value::List(items)
+    }
+
     fn zero(ty: &Ty) -> Value {
         match ty {
             Ty::Number | Ty::Dice | Ty::Percent => Value::Number(0),
@@ -697,6 +788,12 @@ impl<'m> World<'m> {
     /// `None` joins the game's lower bound. The count is clamped to the
     /// game's `seats a..b`.
     pub fn new_game_seats(m: &'m Model, seed: u64, seats: Option<u8>) -> RtResult<World<'m>> {
+        Self::new_game_with(m, seed, seats, None)
+    }
+
+    /// `new_game_seats` with the profile file's components (M 5.1 step 2);
+    /// `None` is the `profile` blocks' start values.
+    pub fn new_game_with(m: &'m Model, seed: u64, seats: Option<u8>, profile: Option<&[ComponentValue]>) -> RtResult<World<'m>> {
         let g = m.named_game().ok_or("no named `game` block")?.clone();
         let field = |name: &str| g.items.iter().find(|i| i.key() == name).map(|i| i.rest(1).to_string());
         // 1. the seed
@@ -714,7 +811,10 @@ impl<'m> World<'m> {
         w.s.seat_range = (lo, hi);
         w.s.game.call_depth = field("call_depth").and_then(|s| s.parse().ok()).unwrap_or(256);
         w.s.game.loop_steps = field("loop_steps").and_then(|s| s.parse().ok()).unwrap_or(1_000_000);
-        // 2. the profile is not supported yet
+        // 2. the profile's snapshot: the data's components, with the file's
+        // values for the fields both have (D 3.5)
+        w.s.profile = w.profile_view(profile.unwrap_or_default())?;
+        w.profile_start = w.s.profile.clone();
         // 3. decks: written order, `shuffled` ones shuffled by full name
         let decks: Vec<(String, RawBlock)> = m.defs.values().filter(|d| d.kind == Kind::Deck).filter_map(|d| d.block().map(|b| (d.full.clone(), b.clone()))).collect();
         for (name, b) in decks {

@@ -8,15 +8,23 @@ use rlml_core::rt::store::Store;
 
 pub struct DiskStore {
     dir: PathBuf,
+    /// The files' ending: `.save` for saves, none for the profile.
+    ext: &'static str,
 }
 
 impl DiskStore {
+    /// Saves in `dir`, `NAME.save` each.
     pub fn new(dir: &Path) -> DiskStore {
-        DiskStore { dir: dir.to_path_buf() }
+        DiskStore { dir: dir.to_path_buf(), ext: ".save" }
+    }
+
+    /// Files in `dir` by their names as they are: the profile (D 3.2).
+    pub fn plain(dir: &Path) -> DiskStore {
+        DiskStore { dir: dir.to_path_buf(), ext: "" }
     }
 
     fn file(&self, name: &str) -> PathBuf {
-        self.dir.join(format!("{name}.save"))
+        self.dir.join(format!("{name}{}", self.ext))
     }
 }
 
@@ -28,7 +36,7 @@ impl Store for DiskStore {
     fn write(&mut self, name: &str, text: &str) -> Result<(), String> {
         let err = |e: std::io::Error| format!("{}: {e}", self.dir.display());
         std::fs::create_dir_all(&self.dir).map_err(err)?;
-        let tmp = self.dir.join(format!("{name}.save.tmp"));
+        let tmp = self.dir.join(format!("{name}{}.tmp", self.ext));
         std::fs::write(&tmp, text).map_err(err)?;
         std::fs::rename(&tmp, self.file(name)).map_err(err)
     }
@@ -39,7 +47,18 @@ impl Store for DiskStore {
 
     fn list(&self) -> Vec<String> {
         let Ok(entries) = std::fs::read_dir(&self.dir) else { return vec![] };
-        let mut out: Vec<String> = entries.flatten().filter_map(|e| e.file_name().to_str()?.strip_suffix(".save").map(String::from)).collect();
+        let ext = self.ext;
+        let mut out: Vec<String> = entries
+            .flatten()
+            .filter(|e| e.path().is_file())
+            .filter_map(|e| {
+                let name = e.file_name().to_str()?.to_string();
+                if name.ends_with(".tmp") {
+                    return None;
+                }
+                if ext.is_empty() { Some(name) } else { name.strip_suffix(ext).map(String::from) }
+            })
+            .collect();
         out.sort();
         out
     }

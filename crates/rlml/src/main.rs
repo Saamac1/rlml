@@ -44,7 +44,7 @@ impl Files for DiskFiles {
 
 const USAGE: &str = "usage: rlml check GAME [--lib DIR]
        rlml run GAME [--seed N] [--keys \"KEY KEY …\"] [--log-out FILE] [--lib DIR]
-       rlml play GAME [--seed N] [--log-out FILE] [--saves DIR] [--lib DIR]
+       rlml play GAME [--seed N] [--log-out FILE] [--data DIR] [--lib DIR]
        rlml replay GAME LOG [--lib DIR]
 
 check loads the game and reports load errors and warnings (M 2).
@@ -56,8 +56,9 @@ pause menu where it binds one, ctrl+c to leave at once. A runtime error
 ends the game and is printed after the terminal is restored.
 --log-out writes the session's input log (M 4.4) to FILE; with play it
 is the last game's log, written also when a runtime error ends it.
-play keeps its saves in DIR, by default the user data folder's
-rlml/GAME/saves (~/.local/share on Linux).
+play keeps the game's saves (DIR/saves) and profile (DIR/profile) in
+DIR, by default the user data folder's rlml/GAME (~/.local/share on
+Linux).
 replay plays an input log and prints a transcript as run does: the
 frame after each row of the log.
 
@@ -73,7 +74,7 @@ fn main() -> ExitCode {
     let mut keys = String::new();
     let mut log_out: Option<PathBuf> = None;
     let mut log_in: Option<PathBuf> = None;
-    let mut saves: Option<PathBuf> = None;
+    let mut data: Option<PathBuf> = None;
     let mut i = 0;
     let command = args.first().cloned().unwrap_or_default();
     if !["check", "run", "play", "replay"].contains(&command.as_str()) {
@@ -101,8 +102,8 @@ fn main() -> ExitCode {
                 log_out = Some(PathBuf::from(&args[i + 1]));
                 i += 1;
             }
-            "--saves" if command == "play" && i + 1 < args.len() => {
-                saves = Some(PathBuf::from(&args[i + 1]));
+            "--data" if command == "play" && i + 1 < args.len() => {
+                data = Some(PathBuf::from(&args[i + 1]));
                 i += 1;
             }
             "--keys" if command == "run" && i + 1 < args.len() => {
@@ -151,8 +152,8 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
         let game_name = model.named_game().map(|g| g.name.clone()).unwrap_or_default();
-        let saves = saves.or_else(|| rlml_tui::saves::user_data(&game_name).map(|d| d.join("saves")));
-        return match rlml_tui::term::play(&model, seed, log_out.as_deref(), saves.as_deref()) {
+        let data = data.or_else(|| rlml_tui::saves::user_data(&game_name));
+        return match rlml_tui::term::play(&model, seed, log_out.as_deref(), data.as_deref()) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("{e}");

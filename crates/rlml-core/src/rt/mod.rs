@@ -7,6 +7,7 @@ pub mod input;
 pub mod rng;
 pub mod path;
 pub mod play;
+pub mod profile;
 pub mod run;
 pub mod save;
 pub mod senses;

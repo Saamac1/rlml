@@ -16,16 +16,19 @@ use termplate_term::{Screen, TtyGuard, map_event, no_color_from_env, terminal_si
 /// Plays a new game in the terminal until the player quits. A runtime
 /// error ends the game and is returned after the terminal is restored.
 /// `log_out` gets the last game's input log (M 4.4), also when a runtime
-/// error ends it. Saves go to the folder `saves` (M 5.2).
-pub fn play(m: &Model, seed: u64, log_out: Option<&std::path::Path>, saves: Option<&std::path::Path>) -> Result<(), String> {
+/// error ends it. The game's data folder `data` keeps its saves in
+/// `saves/` and its profile (D 3.2).
+pub fn play(m: &Model, seed: u64, log_out: Option<&std::path::Path>, data: Option<&std::path::Path>) -> Result<(), String> {
     // the mouse is on unless the player's settings turn it off (D 3.2)
     let mouse = m.settings().get("mouse").and_then(|i| i.word(1)) != Some("off");
     let (guard, tty) = TtyGuard::new(mouse).map_err(|e| format!("cannot open the terminal: {e}"))?;
     let no_color = no_color_from_env(std::env::var("NO_COLOR").ok().as_deref());
     let mut screen = Screen::new(tty, StyleSheet::default(), no_color);
     let mut app = App::new(m, seed, terminal_size())?;
-    if let Some(dir) = saves {
-        app.set_store(Box::new(crate::saves::DiskStore::new(dir)));
+    if let Some(dir) = data {
+        app.set_store(Box::new(crate::saves::DiskStore::new(&dir.join("saves"))));
+        // the first game started before the profile was there
+        app.set_profile_store(Box::new(crate::saves::DiskStore::plain(dir)), true)?;
     }
     let result = run(&mut app, &mut screen);
     drop(guard);

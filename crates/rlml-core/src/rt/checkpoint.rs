@@ -54,7 +54,10 @@ impl<'m> Runner<'m> {
     pub fn restore(&mut self, snap: &Snapshot) {
         let later: Vec<Seat> = self.w.s.seats.iter().filter(|s| snap.s.seat(s.n).is_none()).map(|s| Seat { n: s.n, ..Seat::default() }).collect();
         let w = &mut self.w;
+        // profile writes stay: `rollback` does not undo them (M 5.6)
+        let profile = std::mem::take(&mut w.s.profile);
         w.s = snap.s.clone();
+        w.s.profile = profile;
         for seat in later {
             let i = w.s.seats.iter().position(|s| s.n > seat.n).unwrap_or(w.s.seats.len());
             w.s.seats.insert(i, seat);
