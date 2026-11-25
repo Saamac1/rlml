@@ -501,6 +501,13 @@ Tehty 25.11.2026 haarassa `claude/moninpeli-istuimet`:
 
 ### Vaihe 4: esitys
 
+Tehty 25.11.2026 haarassa `claude/moninpeli-esitys`:
+- **Jo aiemmin toteutettu:** kameran ryhmäseuranta ja paluu `player`-seurantaan, kun ryhmä ei mahdu alueeseen, `view_width`, `view_height` ja vuoron merkki. Testit `the_camera_follows_the_group_and_falls_back_to_the_player` ja `the_turn_marker_flashes_and_blinks` kattavat valmiusehdon.
+- **Uutta:**
+  - `follow(camera, e)` ja `follow(camera)` (M 7.1). Kohde on pelin tilassa (`State::camera`) ja tallennuksessa.
+  - Kokoelmassa olevaa kohdetta seurataan ylimmän kantajan mukana (`State::outer_at`).
+  - Tuhoutunut kohde jättää kameran paikalleen.
+
 - Kameran ryhmäseuranta, `follow(camera)` ilman kohdetta, `view_width` ja `view_height`.
 - Vuoron merkki.
 - **Valmis, kun** hajaantuvan ryhmän kamera vaihtaa `player`-seurantaan ja palaa ryhmään, kun ryhmä mahtuu taas alueeseen.

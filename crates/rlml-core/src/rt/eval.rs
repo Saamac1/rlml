@@ -1724,6 +1724,15 @@ impl World<'_> {
                     _ => Value::List(vec![]),
                 }
             }
+            // the camera's target, or the default without one (M 7.1)
+            "follow" => {
+                self.s.camera = match self.arg(&args, 1, "e") {
+                    Some(Value::Entity(e)) => Some(*e),
+                    Some(Value::None) | None => None,
+                    Some(other) => return Err(self.rt_err(env, pos, format!("`follow` takes an entity, not `{other}`"))),
+                };
+                Value::None
+            }
             // done at the action's end (M 5.3, M 5.5, M 6.1.7)
             "checkpoint" => {
                 self.saves.point = Some(super::world::Point::Checkpoint);

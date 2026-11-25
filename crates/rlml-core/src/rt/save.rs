@@ -665,7 +665,7 @@ impl Put for State {
         (self.party_each, (self.leash, self.seat_range)).put(w);
         (self.acting, self.last_player_map).put(w);
         w.line();
-        self.profile.put(w);
+        (&self.profile, self.camera).put(w);
         w.close();
     }
 }
@@ -692,9 +692,9 @@ impl Get for State {
         let (player, seats) = Get::get(r)?;
         let (party_each, (leash, seat_range)) = Get::get(r)?;
         let (acting, last_player_map) = Get::get(r)?;
-        let profile = Get::get(r)?;
+        let (profile, camera) = Get::get(r)?;
         r.close()?;
-        Ok(State { entities, game, maps, wakes, next_seq, decks, player, seats, party_each, acting, leash, seat_range, last_player_map, profile })
+        Ok(State { entities, game, maps, wakes, next_seq, decks, player, seats, party_each, acting, leash, seat_range, last_player_map, profile, camera })
     }
 }
 

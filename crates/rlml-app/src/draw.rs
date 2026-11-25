@@ -331,9 +331,14 @@ impl View {
         let group = span(|c| c.0).zip(span(|c| c.1));
         // a group that does not fit the area falls back to the player
         let fits = |(lo, hi): (i32, i32), size: i32| hi - lo + 1 <= size - 2 * margin(size);
-        let target = match group {
-            Some((x, y)) if fits(x, w) && fits(y, h) => Some((x, y)),
-            _ => player.map(|p| ((p.x, p.x), (p.y, p.y))),
+        let target = match world.s.camera {
+            // `follow(camera, e)`: its cell or its top holder's; a destroyed
+            // target leaves the camera where it was (M 7.1)
+            Some(e) => world.s.outer_at(e).filter(|p| p.map == map && world.s.get(e).alive).map(|p| ((p.x, p.x), (p.y, p.y))),
+            None => match group {
+                Some((x, y)) if fits(x, w) && fits(y, h) => Some((x, y)),
+                _ => player.map(|p| ((p.x, p.x), (p.y, p.y))),
+            },
         };
         let old = self.camera.get(&map).copied();
         let axis = |len: i32, size: i32, at: Option<(i32, i32)>, old: Option<i32>| -> i32 {

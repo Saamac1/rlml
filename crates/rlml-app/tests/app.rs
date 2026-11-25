@@ -1796,3 +1796,44 @@ fn a_loaded_game_asks_a_device_for_each_saved_seat() {
     assert_eq!(app.r.w.s.seat_of(pad_hero), None);
     assert!(app.r.w.s.get(pad_hero).has("STD.FOLLOW"), "as by `part`");
 }
+
+// ---- the camera's target (M 7.1, moninpeli vaihe 4) ----
+
+#[test]
+fn follow_camera_watches_a_rat_and_comes_back() {
+    let mut f = mini_with(|g| {
+        g.push_str(
+            "\n```roguescript\ncommand WATCH() cost 0:\n    follow(camera, (entities(in: tiles()) where it has STD.HP and it != player).last)\n    return true\n\n\
+             command HOME() cost 0:\n    follow(camera)\n    return true\n```\n",
+        );
+    });
+    let ui = f.game.get_mut("ui/main.rlml").unwrap();
+    *ui = ui.replace("- pass z", "- pass z\n- WATCH v\n- HOME b");
+    // a map area smaller than the cave, so the camera has somewhere to go
+    *ui = ui.replace("- m map\n", "- m map size 8x5\n");
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    app.draw();
+    let map = app.r.w.s.active_map().unwrap();
+    let home = app.view.camera[&map];
+    press(&mut app, "v");
+    let rat = app.r.w.s.camera.expect("WATCH set the target");
+    app.draw();
+    let p = app.r.w.s.at(rat).unwrap();
+    let (cx, cy) = app.view.camera[&map];
+    assert!((cx..cx + 8).contains(&p.x) && (cy..cy + 5).contains(&p.y), "the rat at {p:?} is in view from {:?}", (cx, cy));
+    assert_ne!((cx, cy), home, "the camera moved to the rat");
+    // the target goes with a save (M 7.1)
+    let save = rlml_core::rt::save::Save::read(&app.r.save().write()).unwrap();
+    assert_eq!(save.now.s.camera, Some(rat));
+    // a destroyed target leaves the camera where it was
+    let env = Env::new(BodyKind::Handler, "test", None, "test");
+    app.r.w.destroy(rat, &env).unwrap();
+    app.draw();
+    assert_eq!(app.view.camera[&map], (cx, cy));
+    // `follow(camera)` gives back the default: the player
+    press(&mut app, "b");
+    assert_eq!(app.r.w.s.camera, None);
+    app.draw();
+    assert_eq!(app.view.camera[&map], home);
+}

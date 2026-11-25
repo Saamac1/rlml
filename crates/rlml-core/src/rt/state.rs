@@ -243,6 +243,9 @@ pub struct State {
     /// The session's view of the profile (M 5.6): its snapshot at the
     /// start and the session's own writes.
     pub profile: Vec<ComponentValue>,
+    /// The camera's target from `follow(camera, e)`, or `None` for the
+    /// default: the group, or `player` (M 7.1).
+    pub camera: Option<EntityId>,
 }
 
 impl State {
@@ -302,6 +305,20 @@ impl State {
 
     /// `e.at`: the cell, or in a collection the topmost holder's cell
     /// (M 3.4).
+    /// The cell `e` is in, or for an instance in a collection its top
+    /// holder's: where the camera follows it (M 7.1).
+    pub fn outer_at(&self, e: EntityId) -> Option<Pos> {
+        let mut x = e;
+        for _ in 0..=self.entities.len() {
+            match &self.get(x).place {
+                Place::Map(p) => return Some(*p),
+                Place::In { holder, .. } => x = *holder,
+                Place::Nowhere => return None,
+            }
+        }
+        None
+    }
+
     pub fn at(&self, e: EntityId) -> Option<Pos> {
         let mut cur = e;
         for _ in 0..=self.entities.len() {
