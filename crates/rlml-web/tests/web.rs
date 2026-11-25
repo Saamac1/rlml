@@ -381,3 +381,45 @@ fn saves_outlive_the_page() {
     g.restart().unwrap();
     assert_eq!(g.app.saves.as_ref().unwrap().list().len(), 1);
 }
+
+/// The scene example published at `kohtaus/` beside the minigame.
+fn kohtaus() -> rlml_core::load::MemFiles {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let (mut g, mut e) = (vec![], vec![]);
+    read_tree(
+        &repo.join("esimerkit/kohtaus"),
+        &repo.join("esimerkit/kohtaus"),
+        &mut g,
+    );
+    read_tree(&repo, &repo.join("lib"), &mut e);
+    rlml_web::bundle::files(g, e)
+}
+
+#[test]
+fn the_scene_example_plays_in_the_workers_loop() {
+    let m = Box::leak(Box::new(
+        rlml_web::bundle::load(&kohtaus(), "game.rlml").unwrap(),
+    ));
+    let mut g = Game::new(m, 7, (60, 24)).unwrap();
+    assert!(g.app.r.in_scene(), "the Guardian of the Gates asks a name");
+    // a name, the spectacles, and Dorothy's turn
+    for k in ["enter", "enter", "enter"] {
+        g.push(Event::Key(parse_binding(k).unwrap()));
+        g.step(Duration::from_millis(10)).unwrap();
+    }
+    assert!(g.app.players_turn());
+    // the patrol walks on the rounds while Dorothy waits
+    let soldier = |g: &Game| {
+        let s = &g.app.r.w.s;
+        (0..s.entities.len())
+            .find(|&e| s.get(e).alive && s.get(e).kind.ends_with("SOLDIER"))
+            .and_then(|e| s.at(e))
+    };
+    let start = soldier(&g);
+    for i in 0..4 {
+        g.push(Event::Key(parse_binding("s").unwrap()));
+        g.step(Duration::from_millis(100 + i * 100)).unwrap();
+        while g.next_frame().is_some() {}
+    }
+    assert_ne!(soldier(&g), start, "PATROL, a background scene");
+}

@@ -1,6 +1,7 @@
-# The STD minigame in the browser on GitHub Pages: every push to main is
-# tested, built with crates/rlml-web/build.sh and published to the
-# gh-pages branch, which Pages serves at https://saamac1.github.io/rlml/.
+# The STD minigame and the scene example in the browser on GitHub Pages:
+# every push to main is tested, built with crates/rlml-web/build.sh and
+# published to the gh-pages branch, which Pages serves at
+# https://saamac1.github.io/rlml/ and https://saamac1.github.io/rlml/kohtaus/.
 # The branch holds only the last build.
 name: Pages
 
@@ -52,13 +53,18 @@ jobs:
       - name: Publish to gh-pages
         run: |
           site=$(mktemp -d)
-          cd crates/rlml-web/www
-          cp -r index.html main.js worker.js game.json pkg "$site"/
+          www=crates/rlml-web/www
+          cp -r $www/index.html $www/main.js $www/worker.js $www/game.json $www/pkg "$site"/
+          # the scene example beside it: the same page and module, its own
+          # game, and its saves in a folder of its own name
+          mkdir "$site/kohtaus"
+          cp -r $www/index.html $www/main.js $www/worker.js $www/pkg "$site/kohtaus"/
+          crates/rlml-web/bundle.sh esimerkit/kohtaus "$site/kohtaus/game.json"
           cd "$site"
           touch .nojekyll
           git init -q -b gh-pages
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -q -m "The STD minigame in the browser, built from main ${GITHUB_SHA::7}"
+          git commit -q -m "The STD minigame and the scene example in the browser, built from main ${GITHUB_SHA::7}"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" gh-pages
