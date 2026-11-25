@@ -1667,6 +1667,31 @@ impl World<'_> {
                     _ => Value::List(vec![]),
                 }
             }
+            // done at the action's end (M 5.3, M 5.5, M 6.1.7)
+            "checkpoint" => {
+                self.saves.point = Some(super::world::Point::Checkpoint);
+                Value::None
+            }
+            "rollback" => {
+                self.saves.point = Some(super::world::Point::Rollback);
+                Value::None
+            }
+            "autosave" => {
+                self.saves.autosave = true;
+                Value::None
+            }
+            "delete_save" => {
+                match &a0 {
+                    Value::Name(n) if n == "checkpoint" => self.saves.delete_checkpoint = true,
+                    Value::Name(n) if n == "auto" => self.saves.delete_auto = true,
+                    Value::All => {
+                        self.saves.delete_checkpoint = true;
+                        self.saves.delete_auto = true;
+                    }
+                    other => return Err(self.rt_err(env, pos, format!("`delete_save` takes `checkpoint`, `auto` or `all`, not `{other}` (M 5.5)"))),
+                }
+                Value::None
+            }
             "text_of" => {
                 // a key's text in the chosen language with its named
                 // arguments as placeholders; a name, number or entity

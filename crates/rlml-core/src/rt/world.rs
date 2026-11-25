@@ -43,6 +43,9 @@ pub struct World<'m> {
     pub sounds: Vec<Noise>,
     /// Travels waiting for the action's end (M 6.1.7).
     pub travels: Vec<Travel>,
+    /// `checkpoint`, `rollback`, `delete_save` and `autosave` calls waiting
+    /// for the action's end (M 6.1.7 steps 2–5).
+    pub saves: SaveCalls,
     /// Nested calls and events now (M 6.2, `game.call_depth`).
     pub depth: u32,
     /// The active map's change at the microstep's end: from and to.
@@ -67,6 +70,26 @@ pub struct World<'m> {
     /// which cannot change the state: `in_view` reads it instead of
     /// casting the view again for each call (M 7.7).
     pub(crate) held_view: Option<(MapId, std::collections::BTreeSet<(i32, i32)>)>,
+}
+
+/// The save calls of an action, done at its end (M 6.1.7).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SaveCalls {
+    /// `checkpoint()` or `rollback()`: the last of them in the action
+    /// decides (M 5.3).
+    pub point: Option<Point>,
+    /// `delete_save(checkpoint)`, or the checkpoint part of `all`.
+    pub delete_checkpoint: bool,
+    /// `delete_save(auto)`, or that part of `all`; saving comes later.
+    pub delete_auto: bool,
+    /// `autosave()`; saving comes later.
+    pub autosave: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Point {
+    Checkpoint,
+    Rollback,
 }
 
 /// A `log` call: the message key and its text arguments.
@@ -108,7 +131,7 @@ impl<'m> World<'m> {
     pub fn new(m: &'m Model, seed: u64) -> World<'m> {
         let mut s = State::default();
         s.game.seed = seed;
-        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area(), looks: Default::default(), flags: Default::default(), held_view: None }
+        World { m, s, rng: Rng::from_seed(seed), created: vec![], warnings: vec![], log: vec![], sounds: vec![], travels: vec![], saves: SaveCalls::default(), depth: 0, switch: None, sounds_made: 0, heard_mark: Default::default(), heard: Default::default(), last_view: None, map_area: m.map_area(), looks: Default::default(), flags: Default::default(), held_view: None }
     }
 
     fn component_ns(&self, full: &str) -> Option<String> {

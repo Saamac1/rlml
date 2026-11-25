@@ -78,6 +78,15 @@ Alla on alkuperäinen tehtävälista.
 
 ### 2. Checkpoint ja rollback muistissa
 
+Tehty 25.11.2026:
+- **Toteutus.** `rt::checkpoint` sisältää `Snapshot`-kuvan (tila, virta, kuulo, viimeinen näkökenttä, odottavat komennot ja `woke`) ja toiminnon lopun vaiheet 2–4. `checkpoint()`, `rollback()`, `delete_save()` ja `autosave()` kerätään toiminnon aikana `World::saves`-kenttään.
+- **Checkpoint 0** otetaan `Runner::new`-kutsussa `begin`-käsittelijöiden jälkeen.
+- **Vaiheen sivulöydös.** Kun jäsenen vuoro päättyi jo `wake`-tapahtumaan, toiminnon loppua ei tehty. Nyt se tehdään, joten esimerkiksi myrkkykuoleman `rollback` ei odota seuraavan toimijan toimintoa.
+- **Speksiin** lisättiin, että viestiloki ei palaa checkpointin mukaiseksi (M 5.3).
+- **Testit** ovat tiedostossa `crates/rlml-core/tests/checkpoint.rs`: kuolema ja alttari, checkpoint 0, saman toiminnon järjestys, `delete_save(checkpoint)`, ryhmän ohjattava ja toisto rollbackin yli.
+
+Alla on alkuperäinen tehtävälista.
+
 - Toiminnon loppuun lisätään vaiheet 2–4 (M 6.1.7): `rollback`, `checkpoint` ja `delete_save(checkpoint)` tässä järjestyksessä siirtojen ja istuinten jälkeen. Jos samassa toiminnossa kutsutaan kumpaakin, viimeinen pyyntö ratkaisee.
 - `Snapshot` sisältää `State`-tilan, pelin virran, kuulon ja viimeisimmän näkymän sekä `Runner`-ajurin `waiting`- ja `woke`-kentät. Se on kloonattu arvo. Checkpoint 0 otetaan `begin`-käsittelijöiden jälkeen.
 - `rollback()` palauttaa tilan. Istuimet, jotka on liitetty checkpointin jälkeen, säilyvät tyhjinä (M 5.3). Esityksen tila (`travels`, `orders`) tyhjennetään. Ilman checkpointia (`delete_save(checkpoint)`) rollback kirjaa ajon varoituksen.

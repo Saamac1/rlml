@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (checkpoint):** `rollback()` ei palauta viestilokia, ja se päättää matkat ja ennakkokäskyt (luku [5.3](05-aloitus-tallennus-ja-checkpointit.md#53-checkpointit)).
+
 **Muutokset 25.11.2026 (syöteloki, toteutus):** toteutus tarkensi lukua [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki):
 - Kierrokset ilman vuoroa eivät ole rivejä. Rivin hetki kertoo, mihin asti toisto ajaa kierroksia, ja loki päättyy `end`-riviin. `pass`-riviä ei ole.
 - `idle` kirjataan ajettuna komentona, koska se on pelaajan asetus.

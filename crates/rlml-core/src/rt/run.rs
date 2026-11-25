@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 
 use super::eval::{BodyKind, Env, Outcome, Scope, Suspended};
+use super::checkpoint::Snapshot;
 use super::input::InputLog;
 use super::state::{SeatId, Wake};
 use super::travel::{Order, Travel, TravelFields};
@@ -40,9 +41,9 @@ pub struct Runner<'m> {
     /// its `wake` (M 6.1.5). This rests on wake sequence numbers never
     /// repeating in a session: loading a save must keep `next_seq`, or
     /// clear this map.
-    woke: BTreeMap<EntityId, Wake>,
+    pub(crate) woke: BTreeMap<EntityId, Wake>,
     /// The seat whose input the scheduler waits for (M 8.2).
-    awaiting: Option<SeatId>,
+    pub(crate) awaiting: Option<SeatId>,
     /// Travels by seat: click travel and following (M 8.1). Not state.
     pub travels: BTreeMap<SeatId, Travel>,
     /// Orders given on other seats' turns, by seat (M 8.1). Not state.
@@ -51,6 +52,9 @@ pub struct Runner<'m> {
     pub fields: TravelFields,
     /// The input run so far (M 4.4).
     pub inputs: InputLog,
+    /// The last checkpoint (M 5.3); checkpoint 0 is the state the runner
+    /// starts from, after `begin`. `delete_save(checkpoint)` removes it.
+    pub checkpoint: Option<Box<Snapshot>>,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -61,7 +65,12 @@ impl<'m> Runner<'m> {
     pub fn new(w: World<'m>) -> Runner<'m> {
         let fields = TravelFields::read(w.m);
         let inputs = InputLog { seed: w.s.game.seed, seats: w.s.seats.len() as SeatId, ..InputLog::default() };
-        Runner { w, waiting: BTreeMap::new(), woke: BTreeMap::new(), awaiting: None, travels: BTreeMap::new(), orders: BTreeMap::new(), fields, inputs }
+        let mut r = Runner { w, waiting: BTreeMap::new(), woke: BTreeMap::new(), awaiting: None, travels: BTreeMap::new(), orders: BTreeMap::new(), fields, inputs, checkpoint: None };
+        // calls in `begin` are its own: checkpoint 0 is taken here anyway
+        r.w.saves = Default::default();
+        r.w.see();
+        r.checkpoint = Some(Box::new(r.snapshot()));
+        r
     }
 
     /// The seat whose input is awaited, after `run` returned `Input`.
@@ -145,7 +154,9 @@ impl<'m> Runner<'m> {
                         self.wake_event(e)?;
                         // `wake` may end the turn: the member died or stopped acting
                         if self.w.s.wake_of(e) != Some(wake) {
+                            // the turn ended in `wake`, and so did the action
                             self.woke.remove(&e);
+                            self.end_action()?;
                             continue;
                         }
                     }
@@ -222,7 +233,9 @@ impl<'m> Runner<'m> {
     fn end_action(&mut self) -> RtResult<()> {
         self.w.end_action()?;
         let env = engine_env("<action end>");
-        self.w.flush_created(&env)
+        self.w.flush_created(&env)?;
+        self.save_calls();
+        Ok(())
     }
 
     /// An actor's turn that is not the player's choice (M 6.1.5): `wake`,
