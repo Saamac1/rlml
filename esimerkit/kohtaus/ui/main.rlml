@@ -1,0 +1,43 @@
+# Käyttöliittymä
+
+> Kartta ja sen alla loki, johon tulevat myös `say`-repliikit (`SPEECH`)
+> ja sotilaan ilmoitukset. Dialogit ja valinnat näkyvät moottorin
+> ikkunoina kartan päällä (M 7.4 ja 7.5).
+
+layout MAIN
+
+```
+m
+l
+```
+
+legend:
+- m map
+- l LOG size.height 4 read
+
+log LOG history 50
+- STD.MESSAGE.COMBAT
+- SPEECH
+- SOLDIER
+
+menu PAUSE
+- RESUME
+- SAVE save
+- QUIT
+
+menu HOME final
+- NEW_GAME new_game
+- EXIT
+
+## Näppäimet
+
+keys ALWAYS
+- open PAUSE esc
+
+keys GAME
+- MOVE.NORTH k up
+- MOVE.SOUTH j down
+- MOVE.WEST h left
+- MOVE.EAST l right
+- WAIT s
+- pass z

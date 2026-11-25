@@ -1,0 +1,36 @@
+# Valtaistuinsali
+
+> Salin pohjoispäässä valtaistuimella leijuu suuri pää `O`.
+> Variksenpelätin `v` odottaa salissa, ja länsinurkassa on sermi `H`.
+> Ovi `=` vie pihalle, jossa ilmapallo `$` odottaa. Vihreäpartainen
+> sotilas `G` kulkee vartiopaikkojen `a` ja `b` väliä (`PATROL`), ja
+> soihdut `i` sykkivät, kun pää hehkuu (`HEAD_GLOWS`).
+
+map THRONE_ROOM
+
+```
+###############
+#i.....O.....i#
+#.............#
+#...v.........#
+#a.....S.....b#
+#.............#
+#H....G.......#
+#######=#######
+#.....$$$.....#
+###############
+```
+
+legend:
+- # WALL
+- . FLOOR
+- S FLOOR as START
+- O FLOOR with OZ_HEAD
+- v FLOOR with SCARECROW
+- H FLOOR with SCREEN
+- G FLOOR with SOLDIER as SOLDIER_POST
+- a FLOOR as POST_A
+- b FLOOR as POST_B
+- i FLOOR as TORCH
+- = DOOR.closed as COURTYARD_DOOR
+- $ FLOOR as COURTYARD

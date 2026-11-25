@@ -1,0 +1,29 @@
+# ASCII-tyyli
+
+> Smaragdikaupungissa kaikki näyttää vihreältä, koska portinvartija
+> lukitsi vihreät lasit jokaisen silmille.
+
+colors
+- EMERALD 2f8f5f
+- DARK 0f1f17
+- FLOOR_GREEN 3a5a48
+- GOLD e0c050
+- STRAW d8c070
+
+tiles.glyphs ascii
+- default ? fg ff00ff
+- WALL # fg EMERALD bg DARK
+- FLOOR . fg FLOOR_GREEN
+- DOOR.closed + fg EMERALD
+- DOOR.open ' fg EMERALD
+- GLYPH.DOROTHY @ fg ffffff
+- GLYPH.HEAD O fg GOLD
+- GLYPH.SCARECROW v fg STRAW
+- GLYPH.SCREEN H fg EMERALD
+- GLYPH.SOLDIER G fg 60c060
+- GLYPH.SPECTACLES 8 fg EMERALD
+
+layers
+- GROUND map
+- THINGS entities where it has render
+- FOG fog

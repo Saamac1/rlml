@@ -1,0 +1,117 @@
+# Kohtaukset
+
+> RS 9:n esimerkkien rakenne Ozin tarinana. Erot speksin esimerkkeihin:
+> tehtävän tila on `game.STORY`-komponentin kentissä, säädettävä kohta
+> (`adjust`) ja kauppa (`open SHOP.BUY`) puuttuvat, ja aikajanoista puuttuu
+> ääni (`play`), koska pelissä ei ole äänitiedostoja. Aikajanan rivi on
+> aina kutsu, joten tila asetetaan funktioilla (`UNMASK`).
+
+messages
+- SOLDIER.ALL_CLEAR
+
+```roguescript
+// ---- käynnistys ----
+
+on begin() as AT_THE_GATES:
+    start(GUARDIAN(player))
+
+on BUMP(who, other) as SPEAK_TO_OZ when who == player and other has OZ_MARK:
+    start(OZ.TALK(other))
+
+on BUMP(who, other) as ASK_SCARECROW when who == player and other has SUSPICION:
+    start(SCARECROW.TALK(other))
+
+on BUMP(who, other) as TOTO_AND_THE_SCREEN when who == player and other has SCREEN_MARK and not game.STORY.unmasked:
+    start(SCREEN_FALLS(other))
+
+on arrive(who, map, p) as START_PATROL when who == player and map == THRONE_ROOM:
+    s = entities(in: label(SOLDIER_POST)).first
+    start(PATROL(s), scope: map, bind: s)
+
+after enter(who, p, prev) as TO_THE_BALLOON when who == player and p in label(COURTYARD):
+    start(BALLOON())
+
+// ---- portinvartija (RS 9.7: syöte korutiinissa) ----
+
+scene GUARDIAN(hero: entity):
+    say(GUARDIAN.HALT)
+    hero_name = wait text(16)
+    if hero_name != none:
+        add(hero, name(text: hero_name))
+    GIVE(hero, SPECTACLES)
+    say(GUARDIAN.SPECTACLES)
+
+// ---- Oz (RS 9.7: dialogi) ----
+
+scene OZ.TALK(speaker: entity):
+    say(OZ.WHO_ARE_YOU, speaker: speaker)
+    choice:
+        HOME hide when game.STORY.promised:
+            game.STORY.promised = true
+            say(OZ.THE_PRICE, speaker: speaker)
+            start(HEAD_GLOWS())
+        WITCH disabled when not game.STORY.promised:
+            say(OZ.NO_MORE, speaker: speaker)
+        BYE:
+            return
+
+// ---- Variksenpelätin (RS 9.7: aiempi valinta avaa myöhemmän kohdan) ----
+
+query SUSPICION_TEXT(s: entity) -> name:
+    if not game.STORY.promised:
+        return SCARECROW.NOT_YET
+    return SCARECROW.THE_SCREEN
+
+scene SCARECROW.TALK(speaker: entity):
+    choice:
+        THINK:
+            speaker.SUSPICION.noticed = true
+            say(SCARECROW.THINKING, speaker: speaker)
+        BYE:
+            return
+    choice:
+        WHAT hide when not speaker.SUSPICION.noticed:
+            say(SUSPICION_TEXT(speaker), speaker: speaker)
+        BYE:
+            return
+
+// ---- sermi (RS 9.1: aikajana, kestot, merkki ja ehto) ----
+
+fn UNMASK():
+    game.STORY.unmasked = true
+
+scene SCREEN_FALLS(screen: entity) timeline:
+    0000ms        say(TOTO.JUMPS)
+    0000ms 0500ms shake(camera, strength: 1)
+    0500ms 1000ms destroy(screen)
+    1500ms        mark REVEAL
+    REVEAL        say(OZ.HUMBUG)
+    REVEAL        when game.STORY.promised: say(OZ.CONFESSES)
+    REVEAL+1s     UNMASK()
+    REVEAL+1s     tile(label(COURTYARD_DOOR), DOOR.open)
+    REVEAL+1s     say(OZ.THE_BALLOON)
+
+// ---- pää hehkuu (RS 9.3: raidat ja silmukka) ----
+
+scene HEAD_GLOWS() timeline:
+    track TORCHES loop 2s:
+        0000ms 1000ms fade(light(label(TORCH)), to: 60%)
+        1000ms 1000ms fade(light(label(TORCH)), to: 100%)
+    track ACTION:
+        0000ms        say(OZ.SPEAKS)
+        1000ms 2000ms pan(camera, to: label(COURTYARD_DOOR))
+
+// ---- sotilas (RS 9.9: taustakohtaus pelin ajassa) ----
+
+scene PATROL(soldier: entity) timeline background:
+    track ROUTE loop 12:
+        00 02 move(soldier, to: label(POST_A))
+        05 02 move(soldier, to: label(POST_B))
+        10    log(SOLDIER.ALL_CLEAR, speaker: soldier)
+
+// ---- ilmapallo (RS 9: korutiini, joka päättyy valikkoon) ----
+
+scene BALLOON():
+    say(BALLOON.READY)
+    open HOME()
+```

@@ -1,0 +1,49 @@
+# Kohtaus: Ozin valtaistuinsali
+
+> Kohtausten ja dialogien esimerkki (RS 9, `RLML-kohtaukset.md`).
+> Tarina on L. Frank Baumin kirjasta *The Wonderful Wizard of Oz* (1900,
+> luvut 10–15), joka on vapaa tekijänoikeudesta. Repliikit ovat tämän
+> esimerkin omia. Pelaaja on Dorothy, ja hän tulee Smaragdikaupungin
+> valtaistuinsaliin pyytämään pääsyä kotiin Kansasiin.
+>
+> | Kohtaus | Laji | Missä |
+> | --- | --- | --- |
+> | `GUARDIAN` | korutiini: nimi tekstikentästä | pelin alussa (`begin`) |
+> | `OZ.TALK` | dialogi: `hide when`, `disabled when` ja `say` | suurta päätä päin kävellessä |
+> | `SCARECROW.TALK` | dialogi: aiempi valinta avaa myöhemmän kohdan | Variksenpelätintä päin kävellessä |
+> | `SCREEN_FALLS` | aikajana: rivit, kestot, merkki ja ehto | sermiä päin kävellessä |
+> | `HEAD_GLOWS` | aikajana: raidat ja silmukka | kun Oz antaa tehtävän |
+> | `PATROL` | taustakohtaus pelin ajassa | salissa koko ajan |
+> | `BALLOON` | korutiini, joka päättyy valikkoon (`open`) | pihalle astuessa |
+>
+> Tavoite: puhu Ozille, kysy Variksenpelättimeltä, mitä nurkassa liikkuu,
+> kaada sermi ja astu pihalle ilmapallon luo. Moottori ajaa kohtaukset
+> vasta, kun ne on toteutettu (`RLML-kohtaukset.md`); siihen asti peli
+> latautuu ja tarkistuu.
+
+game KOHTAUS
+- start THRONE_ROOM
+- at START
+- keys GAME
+- PLAYER DOROTHY
+- STORY
+
+profile KOHTAUS
+
+include lib/std.rlml
+include maps/*
+include ui/*
+include style/*
+include text/*
+include logic/*
+
+settings
+- style ascii
+- language fi
+- round 250ms
+
+tiles
+- WALL blocks move sight sound
+- DOOR.closed blocks move sight
+- DOOR.open
+- default blocks none lit

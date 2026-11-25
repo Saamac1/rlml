@@ -1,0 +1,44 @@
+# Olennot
+
+> Pää, Variksenpelätin ja sermi estävät liikkeen, joten niitä päin
+> kävely on vakiokirjaston törmäys (`STD.BUMP`, `logic/kohtaukset.rlml`).
+> Sotilas kulkee taustakohtauksessa eikä tarvitse tekoälyä. Toto on
+> Dorothyn sylissä eikä oma entiteettinsä: hän näkyy vain sermin
+> kohtauksessa (`SCREEN_FALLS`), jossa juuri hän kaataa sermin.
+
+entity DOROTHY extends STD.DEFAULT.PLAYER
+- render GLYPH.DOROTHY
+
+entity OZ_HEAD
+- render GLYPH.HEAD
+- blocks move
+- OZ_MARK
+
+entity SCARECROW
+- render GLYPH.SCARECROW
+- blocks move
+- SUSPICION
+
+entity SCREEN
+- render GLYPH.SCREEN
+- blocks move sight
+- SCREEN_MARK
+
+entity SOLDIER
+- render GLYPH.SOLDIER
+- blocks move
+
+entity SPECTACLES
+- render GLYPH.SPECTACLES
+- STD.ITEM
+
+component OZ_MARK
+
+component SCREEN_MARK
+
+component SUSPICION
+- noticed bool default false
+
+component STORY
+- promised bool default false
+- unmasked bool default false

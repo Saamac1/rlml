@@ -1,0 +1,48 @@
+language fi
+
+> Pelin tekstit. Repliikit ovat tämän esimerkin omia, ja tarina on Baumin
+> kirjasta (1900). Dialogin kohdat ovat avaimia `<KOHTAUS>.<KOHTA>`, kuten
+> valikon kohdat (RS 9.7).
+
+DOROTHY.NAME Dorothy
+OZ_HEAD.NAME suuri pää
+SCARECROW.NAME Variksenpelätin
+SCREEN.NAME sermi
+SOLDIER.NAME vihreäpartainen sotilas
+SPECTACLES.NAME vihreät lasit
+
+GUARDIAN.HALT Seis! Kukaan ei astu Smaragdikaupunkiin ilman nimeä. Kuka olet?
+GUARDIAN.SPECTACLES Nämä lasit lukitaan silmillesi, ettei kaupungin loisto sokaise sinua.
+
+OZ.WHO_ARE_YOU Minä olen Oz, suuri ja kauhea. Kuka sinä olet, ja mitä haet?
+OZ.TALK.HOME Haluan kotiin Kansasiin.
+OZ.TALK.WITCH Kerro vielä noidasta.
+OZ.TALK.BYE Lähden nyt.
+OZ.THE_PRICE Mikään ei ole ilmaista. Kukista Lännen noita, niin lähetän sinut kotiin.
+OZ.NO_MORE Olen sanonut sanottavani. Mene!
+OZ.SPEAKS Pää hehkuu, ja ääni kaikuu holvissa.
+OZ.HUMBUG Sermin takana seisoo pieni, kalju vanha mies, joka katsoo sinua yhtä säikähtäneenä kuin sinä häntä.
+OZ.CONFESSES Älä huuda. Olen vain tavallinen mies. Pää on paperia ja ääni kurkustani.
+OZ.THE_BALLOON Pihalla odottaa ilmapallo. Sillä lähdetään.
+
+SCARECROW.TALK.THINK Mitä ajattelet?
+SCARECROW.TALK.WHAT Mitä nurkassa liikkuu?
+SCARECROW.TALK.BYE Mennään.
+SCARECROW.THINKING Minulla ei ole aivoja, mutta ajatella osaan silti.
+SCARECROW.NOT_YET Puhu ensin Ozin kanssa. Sitten katsotaan.
+SCARECROW.THE_SCREEN Sermin takana kuului köhäisy. Päät eivät köhi.
+
+TOTO.JUMPS Toto haukahtaa ja hyppää sermiä vasten.
+
+SOLDIER.ALL_CLEAR Sotilas: salissa on kaikki hyvin.
+
+BALLOON.READY Ilmapallo nykii köysissään. Kansas odottaa.
+
+PAUSE.TITLE Tauko
+PAUSE.RESUME Jatka
+PAUSE.SAVE Tallenna
+PAUSE.QUIT Lopeta
+
+HOME.TITLE Kotiin
+HOME.NEW_GAME Uusi peli
+HOME.EXIT Poistu
