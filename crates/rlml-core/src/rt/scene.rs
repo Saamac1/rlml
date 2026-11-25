@@ -16,6 +16,7 @@ use super::input::Act;
 use super::rng::{Rng, mix, mix_name};
 use super::run::Runner;
 use super::state::{QueuedScene, SeatId};
+use super::timeline::{TimelineRun, TlFlow};
 use super::value::{CommandValue, EntityId};
 use super::world::{Pause, RtResult};
 use crate::rs::ast::{ItemKind, Stmt};
@@ -25,6 +26,19 @@ use crate::rs::ast::{ItemKind, Stmt};
 struct Level {
     frames: Vec<Frame>,
     env: Env,
+    /// A timeline's rows and clock in place of frames (RS 9.1).
+    timeline: Option<Box<TimelineRun>>,
+}
+
+/// How far a timeline's clock goes when the scene runs on.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Clock {
+    /// The rows of the clock's moment only.
+    Now,
+    /// The front end's tick, in milliseconds.
+    Tick(i64),
+    /// To the next pause or the end, without a front end.
+    Out,
 }
 
 /// The foreground scene running now.
@@ -44,6 +58,8 @@ pub struct ActiveScene {
     pub seat: Option<SeatId>,
     /// The command that waits for it (M 6.1.6), woken when it ends.
     command: Option<EntityId>,
+    /// The player's answers so far, for `rewind` (RS 9.8).
+    answers: Vec<Act>,
 }
 
 impl<'m> Runner<'m> {
@@ -70,20 +86,33 @@ impl<'m> Runner<'m> {
             .w
             .decl_of(&call.name)
             .ok_or_else(|| format!("no scene `{}`", call.name))?;
-        let ItemKind::Scene { params, body } = &item.kind else {
-            return Err(format!("`{}` is not a coroutine scene", call.name));
-        };
         let mut env = Env::new(BodyKind::Scene, &call.name, ns.clone(), &file);
         env.map = map;
         env.actor = opener;
         env.rng = Some(rng);
-        self.w
-            .bind_params(params, call.args.clone(), &mut env, ns.as_deref(), item.pos)?;
-        let body: Vec<Stmt> = body.clone();
-        Ok(Level {
-            frames: vec![Frame::Block { stmts: body, i: 0 }],
-            env,
-        })
+        match &item.kind {
+            ItemKind::Scene { params, body } => {
+                self.w
+                    .bind_params(params, call.args.clone(), &mut env, ns.as_deref(), item.pos)?;
+                let body: Vec<Stmt> = body.clone();
+                Ok(Level {
+                    frames: vec![Frame::Block { stmts: body, i: 0 }],
+                    env,
+                    timeline: None,
+                })
+            }
+            ItemKind::Timeline { params, timeline } => {
+                self.w
+                    .bind_params(params, call.args.clone(), &mut env, ns.as_deref(), item.pos)?;
+                let run = self.w.timeline_new(timeline, &mut env)?;
+                Ok(Level {
+                    frames: vec![],
+                    env,
+                    timeline: Some(Box::new(run)),
+                })
+            }
+            _ => Err(format!("`{}` is not a scene", call.name)),
+        }
     }
 
     /// The scene's map (RS 9): the opener seat's controlled member's, or
@@ -148,6 +177,7 @@ impl<'m> Runner<'m> {
                         stack: vec![level],
                         seat,
                         command: None,
+                        answers: vec![],
                     }));
                     self.run_scene()?;
                 }
@@ -204,6 +234,7 @@ impl<'m> Runner<'m> {
                     stack: vec![level],
                     seat,
                     command: Some(e),
+                    answers: vec![],
                 }));
                 self.run_scene()
             }
@@ -224,9 +255,11 @@ impl<'m> Runner<'m> {
                     stack: vec![Level {
                         frames: vec![],
                         env,
+                        timeline: None,
                     }],
                     seat,
                     command: Some(e),
+                    answers: vec![],
                 }));
                 Ok(())
             }
@@ -251,6 +284,37 @@ impl<'m> Runner<'m> {
     /// Runs the scene on until it waits for the player or ends. Its end is
     /// an action's end: its travels, saves and the next queued scene.
     fn run_scene(&mut self) -> RtResult<()> {
+        self.run_scene_by(Clock::Now)
+    }
+
+    /// The scene's clock runs: a timeline stops at a `say`, at a `wait
+    /// confirm` and where the clock is (RS 9.5).
+    pub fn scene_clock_runs(&self) -> bool {
+        self.scene
+            .as_ref()
+            .is_some_and(|s| s.stack.last().is_some_and(|l| l.timeline.is_some()))
+            && self.w.pause.is_none()
+    }
+
+    /// The front end's tick: a running timeline's clock goes on `ms`
+    /// milliseconds.
+    pub fn scene_tick(&mut self, ms: i64) -> RtResult<()> {
+        if self.scene_clock_runs() {
+            self.run_scene_by(Clock::Tick(ms.max(0)))?;
+        }
+        Ok(())
+    }
+
+    /// Without a front end's clock the timeline runs to its next pause or
+    /// its end at once: the rows run in the same order (M 4.4).
+    pub fn scene_play_out(&mut self) -> RtResult<()> {
+        while self.scene_clock_runs() {
+            self.run_scene_by(Clock::Out)?;
+        }
+        Ok(())
+    }
+
+    fn run_scene_by(&mut self, mut clock: Clock) -> RtResult<()> {
         loop {
             let Some(scene) = self.scene.as_mut() else {
                 return Ok(());
@@ -264,13 +328,48 @@ impl<'m> Runner<'m> {
                 }
                 return self.end_action();
             };
-            let (mut frames, mut env) = (std::mem::take(&mut top.frames), top.env.clone());
-            let flow = self.w.run_frames(&mut frames, &mut env);
+            let flow = if let Some(mut run) = top.timeline.take() {
+                let mut env = top.env.clone();
+                let by = std::mem::replace(&mut clock, Clock::Now);
+                let to_end = Some(run.end.max(run.clock));
+                let until = match by {
+                    _ if self.w.scene_skipping => to_end,
+                    Clock::Now => None,
+                    Clock::Tick(ms) => Some(run.clock + ms),
+                    Clock::Out => to_end,
+                };
+                let flow = self.w.timeline_run(&mut run, &mut env, until);
+                let scene = self.scene.as_mut().expect("the scene runs");
+                let top = scene.stack.last_mut().expect("its level runs");
+                top.timeline = Some(run);
+                top.env = env;
+                match flow? {
+                    TlFlow::Pause => Flow::Pause,
+                    TlFlow::Sub(call) => Flow::Sub(call),
+                    TlFlow::Done => Flow::Done(None),
+                    // only loops are left: without a front end, or skipped,
+                    // the scene ends (RS 9.3)
+                    TlFlow::Running if by == Clock::Out || self.w.scene_skipping => {
+                        self.w.warnings.push(format!(
+                            "the timeline `{}` has only loops left: it ends without a front end's clock",
+                            top.env.name
+                        ));
+                        Flow::Done(None)
+                    }
+                    TlFlow::Running => return Ok(()),
+                }
+            } else {
+                let (mut frames, mut env) = (std::mem::take(&mut top.frames), top.env.clone());
+                let flow = self.w.run_frames(&mut frames, &mut env);
+                let scene = self.scene.as_mut().expect("the scene runs");
+                let top = scene.stack.last_mut().expect("its level runs");
+                top.frames = frames;
+                top.env = env;
+                flow?
+            };
             let scene = self.scene.as_mut().expect("the scene runs");
             let top = scene.stack.last_mut().expect("its level runs");
-            top.frames = frames;
-            top.env = env;
-            match flow? {
+            match flow {
                 Flow::Pause => return Ok(()),
                 Flow::Sub(call) => {
                     let (map, rng, opener) = (
@@ -321,7 +420,7 @@ impl<'m> Runner<'m> {
             return Ok(());
         }
         let seat = self.scene_seat();
-        self.record(seat, Act::SceneConfirm);
+        self.scene_answered(seat, Act::SceneConfirm);
         self.w.pause = None;
         self.run_scene()
     }
@@ -341,11 +440,80 @@ impl<'m> Runner<'m> {
     /// `restart`: the draft goes, and the scene runs from its start
     /// (RS 9.8).
     pub fn scene_restart(&mut self) -> RtResult<()> {
-        let Some(scene) = self.scene.take() else {
+        let Some(seat) = self.scene.as_ref().map(|s| s.seat.or(Some(1))) else {
+            return Ok(());
+        };
+        self.record(seat, Act::SceneRestart);
+        self.restart_quietly()
+    }
+
+    /// An answer to the scene: a row in the input log, and one of the
+    /// answers `rewind` gives again.
+    fn scene_answered(&mut self, seat: Option<SeatId>, act: Act) {
+        if !self.scene_silent {
+            self.record(seat, act.clone());
+        }
+        if let Some(scene) = self.scene.as_mut() {
+            scene.answers.push(act);
+        }
+    }
+
+    /// `rewind`: back to the previous line or choice (RS 9.8). The scene
+    /// starts again without a sound and is given its answers but the last,
+    /// so it is where it was then; the course is deterministic.
+    pub fn scene_rewind(&mut self) -> RtResult<()> {
+        let Some(scene) = self.scene.as_ref() else {
             return Ok(());
         };
         let seat = scene.seat.or(Some(1));
-        self.record(seat, Act::SceneRestart);
+        let mut answers = scene.answers.clone();
+        // a choice's moves stay in the choice: back to before it
+        while matches!(answers.last(), Some(Act::SceneAdjust(..))) {
+            answers.pop();
+        }
+        answers.pop();
+        self.record(seat, Act::SceneRewind);
+        self.scene_silent = true;
+        let done = self.answer_again(answers);
+        self.scene_silent = false;
+        // the quiet run is not shown
+        self.w.effects.clear();
+        done
+    }
+
+    fn answer_again(&mut self, answers: Vec<Act>) -> RtResult<()> {
+        self.restart_quietly()?;
+        for act in answers {
+            self.scene_play_out()?;
+            if !self.in_scene() {
+                break;
+            }
+            match act {
+                Act::SceneConfirm => self.scene_confirm()?,
+                Act::SceneChoose(n) => {
+                    self.scene_choose(&n)?;
+                }
+                Act::SceneAdjust(n, step) => {
+                    self.scene_adjust(&n, step)?;
+                }
+                Act::SceneAnswer(a) => {
+                    let v = a.value(&self.w.s)?;
+                    self.scene_answer(v)?;
+                }
+                Act::SceneClose => {
+                    self.scene_closed()?;
+                }
+                _ => {}
+            }
+        }
+        self.scene_play_out()
+    }
+
+    /// The scene from its start, its draft dropped, without a log row.
+    fn restart_quietly(&mut self) -> RtResult<()> {
+        let Some(scene) = self.scene.take() else {
+            return Ok(());
+        };
         self.restore(&scene.draft);
         self.w.log.truncate(scene.log_len);
         self.w.pause = None;
@@ -362,6 +530,7 @@ impl<'m> Runner<'m> {
         )?;
         self.scene = Some(Box::new(ActiveScene {
             stack: vec![level],
+            answers: vec![],
             ..*scene
         }));
         self.run_scene()
@@ -400,7 +569,7 @@ impl<'m> Runner<'m> {
             return Ok(false);
         };
         let seat = self.scene_seat();
-        self.record(seat, Act::SceneChoose(name.to_string()));
+        self.scene_answered(seat, Act::SceneChoose(name.to_string()));
         self.w.pause = None;
         if let crate::rs::ast::OptionBody::Block(body) = &option.body {
             let body = body.clone();
@@ -425,7 +594,7 @@ impl<'m> Runner<'m> {
         let moved = self.with_top(|w, _, env| w.adjust(&option, step, env))?;
         if moved {
             let seat = self.scene_seat();
-            self.record(seat, Act::SceneAdjust(name.to_string(), step.signum()));
+            self.scene_answered(seat, Act::SceneAdjust(name.to_string(), step.signum()));
             let items = self.with_top(|w, _, env| w.choice_items(&options, env))?;
             self.w.pause = Some(Pause::Choice {
                 scene,
@@ -454,7 +623,7 @@ impl<'m> Runner<'m> {
         };
         let seat = self.scene_seat();
         match super::input::Arg::of(&v, &self.w.s) {
-            Ok(a) => self.record(seat, Act::SceneAnswer(a)),
+            Ok(a) => self.scene_answered(seat, Act::SceneAnswer(a)),
             Err(e) => {
                 self.inputs.broken.get_or_insert(e);
             }
@@ -475,7 +644,7 @@ impl<'m> Runner<'m> {
             return Ok(false);
         };
         let seat = self.scene_seat();
-        self.record(seat, Act::SceneClose);
+        self.scene_answered(seat, Act::SceneClose);
         self.w.pause = None;
         if let Some(name) = into {
             self.with_top(|_, _, env| {

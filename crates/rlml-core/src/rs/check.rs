@@ -282,8 +282,11 @@ fn check_decl(
             b.params(params);
             for t in &timeline.tracks {
                 b.rows(&t.rows);
+                let len = t.looped.as_ref().map(literal_ms);
+                b.timeline_rows(&t.rows, len, !timeline.background);
             }
             b.rows(&timeline.rows);
+            b.timeline_rows(&timeline.rows, None, !timeline.background);
         }),
     }
     last
@@ -672,6 +675,84 @@ impl Body<'_> {
         }
         for a in args {
             self.expr(&a.value);
+        }
+    }
+
+    /// RS 9.1–9.3: a duration takes a call that shows or changes cells a
+    /// step at a time; a loop track has no marks, and its rows start and
+    /// end within its length; a state change in a loop is warned of, as a
+    /// skip leaves a foreground scene's loops out (RS 9.8). `looped` is the
+    /// loop's length when it is written as a time, else `Some(None)`.
+    fn timeline_rows(&mut self, rows: &[Row], looped: Option<Option<i64>>, fore: bool) {
+        for r in rows {
+            match r {
+                Row::Mark { pos, .. } if looped.is_some() => {
+                    self.error(*pos, "a loop track has no marks (RS 9.2)");
+                }
+                Row::Action {
+                    time,
+                    span,
+                    action: Action::Call(c),
+                    pos,
+                    ..
+                } => {
+                    if span.is_some() && !self.shows(c) {
+                        self.error(*pos, format!("`{c}` has nothing to show over a duration: a duration takes a presentation call, `move`, `tile`, `carve`, `spawn` or `destroy` (RS 9.1)"));
+                    }
+                    let Some(len) = looped else { continue };
+                    let start = match time {
+                        Some(Time::At(e)) => literal_ms(e),
+                        _ => None,
+                    };
+                    let span_ms = span.as_ref().map(literal_ms).unwrap_or(Some(0));
+                    if let (Some(len), Some(start), Some(span_ms)) = (len, start, span_ms)
+                        && (start >= len || start + span_ms > len)
+                    {
+                        self.error(*pos, format!("the row goes over its loop's length ({len}ms): it starts before the length and ends at it at the latest (RS 9.3)"));
+                    }
+                    if fore
+                        && let ExprKind::Call(f, _) = &c.kind
+                        && let ExprKind::Word(n) = &f.kind
+                        && matches!(sigs::kind_of(n), Some(sigs::FnKind::Changes))
+                    {
+                        self.errors.push(Diagnostic::warning(
+                            &self.decl.file,
+                            pos.line,
+                            format!("column {}: `{n}` changes the state in a loop track, and a skip leaves loops out (RS 9.8)", pos.col),
+                        ));
+                    }
+                }
+                Row::When {
+                    rows, otherwise, ..
+                } => {
+                    self.timeline_rows(rows, looped, fore);
+                    self.timeline_rows(otherwise, looped, fore);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Does a call show something, or change cells a step at a time, over
+    /// a timeline row's duration (RS 9.1)?
+    fn shows(&self, c: &Expr) -> bool {
+        let ExprKind::Call(f, _) = &c.kind else {
+            return false;
+        };
+        match &f.kind {
+            ExprKind::Word(n) => {
+                // `say` and `log` take no duration (RS 9.6)
+                matches!(n.as_str(), "move" | "tile" | "carve" | "spawn" | "destroy")
+                    || (sigs::kind_of(n) == Some(sigs::FnKind::Present) && !matches!(n.as_str(), "say" | "log"))
+            }
+            ExprKind::Name { name, .. } => self
+                .m
+                .resolve(self.decl.namespace.as_deref(), name)
+                .ok()
+                .is_some_and(|d| {
+                    matches!(&d.source, DefSource::Decl(x) if matches!(x.item.kind, ItemKind::Function { present: true, .. }))
+                }),
+            _ => false,
         }
     }
 
@@ -1907,5 +1988,13 @@ fn collect_assigned(body: &[Stmt], out: &mut BTreeSet<String>) {
             }
             _ => {}
         }
+    }
+}
+
+/// A time written as a literal, in milliseconds.
+fn literal_ms(e: &Expr) -> Option<i64> {
+    match &e.kind {
+        ExprKind::Time(ms, _) => Some(*ms as i64),
+        _ => None,
     }
 }

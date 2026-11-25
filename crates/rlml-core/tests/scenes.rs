@@ -180,7 +180,7 @@ fn a_scene_from_begin_waits_line_by_line() {
 }
 
 #[test]
-fn restart_drops_the_draft_and_skip_runs_the_rest_without_lines() {
+fn restart_drops_the_draft_and_skip_logs_the_rest_without_windows() {
     let m = model();
     let mut r = start(&m);
     r.run(0).unwrap();
@@ -216,11 +216,16 @@ fn restart_drops_the_draft_and_skip_runs_the_rest_without_lines() {
     r.scene_skip().unwrap();
     assert!(!r.in_scene(), "skipped to its end");
     assert_eq!(told(&r), 1, "the state changes ran");
-    assert!(
-        !r.w.log
-            .iter()
-            .any(|l| l.key == "LINE.TWO" || l.key == "LINE.NOTE"),
-        "lines and log messages were left out"
+    let keys: Vec<(&str, bool)> = r.w.log.iter().map(|l| (l.key.as_str(), l.speech)).collect();
+    assert_eq!(
+        keys,
+        [
+            ("LINE.ONE", true),
+            ("LINE.NOTE", false),
+            ("LINE.ASIDE", true),
+            ("LINE.TWO", true)
+        ],
+        "skipped lines and messages go to the log without a window (RS 9.8)"
     );
 }
 
@@ -550,4 +555,24 @@ fn open_waits_for_its_menu() {
         matches!(r.scene_pause(), Some(Pause::Say { key, .. }) if key == "KING.BYE"),
         "the scene goes on after the menu"
     );
+}
+
+#[test]
+fn rewind_goes_back_to_the_choice() {
+    let m = dialogue_model();
+    let mut r = begin_scene(&m, "TALK");
+    r.scene_confirm().unwrap();
+    assert!(r.scene_choose("QUEST").unwrap());
+    assert_eq!(quest(&r), 1);
+    assert!(matches!(r.scene_pause(), Some(Pause::Say { key, .. }) if key == "KING.THANKS"));
+    r.scene_rewind().unwrap();
+    assert_eq!(items(&r).len(), 3, "back at the choice (RS 9.8)");
+    assert_eq!(quest(&r), 0, "the choice's change went with it");
+    assert!(r.scene_choose("BYE").unwrap());
+    assert!(!r.in_scene());
+    r.run(0).unwrap();
+    let text = r.input_log().write().unwrap();
+    let got =
+        Replay::run(&m, &InputLog::read(&text).unwrap()).unwrap_or_else(|e| panic!("{e}\n{text}"));
+    assert!(got.w.s == r.w.s, "{text}");
 }

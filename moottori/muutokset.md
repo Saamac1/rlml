@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (aikajanat):** ohituksen hetkeä ei kirjata syötelokiin, koska ohitus kirjaa jäljellä olevat repliikit lokiin, ja toisto ajaa aikajanan kellon seuraavaan pysähdykseen (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)). Muisti ei päivity etualan kohtauksen aikana, ja päätteen `shake` ja `pan` (luku [7.2](07-esitys.md#72-kartan-piirtäminen)).
+
 **Muutokset 25.11.2026 (kohtaukset, vaihe 0):**
 - Syötelokin rivit kohtauksen vastauksille: `scene.confirm`, `scene.choose KOHTA`, `scene.adjust`, `scene.answer`, `scene.close`, `skip`, `restart` ja `rewind`. Aikajanan kello ei ole syöte (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)).
 - Sama kohtaus voi olla jonossa useaan kertaan (luku [6.1.7](06-ajo.md#617-toiminto)).

@@ -70,6 +70,8 @@ pub enum Act {
     SceneSkip,
     /// A scene from its start again (`restart`).
     SceneRestart,
+    /// `rewind` (RS 9.8).
+    SceneRewind,
     /// A choice's item (`scene.choose NAME`).
     SceneChoose(String),
     /// An `adjust` item moved (`scene.adjust NAME +1`).
@@ -216,6 +218,7 @@ impl fmt::Display for Row {
             Act::SceneConfirm => f.write_str(" scene.confirm"),
             Act::SceneSkip => f.write_str(" skip"),
             Act::SceneRestart => f.write_str(" restart"),
+            Act::SceneRewind => f.write_str(" rewind"),
             Act::SceneChoose(n) => write!(f, " scene.choose {n}"),
             Act::SceneAdjust(n, s) => write!(f, " scene.adjust {n} {s:+}"),
             Act::SceneAnswer(a) => write!(f, " scene.answer {a}"),
@@ -358,6 +361,7 @@ fn read_row(line: &str) -> Result<Row, String> {
         "scene.confirm" => Act::SceneConfirm,
         "skip" => Act::SceneSkip,
         "restart" => Act::SceneRestart,
+        "rewind" => Act::SceneRewind,
         "scene.close" => Act::SceneClose,
         "scene.choose" => {
             Act::SceneChoose(rest.first().ok_or("`scene.choose` takes an item")?.clone())
@@ -627,6 +631,7 @@ impl<'m> Replay<'m> {
             Act::SceneConfirm
             | Act::SceneSkip
             | Act::SceneRestart
+            | Act::SceneRewind
             | Act::SceneChoose(_)
             | Act::SceneAdjust(..)
             | Act::SceneAnswer(_)
@@ -638,6 +643,7 @@ impl<'m> Replay<'m> {
                     Act::SceneConfirm => self.r.scene_confirm().map(|_| true),
                     Act::SceneSkip => self.r.scene_skip().map(|_| true),
                     Act::SceneRestart => self.r.scene_restart().map(|_| true),
+                    Act::SceneRewind => self.r.scene_rewind().map(|_| true),
                     Act::SceneChoose(n) => self.r.scene_choose(n),
                     Act::SceneAdjust(n, s) => self.r.scene_adjust(n, *s),
                     Act::SceneAnswer(a) => {

@@ -14,6 +14,7 @@ pub mod scene;
 pub mod senses;
 pub mod state;
 pub mod store;
+pub mod timeline;
 pub mod travel;
 pub mod value;
 pub mod verbs;

@@ -148,6 +148,39 @@ Alla on alkuperäinen tehtävälista.
 
 ### 4. Aikajanat etualalla
 
+Tehty 25.11.2026 haarassa `claude/kohtaukset-4`:
+- **Kello ja rivit (`rt::timeline`).**
+  - Rivien ajat lasketaan kerran, kun kohtaus alkaa: alku, `+`-aika, merkki ja peritty aika.
+  - Rivit järjestetään ajan, raidan ja kirjoitusjärjestyksen mukaan.
+  - `when … else` on portti: sen ehto luetaan, kun kello saavuttaa sen, ja lohkon rivit ajetaan vain valitulta puolelta.
+- **Raidat ja silmukat.** Silmukkaraidat kulkevat rinnalla, ja `stop(track:)` pysäyttää silmukan. Kohtaus päättyy, kun kaikki silmukattomat raidat ovat valmiita. Kohtaus, jossa on pelkkiä silmukoita, päättyy varoituksella ilman käyttöliittymän kelloa.
+- **Tweenit.**
+  - `move` laskee reitin kerran (`via: line` suoraan), ja este pysäyttää sen.
+  - `tile` ja `carve` joukolle vaihtavat ruudun kerrallaan, `from:`-argumentilla lähimmästä alkaen.
+  - Askeleen hetki on alku + ⌈(2i − 1)·D / 2N⌉, ja se on kirjattu lukuun RS 9.1.
+  - `tile` ja `carve` toteutettiin samalla, koska niitä ei ollut ajossa.
+- **Kello.**
+  - Sovellus vie kelloa `tick`-kutsuissa (`Runner::scene_clock`, `scene_tick`), ja `say` pysäyttää sen.
+  - Ilman käyttöliittymän kelloa (toisto, `rlml run`, testit) aikajana ajetaan heti seuraavaan pysähdykseen (`scene_play_out`).
+  - Muisti ei päivity kohtauksen pysähdyksissä, joten se ei riipu tahdista (M 7.2).
+- **Ohitus.** Ohitettu `say` kirjataan lokiin ilman ikkunaa, ja `log` kirjoitetaan, joten loki on sama, missä kohdassa pelaaja ohitti (RS 9.8 ja M 4.4, käyttäjän päätös). Esitys jätetään väliin paitsi `always`-rivillä, ja silmukat eivät kulje.
+- **`rewind`** tekee hiljaisen alusta aloituksen ja antaa kohtaukselle sen vastaukset viimeistä lukuun ottamatta. Syötelokin rivi on `rewind`. Toimii korutiineissa ja aikajanoissa.
+- **Esitys.**
+  - `pan`, `shake`, `fade`, `play`, `fly` ja `reveal` menevät käyttöliittymälle (`World::effects`).
+  - Pääte näyttää `shake`-kutsun nytkähdyksenä ja `pan`-kutsun kameran siirtona (M 7.2).
+  - `fade`, `play` ja `fly` eivät näy päätteessä, ja `reveal` ei vielä lisää muistiin.
+- **Lataus.**
+  - Kesto vain esitykselle tai tweenille: `say` ja `log` eivät ota kestoa.
+  - Silmukkaraidassa ei saa olla merkkiä, ja rivit pysyvät silmukan pituuden sisällä.
+  - Tilan muutos etualan silmukassa saa varoituksen.
+- **Taustakohtaus** (`background`) jää yhä väliin varoituksella vaiheeseen 5 asti.
+- **Testit:**
+  - `crates/rlml-core/tests/timelines.rs`: RS 9.1:n `GATE_OPENS` ja RS 9.3:n `AUDIENCE` sovitettuina, ohitus samaan tilaan ja lokiin, toisto ilman kelloa, `rewind` ja lataustarkistukset.
+  - `scenes.rs`: dialogin `rewind`.
+  - Sovellustesti pelaa Oz-esimerkin `HEAD_GLOWS`- ja `SCREEN_FALLS`-aikajanat.
+
+Alla on alkuperäinen tehtävälista.
+
 - **Kello** laskee esitysaikaa. Käyttöliittymä vie sitä eteenpäin `tick`-kutsuissa, ja välikehykset näkyvät.
 - **Rivit:** alku, kesto, merkit, `+`-ajat, saman hetken järjestys ja `when … else`.
 - **Raidat** kulkevat rinnakkain, ja `loop` toistaa raitaa. `stop(track:)` pysäyttää silmukan.

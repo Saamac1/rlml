@@ -80,6 +80,11 @@ pub struct Runner<'m> {
     /// A loaded save's state is the one its `on scene` save took: the
     /// scene it starts takes no second save (M 5.4).
     pub(crate) scene_saved: bool,
+    /// The front end runs the timelines' clock with `scene_tick`; without
+    /// it a timeline runs to its next pause at once (M 4.4).
+    pub scene_clock: bool,
+    /// `rewind` gives the scene its answers again: no log rows.
+    pub(crate) scene_silent: bool,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -115,6 +120,8 @@ impl<'m> Runner<'m> {
             seat_calls: vec![],
             scene: None,
             scene_saved: false,
+            scene_clock: false,
+            scene_silent: false,
         };
         // calls in `begin` are its own: checkpoint 0 is taken here anyway
         r.w.saves = Default::default();
@@ -176,7 +183,11 @@ impl<'m> Runner<'m> {
     /// the presentation's in-between frames (M 7.2).
     pub fn run_with(&mut self, rounds: i64, seen: &mut dyn FnMut(&mut World)) -> RtResult<Status> {
         let status = self.run_on(rounds, seen)?;
-        self.w.see();
+        // memory follows the game's stops, not a scene's: a front end runs
+        // a timeline's clock at its own pace (M 4.4)
+        if status != Status::Scene {
+            self.w.see();
+        }
         if status == Status::Input {
             self.input_point();
         }
@@ -189,6 +200,9 @@ impl<'m> Runner<'m> {
         self.start_scenes()?;
         loop {
             // a scene stops the game's time until it ends (RS 9)
+            if !self.scene_clock {
+                self.scene_play_out()?;
+            }
             if self.scene.is_some() {
                 return Ok(Status::Scene);
             }

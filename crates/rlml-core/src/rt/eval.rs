@@ -153,7 +153,7 @@ const CONTEXT: &[&str] = &[
 ];
 
 impl World<'_> {
-    fn rt_err(&self, env: &Env, pos: Pos, msg: impl Into<String>) -> String {
+    pub(crate) fn rt_err(&self, env: &Env, pos: Pos, msg: impl Into<String>) -> String {
         format!(
             "{}:{}: runtime error: column {}: {}",
             env.file,
@@ -455,7 +455,7 @@ impl World<'_> {
         Ok(None)
     }
 
-    fn truth(&mut self, e: &Expr, env: &mut Env) -> RtResult<bool> {
+    pub(crate) fn truth(&mut self, e: &Expr, env: &mut Env) -> RtResult<bool> {
         let v = self.eval(e, env)?;
         v.as_bool().ok_or_else(|| {
             self.rt_err(
@@ -2659,9 +2659,6 @@ impl World<'_> {
                     .iter()
                     .filter_map(|(n, v)| n.clone().map(|n| (n, v.clone())))
                     .collect();
-                if self.scene_skipping {
-                    return Ok(Value::None);
-                }
                 self.log.push(LogEntry {
                     key,
                     args: named,
@@ -2669,8 +2666,38 @@ impl World<'_> {
                 });
                 Value::None
             }
-            // presentation without a screen does nothing (M 9.3)
-            "fly" | "play" | "pan" | "shake" | "fade" | "reveal" => Value::None,
+            // presentation goes to the front end; a skip leaves it out but
+            // for an `always` row (RS 9.8)
+            "fly" | "play" | "pan" | "shake" | "fade" | "reveal" => {
+                if !self.scene_skipping || self.row_always {
+                    if self.effects.len() >= 256 {
+                        self.effects.drain(..128);
+                    }
+                    self.effects.push(super::world::Effect {
+                        call: f.to_string(),
+                        args,
+                        span: self.row_span,
+                    });
+                }
+                Value::None
+            }
+            // a light is the cells it lights (M 9.3)
+            "light" => Value::Area(self.area(&a0, env, pos)?),
+            "tile" | "carve" => self.engine_tile(f, &args, env, pos)?,
+            "stop" => match self.arg(&args, usize::MAX, "track") {
+                Some(Value::Name(t)) => {
+                    self.stop_tracks
+                        .push(t.rsplit('.').next().unwrap_or(t).to_string());
+                    Value::None
+                }
+                _ => {
+                    return Err(self.rt_err(
+                        env,
+                        pos,
+                        "`stop(handle)` comes with background scenes",
+                    ));
+                }
+            },
             "sees" => {
                 let b = self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?;
                 // a collection sees when one of its members does (M 9.3)
@@ -2786,14 +2813,14 @@ impl World<'_> {
                 let Value::Scene(call) = a0 else {
                     return Err(self.rt_err(env, pos, "`start` takes a scene"));
                 };
-                let timeline = self
-                    .decl_of(&call.name)
-                    .is_some_and(|(item, _, _)| matches!(item.kind, ItemKind::Timeline { .. }));
-                // until timelines run (RLML-kohtaukset.md steps 4 and 5) a
-                // timeline is left out with a warning
-                if timeline {
+                let background = self.decl_of(&call.name).is_some_and(|(item, _, _)| {
+                    matches!(&item.kind, ItemKind::Timeline { timeline, .. } if timeline.background)
+                });
+                // until background scenes run (RLML-kohtaukset.md step 5) a
+                // background timeline is left out with a warning
+                if background {
                     self.warnings.push(format!(
-                        "{}:{}: the timeline scene `{}` is left out: timelines do not run yet",
+                        "{}:{}: the background scene `{}` is left out: background scenes do not run yet",
                         env.file, pos.line, call.name
                     ));
                     return Ok(Value::None);
@@ -2807,7 +2834,7 @@ impl World<'_> {
                 Value::None
             }
             // a modal line in a scene, also to the log group SPEECH (RS 9.6,
-            // M 7.4); skipped, it is left out (RS 9.8)
+            // M 7.4)
             "say" => {
                 if env.kind != BodyKind::Scene {
                     return Err(self.rt_err(env, pos, "`say` belongs in a scene (RS 9.6)"));
@@ -2815,9 +2842,6 @@ impl World<'_> {
                 let Value::Name(key) = a0 else {
                     return Err(self.rt_err(env, pos, "`say` takes a text key"));
                 };
-                if self.scene_skipping {
-                    return Ok(Value::None);
-                }
                 let speaker = match self.arg(&args, usize::MAX, "speaker") {
                     Some(Value::Entity(e)) => Some(*e),
                     _ => None,
@@ -2833,11 +2857,14 @@ impl World<'_> {
                     args: named.clone(),
                     speech: true,
                 });
-                self.pause = Some(super::world::Pause::Say {
-                    key,
-                    args: named,
-                    speaker,
-                });
+                // skipped, the line goes to the log without a window (RS 9.8)
+                if !self.scene_skipping {
+                    self.pause = Some(super::world::Pause::Say {
+                        key,
+                        args: named,
+                        speaker,
+                    });
+                }
                 Value::None
             }
             // the camera's target, or the default without one (M 7.1)
@@ -3096,7 +3123,75 @@ impl World<'_> {
         vec![]
     }
 
-    fn engine_move(
+    /// `tile` and `carve` (M 9.3): `tile` changes one cell drawn from the
+    /// set, `carve` the whole set. With a timeline row's duration the set
+    /// changes a cell at a time, in reading order or from `from:` outward
+    /// (RS 9.1).
+    fn engine_tile(
+        &mut self,
+        f: &str,
+        args: &[(Option<String>, Value)],
+        env: &mut Env,
+        pos: Pos,
+    ) -> RtResult<Value> {
+        let area = self.area(
+            args.first().map(|(_, v)| v).unwrap_or(&Value::None),
+            env,
+            pos,
+        )?;
+        let tile = match self.arg(args, 1, "t") {
+            Some(Value::Name(t)) => Some(t.clone()),
+            Some(Value::None) | None if f == "tile" => None,
+            _ => return Err(self.rt_err(env, pos, format!("`{f}` takes a tile"))),
+        };
+        let Some(first) = area.cells().first().copied() else {
+            return Ok(Value::Bool(false));
+        };
+        let layers = &self.s.maps[first.map].layers;
+        let layer = match self.arg(args, usize::MAX, "layer") {
+            Some(Value::Name(l)) => layers
+                .iter()
+                .position(|n| n == l || l.rsplit('.').next() == Some(n.as_str()))
+                .ok_or_else(|| self.rt_err(env, pos, format!("no layer `{l}`")))?,
+            _ => self.default_layer(),
+        };
+        let mut cells: Vec<Cell> = area.cells().to_vec();
+        if let Some(from) = self.arg(args, usize::MAX, "from").cloned() {
+            let anchor = self.area(&from, env, pos)?;
+            cells.sort_by_key(|c| {
+                anchor
+                    .cells()
+                    .iter()
+                    .map(|a| a.distance(*c))
+                    .min()
+                    .unwrap_or(i64::MAX)
+            });
+        }
+        if self.tweening.take().is_some() {
+            self.tween_out = Some(super::timeline::Steps::Tiles { cells, tile, layer });
+            return Ok(if f == "tile" {
+                Value::Bool(true)
+            } else {
+                Value::None
+            });
+        }
+        if f == "tile" {
+            let Some(c) = self.one_cell(&area, env) else {
+                return Ok(Value::Bool(false));
+            };
+            cells = vec![c];
+        }
+        for c in &cells {
+            self.s.maps[c.map].set_tile(layer, c.x, c.y, tile.clone());
+        }
+        Ok(if f == "tile" {
+            Value::Bool(true)
+        } else {
+            Value::None
+        })
+    }
+
+    pub(crate) fn engine_move(
         &mut self,
         args: &[(Option<String>, Value)],
         env: &mut Env,
@@ -3105,6 +3200,23 @@ impl World<'_> {
         let e = self.entity_arg(args.first().map(|(_, v)| v), "move", env, pos)?;
         let to = self.arg(args, 1, "to").cloned().unwrap_or(Value::None);
         let prev = self.s.at(e);
+        // a timeline row's duration: the route is laid once, and the row
+        // walks it a cell at a time (RS 9.1)
+        if self.tweening.take().is_some() {
+            let area = self.area(&to, env, pos)?;
+            let (Some(from), Some(goal)) = (prev, self.one_cell(&area, env)) else {
+                return Ok(Value::Bool(false));
+            };
+            let route = match self.arg(args, 2, "via") {
+                Some(Value::Name(v)) if v.ends_with("line") => {
+                    line(from, goal).into_iter().skip(1).collect()
+                }
+                _ => self.route(from, &[goal], Some(e)),
+            };
+            let ok = !route.is_empty();
+            self.tween_out = Some(super::timeline::Steps::Move { e, route });
+            return Ok(Value::Bool(ok));
+        }
         let was_on_map = matches!(self.s.get(e).place, Place::Map(_));
         // to a collection (D 5.4)
         if let Value::List(l) = &to

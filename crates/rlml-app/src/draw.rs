@@ -111,6 +111,11 @@ pub struct View {
     /// The camera's top-left cell on each map (M 7.1: it stays when its
     /// target is gone).
     pub camera: BTreeMap<MapId, (i32, i32)>,
+    /// A timeline's `pan`: the cell the camera looks at instead of its
+    /// target, and `shake`: the map's offset now (RS 9.1); the app sets
+    /// them from the scene's presentation calls.
+    pub pan: Option<(i32, i32)>,
+    pub shake: (i32, i32),
     /// The member whose turn marker shows now (M 7.1); the app sets it
     /// and blinks it.
     pub marked: Option<rlml_core::rt::value::EntityId>,
@@ -446,6 +451,7 @@ impl View {
         // a group that does not fit the area falls back to the player
         let fits = |(lo, hi): (i32, i32), size: i32| hi - lo + 1 <= size - 2 * margin(size);
         let target = match world.s.camera {
+            _ if self.pan.is_some() => self.pan.map(|(x, y)| ((x, x), (y, y))),
             // `follow(camera, e)`: its cell or its top holder's; a destroyed
             // target leaves the camera where it was (M 7.1)
             Some(e) => world
@@ -865,6 +871,7 @@ impl View {
         };
         let cells = world.render_cells(map);
         let (x0, y0) = self.camera(world, map, r.w as i32, r.h as i32, follow);
+        let (x0, y0) = (x0 + self.shake.0, y0 + self.shake.1);
         for sy in 0..r.h {
             for sx in 0..r.w {
                 let (mx, my) = (x0 + sx as i32, y0 + sy as i32);

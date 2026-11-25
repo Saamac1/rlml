@@ -143,6 +143,10 @@ fn slot_label(slot: Slot) -> String {
     }
 }
 
+/// A timeline's `pan` in the terminal: from, to, its start and its
+/// duration (RS 9.1).
+type Pan = ((i32, i32), (i32, i32), Duration, Duration);
+
 pub struct App<'m> {
     pub m: &'m Model,
     pub r: Runner<'m>,
@@ -176,6 +180,12 @@ pub struct App<'m> {
     /// when, for the turn marker's blink (M 7.1).
     clock: Duration,
     turn_start: Option<(rlml_core::rt::value::EntityId, Duration)>,
+    /// The last tick a timeline's clock went on at (RS 9.5).
+    last_scene: Duration,
+    /// A timeline's `shake` until when and how strong, and its `pan`: from,
+    /// to, its start and its duration (RS 9.1).
+    shake: Option<(Duration, i32)>,
+    pan: Option<Pan>,
     /// Pads by connection id, in the order they connected (M 8.2).
     pub pads: Vec<usize>,
     /// Each seat's device. Until the join screen exists, seat 1 takes
@@ -336,6 +346,8 @@ pub struct Focus {
 
 /// How often the teletype's typing shows (D 9.3).
 const TYPE_PACE: Duration = Duration::from_millis(30);
+/// How often a timeline's clock ticks while it runs (RS 9.5).
+const SCENE_PACE: Duration = Duration::from_millis(33);
 
 /// The least time between two travel steps, so a travel shows even
 /// without `presentation frame` (M 8.1).
@@ -398,6 +410,9 @@ impl<'m> App<'m> {
             last_frame: None,
             clock: Duration::ZERO,
             turn_start: None,
+            last_scene: Duration::ZERO,
+            shake: None,
+            pan: None,
             pads: vec![],
             seat_devices: BTreeMap::new(),
             menu_owner: None,
@@ -630,6 +645,10 @@ impl<'m> App<'m> {
     /// close.
     fn play(&mut self, r: Runner<'m>) -> RtResult<()> {
         self.r = r;
+        // the app runs the timelines' clock (RS 9.5)
+        self.r.scene_clock = true;
+        self.shake = None;
+        self.pan = None;
         self.chosen_devices = false;
         self.view = View {
             truecolor: self.view.truecolor,
@@ -1835,13 +1854,13 @@ impl<'m> App<'m> {
                 _ => {}
             }
         }
-        // a scene's own actions (RS 9.8): `rewind` comes with timelines
+        // a scene's own actions (RS 9.8)
         if self.r.in_scene() && !self.menus.is_open() {
             match a {
                 "confirm" => self.r.scene_confirm()?,
                 "skip" => self.r.scene_skip()?,
                 "restart" => self.r.scene_restart()?,
-                "rewind" => self.note = Some("`rewind` comes with timelines".into()),
+                "rewind" => self.r.scene_rewind()?,
                 _ => return self.engine_action(a, now),
             }
             return self.advance(0);
@@ -2396,6 +2415,70 @@ impl<'m> App<'m> {
         Ok(true)
     }
 
+    /// The scene's presentation calls the terminal can show (RS 9.1):
+    /// `shake` jolts the map a cell at a time and `pan` moves the camera
+    /// a cell at a time to its target, where it stays until the scene
+    /// ends. `fade`, `play`, `fly` and `reveal` show nothing here.
+    fn effects(&mut self, now: Duration) {
+        use rlml_core::rt::value::Value;
+        for e in std::mem::take(&mut self.r.w.effects) {
+            let span = Duration::from_millis(e.span.max(0) as u64);
+            let arg = |name: &str, i: usize| {
+                e.args
+                    .iter()
+                    .find(|(n, _)| n.as_deref() == Some(name))
+                    .or_else(|| e.args.get(i).filter(|(n, _)| n.is_none()))
+                    .map(|(_, v)| v.clone())
+            };
+            match e.call.as_str() {
+                "shake" => {
+                    let strength = arg("strength", 1).and_then(|v| v.as_number()).unwrap_or(1);
+                    self.shake = Some((
+                        now + span.max(Duration::from_millis(200)),
+                        strength.clamp(1, 2) as i32,
+                    ));
+                }
+                "pan" => {
+                    let s = &self.r.w.s;
+                    let cell = match arg("to", 1) {
+                        Some(Value::Pos(p)) => Some(p),
+                        Some(Value::Entity(x)) => s.at(x),
+                        Some(Value::Area(a)) => a.cells().first().copied(),
+                        _ => None,
+                    };
+                    let from = self
+                        .pan
+                        .map(|p| p.1)
+                        .or_else(|| s.player.and_then(|p| s.at(p)).map(|p| (p.x, p.y)));
+                    if let (Some(to), Some(from)) = (cell, from) {
+                        self.pan = Some((from, (to.x, to.y), now, span));
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !self.r.in_scene() {
+            self.pan = None;
+        }
+        self.view.pan = self.pan.map(|(from, to, start, span)| {
+            let t = now.saturating_sub(start).as_millis() as i64;
+            let all = span.as_millis().max(1) as i64;
+            let t = t.min(all);
+            (
+                from.0 + (to.0 - from.0) * t as i32 / all as i32,
+                from.1 + (to.1 - from.1) * t as i32 / all as i32,
+            )
+        });
+        self.view.shake = match self.shake {
+            Some((until, n)) if now < until => {
+                const JOLT: [(i32, i32); 4] = [(1, 0), (0, 1), (-1, 0), (0, -1)];
+                let (x, y) = JOLT[(now.as_millis() / 50 % 4) as usize];
+                (x * n, y * n)
+            }
+            _ => (0, 0),
+        };
+    }
+
     /// The clock at `now`: rounds without the player's turn and `idle`.
     pub fn tick(&mut self, now: Duration) -> RtResult<()> {
         self.clock = now;
@@ -2411,13 +2494,31 @@ impl<'m> App<'m> {
                 self.button_action(action, now)?;
             }
         }
+        self.effects(now);
         // the game's time stops while a menu is open or the log is read
         // (M 7.4, M 8)
         if !self.playing || self.menus.is_open() || self.reading.is_some() {
             self.last_round = now;
             self.last_key = now;
+            self.last_scene = now;
             return Ok(());
         }
+        // a timeline's clock goes on at the ticks' pace; a line stops it
+        // (RS 9.5)
+        if self.r.scene_clock_runs() {
+            let ms = now.saturating_sub(self.last_scene).as_millis() as i64;
+            self.last_scene = now;
+            self.r.scene_tick(ms)?;
+            self.effects(now);
+            self.last_round = now;
+            self.last_key = now;
+            return if self.r.in_scene() {
+                self.sync_scene()
+            } else {
+                self.advance(0)
+            };
+        }
+        self.last_scene = now;
         if !self.players_turn() {
             if let Some(round) = self.round
                 && now.saturating_sub(self.last_round) >= round
@@ -2484,6 +2585,11 @@ impl<'m> App<'m> {
         }
         if !self.playing || self.menus.is_open() || self.reading.is_some() {
             return Duration::from_millis(500);
+        }
+        // a timeline's clock, a shake and a pan move at about 30 frames a
+        // second (RS 9.5)
+        if self.r.scene_clock_runs() || self.shake.is_some_and(|(until, _)| self.clock < until) {
+            return SCENE_PACE;
         }
         // the teletype types on at the frames' pace (D 9.3)
         if self.baud.is_some() && self.typed < self.r.w.log.len() {

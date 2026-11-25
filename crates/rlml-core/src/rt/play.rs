@@ -142,7 +142,7 @@ impl<'m> Session<'m> {
     /// a note for the transcript.
     pub fn press(&mut self, key: &str) -> RtResult<String> {
         // a scene takes the engine's SCENE keys (M 8): `enter` or `space`
-        // confirms, `tab` skips and `r` starts it again
+        // confirms, `tab` skips, `r` starts it again and `backspace` rewinds
         if self.r.in_scene() {
             use super::world::Pause;
             // a choice takes its visible items by number, from 1
@@ -181,6 +181,10 @@ impl<'m> Session<'m> {
                 "r" => {
                     self.r.scene_restart()?;
                     "restart"
+                }
+                "backspace" => {
+                    self.r.scene_rewind()?;
+                    "rewind"
                 }
                 _ => return Ok(format!("(a scene waits: `{key}` does nothing)")),
             };

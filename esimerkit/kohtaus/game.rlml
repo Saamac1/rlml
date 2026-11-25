@@ -17,10 +17,10 @@
 > | `BALLOON` | korutiini, joka päättyy valikkoon (`open`) | pihalle astuessa |
 >
 > Tavoite: puhu Ozille, kysy Variksenpelättimeltä, mitä nurkassa liikkuu,
-> kaada sermi ja astu pihalle ilmapallon luo. Korutiinit ja dialogit
-> toimivat. Aikajanat (`SCREEN_FALLS`, `HEAD_GLOWS`) ja taustakohtaus
-> (`PATROL`) jäävät väliin varoituksella, kunnes ne on toteutettu
-> (`RLML-kohtaukset.md`, vaiheet 4 ja 5), joten sermi ei vielä kaadu.
+> kaada sermi ja astu pihalle ilmapallon luo. Korutiinit, dialogit ja
+> aikajanat toimivat. Taustakohtaus (`PATROL`) jää väliin varoituksella,
+> kunnes se on toteutettu (`RLML-kohtaukset.md`, vaihe 5), joten sotilas
+> seisoo paikallaan.
 
 game KOHTAUS
 - start THRONE_ROOM

@@ -98,7 +98,7 @@ const SNIPPETS: &[(&str, usize, &str)] = &[
     ),
     (
         "roguescript/09-kohtaukset-ja-aikajanat.md",
-        89,
+        90,
         "timeline rows",
     ),
 ];

@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (aikajanat):** ohitettu `say` kirjataan lokiin ilman ikkunaa ja `log` kirjoitetaan, joten loki on sama, missä kohdassa pelaaja ohitti. Vain esitys jätetään väliin, ja `always`-rivi näyttää esityksensä myös ohitettaessa (luku [9.8](09-kohtaukset-ja-aikajanat.md#98-luonnos-ohitus-ja-alusta-aloitus)). Tweenin askeleen hetki (luku [9.1](09-kohtaukset-ja-aikajanat.md#91-rivi)).
+
 **Muutokset 25.11.2026 (säädettävä kohta):** säädön jälkeen `choice`-kohtien ehdot arvioidaan uudelleen, jotta pisteiden jaon jälkeen aukeava kohta toimii (luku [9.7](09-kohtaukset-ja-aikajanat.md#97-dialogit)).
 
 **Muutokset 18.11.2026 (atlaksen lähialue):** atlaksen lehdellä ruutujoukot voivat sisältää naapurilehtien ruutuja, ja `move` naapurilehden ruutuun on reunan ylitys (luvut [2](02-yleinen-syntaksi.md) ja [6.1](06-ruudut-ja-paikkahaku.md#61-joukon-tuottavat-funktiot); moottoridokumentti, luku [6.10](../moottori/06-ajo.md#610-atlas)).

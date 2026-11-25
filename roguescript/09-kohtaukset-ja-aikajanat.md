@@ -47,6 +47,7 @@ scene GATE_OPENS(lever: entity) timeline:
 **Tilaa muuttava tweeni.** Tila on aina kokonaisia ruutuja, joten tilaa muuttava kutsu kestolla jaetaan askeliksi. Jokainen askel on tavallinen tilan muutos, ja sen tapahtumat laukeavat sillä hetkellä, joten logiikka ja ruudulla näkyvä kuva pysyvät samassa tahdissa.
 
 - `move` kestolla laskee rivin alussa kerran reitin kohteeseen. `via: path` (oletus) noudattaa liikkujan estoja, ja `via: line` kulkee suoraan esteistä välittämättä. Esityksen sijainti etenee reittiä pitkin tasaisesti ruudun osina, ja kun pyöristetty ruutu vaihtuu, moottori siirtää liikkujan siihen tavallisella `move`-kutsulla. Moottori laskee osat kokonaisluvuilla, joten tulos on sama kaikilla alustoilla.
+- **Askeleen hetki.** Askel osuu hetkeen, jolloin tasaisesti etenevä sijainti pyöristyy seuraavaan ruutuun: kun reitillä on N ruutua ja kesto on D, askel i (1…N) tehdään hetkellä alku + ⌈(2i − 1)·D / 2N⌉. Joukon tilet vaihtuvat samoin hetkin.
 - **Este matkalla.** Jos seuraava ruutu on askeleen hetkellä estetty, tweeni pysähtyy viimeiseen saavutettuun ruutuun ja rivi päättyy. Kiertäminen on logiikan asia.
 - Joukon tilen vaihto (`tile` tai `carve` joukolle) vaihtaa ruudut yksi kerrallaan tasaisesti keston aikana lukujärjestyksessä, tai `from: ankkuri` -argumentilla etäisyyden mukaan lähimmästä alkaen.
 - Yhden ruudun `tile`, `spawn` ja `destroy` muuttuvat rivin alussa, ja kesto häivyttää muutoksen esiin tai pois.
@@ -208,14 +209,16 @@ Pelaajalla on kohtauksessa (konteksti `SCENE`) kolme moottorin toimintoa:
 | --- | --- |
 | tilaa muuttava (`fn`, `tile`, `move`, kentät, pakkafunktiot) | suoritetaan heti rivijärjestyksessä |
 | tilaa muuttava tweeni | jäljellä olevat askeleet tehdään heti järjestyksessä tapahtumineen (luku [9.1](#91-rivi)) |
-| esitys (`present fn`, `say`, `log`) | jätetään väliin |
-| `always`-rivi | suoritetaan; `say` kirjataan lokiin ilman ikkunaa |
+| `say` | kirjataan lokiin ilman ikkunaa |
+| `log` | kirjoitetaan lokiin |
+| esitys (`present fn`, `play`, `pan`, `shake`, `fade`, `fly`) | jätetään väliin |
+| `always`-rivi | suoritetaan, ja sen esitys näytetään |
 | `wait confirm` | ohitetaan |
 | `wait scene X()` | alikohtaus ohitetaan samoin säännöin |
 | `choice`, `open` | ohitus pysähtyy, koska ne vaativat syötteen |
 | silmukkaraita | ei suoriteta |
 
-Moottorin funktion laji (muuttaa, kysely, esitys) ratkaisee, kumpaan riviin kutsu kuuluu (moottoridokumentti, luku [9.2](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#92-funktion-kuvaus)). Ohitettu kohtaus päätyy samoilla valinnoilla aina samaan tilaan kuin loppuun katsottu, koska esitys käyttää omaa satunnaisvirtaansa. Lataus varoittaa, jos silmukkaraidassa on tilaa muuttava kutsu.
+Moottorin funktion laji (muuttaa, kysely, esitys) ratkaisee, kumpaan riviin kutsu kuuluu (moottoridokumentti, luku [9.2](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#92-funktion-kuvaus)). Ohitettu kohtaus päätyy samoilla valinnoilla aina samaan tilaan kuin loppuun katsottu, koska esitys käyttää omaa satunnaisvirtaansa. Myös loki on sama: ennen ohitusta näytetyt repliikit ovat lokissa jo, ja ohitus kirjaa loput samassa järjestyksessä, joten pelaaja voi lukea ohitetun keskustelun lokista, ja loki ei riipu siitä, missä kohdassa pelaaja ohitti. Lataus varoittaa, jos silmukkaraidassa on tilaa muuttava kutsu.
 
 **Tallennus.** Etualan kohtauksen, dialogin ja `open`-valikon aikana pelaaja ei voi tallentaa. Moottori voi tallentaa kohtausta edeltävän tilan automaattisesti, ja ladattaessa kohtaus ajetaan alusta (moottoridokumentti, luku [5.4](../moottori/05-aloitus-tallennus-ja-checkpointit.md#54-automaattinen-tallennus)).
 

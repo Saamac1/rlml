@@ -2578,8 +2578,12 @@ fn a_scene_shows_its_lines_and_takes_confirm_tap_and_skip() {
     assert!(!app.r.in_scene(), "`tab` skipped the rest (RS 9.8)");
     assert!(app.players_turn());
     assert!(
-        !app.r.w.log.iter().any(|l| l.key == "LINE.THREE"),
-        "the skipped line was left out"
+        app.r
+            .w
+            .log
+            .iter()
+            .any(|l| l.key == "LINE.THREE" && l.speech),
+        "the skipped line went to the log without a window (RS 9.8)"
     );
     assert!(
         !screen(&mut app).contains("Tervetuloa"),
@@ -2653,9 +2657,17 @@ fn the_oz_example_plays_its_dialogues() {
     press(&mut app, "enter");
     assert!(screen(&mut app).contains("Lännen noita"));
     press(&mut app, "enter");
+    // HEAD_GLOWS, a timeline: its line stops the clock, and the app's
+    // ticks run it to its end (RS 9.3, RS 9.5)
+    assert!(screen(&mut app).contains("Pää hehkuu"));
+    press(&mut app, "enter");
+    assert!(app.r.in_scene() && app.r.scene_clock_runs());
+    app.tick(ms(1500)).unwrap();
+    assert!(app.r.in_scene(), "the pan runs from 1000ms to 3000ms");
+    app.tick(ms(3500)).unwrap();
     assert!(
         app.players_turn(),
-        "HEAD_GLOWS is a timeline, left out until step 4"
+        "HEAD_GLOWS is done; its loop ended with it"
     );
     // the Scarecrow: THINK opens WHAT in the next choice
     press(&mut app, "j j h h h k enter");
@@ -2669,6 +2681,50 @@ fn the_oz_example_plays_its_dialogues() {
         "promised: the screen's secret"
     );
     press(&mut app, "enter");
+    assert!(app.players_turn());
+    // to the screen: down to row 5, west to the wall, and into it
+    let at = |app: &App| app.r.w.s.at(app.r.w.s.player.unwrap()).unwrap();
+    while at(&app).y < 5 {
+        press(&mut app, "j");
+    }
+    while at(&app).x > 1 {
+        press(&mut app, "h");
+    }
+    press(&mut app, "j");
+    // SCREEN_FALLS (RS 9.1): rows, a duration, a mark and a condition
+    assert!(
+        screen(&mut app).contains("Toto haukahtaa"),
+        "{}",
+        screen(&mut app)
+    );
+    press(&mut app, "enter");
+    app.tick(ms(10_000)).unwrap();
+    assert!(screen(&mut app).contains("kalju vanha mies"), "REVEAL");
+    let screens = |app: &App| {
+        app.r
+            .w
+            .s
+            .entities
+            .iter()
+            .filter(|e| e.alive && e.kind.ends_with("SCREEN"))
+            .count()
+    };
+    assert_eq!(screens(&app), 0, "the screen fell at 500ms");
+    press(&mut app, "enter");
+    assert!(
+        screen(&mut app).contains("Olen vain tavallinen mies"),
+        "promised: OZ.CONFESSES"
+    );
+    press(&mut app, "enter");
+    app.tick(ms(20_000)).unwrap();
+    assert!(screen(&mut app).contains("ilmapallo"), "REVEAL+1s");
+    let door = app.r.w.s.maps[0].tile(0, 7, 7).map(str::to_string);
+    assert!(
+        door.as_deref().is_some_and(|t| t.ends_with("DOOR.open")),
+        "{door:?}"
+    );
+    press(&mut app, "enter");
+    app.tick(ms(30_000)).unwrap();
     assert!(app.players_turn());
     replays_the_same(&m, &app);
 }

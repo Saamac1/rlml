@@ -45,8 +45,21 @@ pub struct World<'m> {
     pub travels: Vec<Travel>,
     /// What the running scene waits for, set by `say` and `wait confirm`.
     pub pause: Option<Pause>,
-    /// A scene is skipped: `say`, `log` and `wait confirm` pass (RS 9.8).
+    /// A scene is skipped: `say` goes to the log without a window, `wait
+    /// confirm` passes and presentation is left out (RS 9.8).
     pub scene_skipping: bool,
+    /// A timeline row's duration asks a state-changing call for a tween
+    /// (RS 9.1); the call leaves its steps in `tween_out`.
+    pub(crate) tweening: Option<i64>,
+    pub(crate) tween_out: Option<super::timeline::Steps>,
+    /// The timeline row now is `always`, and its duration (RS 9.8).
+    pub(crate) row_always: bool,
+    pub(crate) row_span: i64,
+    /// `stop(track:)` calls of the row now.
+    pub(crate) stop_tracks: Vec<String>,
+    /// Presentation calls for the front end, oldest first (M 7): it takes
+    /// them out. Not state.
+    pub effects: Vec<Effect>,
     /// `checkpoint`, `rollback`, `delete_save` and `autosave` calls waiting
     /// for the action's end (M 6.1.7 steps 2–5).
     pub saves: SaveCalls,
@@ -111,6 +124,16 @@ pub struct LogEntry {
     pub key: String,
     pub args: Vec<(String, Value)>,
     pub speech: bool,
+}
+
+/// A presentation call for the front end (M 7): `pan`, `shake`, `fade`,
+/// `play`, `fly` or `reveal`, its arguments, and the timeline row's
+/// duration in milliseconds (0 outside one).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Effect {
+    pub call: String,
+    pub args: Vec<(Option<String>, Value)>,
+    pub span: i64,
 }
 
 /// What a foreground scene waits for (RS 9.5, M 7.4).
@@ -211,6 +234,12 @@ impl<'m> World<'m> {
             travels: vec![],
             pause: None,
             scene_skipping: false,
+            tweening: None,
+            tween_out: None,
+            row_always: false,
+            row_span: 0,
+            stop_tracks: vec![],
+            effects: vec![],
             saves: SaveCalls::default(),
             depth: 0,
             switch: None,
@@ -1028,7 +1057,7 @@ impl<'m> World<'m> {
             .collect()
     }
 
-    fn default_layer(&self) -> usize {
+    pub(crate) fn default_layer(&self) -> usize {
         self.layers().iter().position(|(_, d, _)| *d).unwrap_or(0)
     }
 
