@@ -8,4 +8,14 @@ RAT.NAME rotta
 RAT.DESC Iso harmaa rotta. Se on nälkäinen.
 PAUSE.TITLE Tauko
 PAUSE.RESUME Jatka
+PAUSE.SAVE Tallenna
 PAUSE.QUIT Lopeta
+
+PAD.NORTH ↑
+PAD.SOUTH ↓
+PAD.WEST ←
+PAD.EAST →
+PAD.WAIT odota
+PAD.PASS ohita
+PAD.MENU valikko
+PAD.STAIRS portaat

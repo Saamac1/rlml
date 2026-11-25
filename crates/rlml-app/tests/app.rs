@@ -25,12 +25,26 @@ fn read_tree(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<Strin
     }
 }
 
-fn mini_with(edit: impl FnOnce(&mut String)) -> MemFiles {
+/// The minigame as it is.
+fn mini_as_is() -> MemFiles {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut f = MemFiles::default();
     read_tree(&repo, &repo.join("lib"), &mut f.engine);
     let game = repo.join("esimerkit/mini");
     read_tree(&game, &game, &mut f.game);
+    f
+}
+
+/// The minigame without its phone layout, buttons, `walk` and pause
+/// menu's Save, which the tests of those engine parts set up as they
+/// need, and `edit` on its game.rlml.
+fn mini_with(edit: impl FnOnce(&mut String)) -> MemFiles {
+    let mut f = mini_as_is();
+    let g = f.game.get_mut("game.rlml").unwrap();
+    *g = g.replace("- layout MAIN\n- layout PHONE when portrait and width < 70\n- walk STD.MOVE\n", "");
+    let ui = f.game.get_mut("ui/main.rlml").unwrap();
+    let (start, end) = (ui.find("layout PHONE\n").unwrap(), ui.find("log LOG history").unwrap());
+    *ui = format!("{}{}", &ui[..start], &ui[end..]).replace("- SAVE save\n", "");
     edit(f.game.get_mut("game.rlml").unwrap());
     f
 }
@@ -1574,4 +1588,109 @@ fn the_profile_lives_over_games_and_the_engine_menu_resets_it() {
     assert!(app.profile.as_ref().unwrap().store.read(FILE).is_none());
     press(&mut app, "k k enter");
     assert_eq!(wins(&app), Some(0), "the profile starts over");
+}
+
+// ---- the minigame's touch buttons (esimerkit/mini/ui/main.rlml) ----
+
+/// The middle cell of the minigame's button whose action is `action`
+/// written as its legend does: a command, `pass` or `open PAUSE`.
+fn pad_button(app: &App, action: &str) -> (usize, usize) {
+    use rlml_app::menu::ItemAction;
+    let found = app.view.buttons.iter().find(|(_, a)| match a {
+        ItemAction::Command(c) => c.ends_with(&format!(".{action}")) || c == action,
+        ItemAction::Engine(e) => e == action,
+        ItemAction::Open { menu, .. } => format!("open {menu}") == action,
+        _ => false,
+    });
+    let (r, _) = found.unwrap_or_else(|| panic!("no button {action}: {:?}", app.view.buttons));
+    (r.x + r.w / 2, r.y + r.h / 2)
+}
+
+fn tap(app: &mut App, action: &str, t: u64) {
+    app.draw();
+    let (x, y) = pad_button(app, action);
+    app.mouse_press(click(), x, y, ms(t)).unwrap();
+    app.mouse_release();
+}
+
+#[test]
+fn the_minigames_buttons_show_on_a_phone_held_upright() {
+    let m = model(&mini_as_is());
+    let mut app = App::new(&m, 7, (80, 24)).unwrap();
+    app.draw();
+    assert!(app.view.buttons.is_empty(), "a landscape window has no buttons");
+    // a phone held upright: 40 columns, 60 rows
+    app.resize(40, 60);
+    let s = screen(&mut app);
+    for t in ["↑", "↓", "←", "→", "odota", "ohita", "valikko", "portaat"] {
+        assert!(s.contains(t), "{t}:\n{s}");
+    }
+    assert_eq!(app.view.buttons.len(), 8);
+}
+
+#[test]
+fn the_minigames_buttons_play_it() {
+    let m = model(&mini_as_is());
+    let mut app = App::new(&m, 7, (40, 60)).unwrap();
+    let (x, y) = player_at(&app);
+    tap(&mut app, "MOVE.EAST", 10);
+    assert_eq!(player_at(&app), (x + 1, y));
+    tap(&mut app, "MOVE.WEST", 20);
+    tap(&mut app, "MOVE.SOUTH", 30);
+    tap(&mut app, "MOVE.NORTH", 40);
+    assert_eq!(player_at(&app), (x, y));
+    let time = app.r.w.s.game.time;
+    tap(&mut app, "WAIT", 50);
+    assert_eq!(app.r.w.s.game.time, time + 120, "odota waits a turn");
+    // the stairs button does nothing off the stairs, and takes no time
+    tap(&mut app, "TAKE_EXIT", 60);
+    assert_eq!((player_at(&app), app.r.w.s.game.time), ((x, y), time + 120));
+    // valikko opens the pause menu, which has Save
+    tap(&mut app, "open PAUSE", 70);
+    assert!(app.menus.is_open());
+    let s = screen(&mut app);
+    assert!(s.contains("Tallenna"), "{s}");
+}
+
+#[test]
+fn the_minigames_pass_button_and_a_tap_on_the_map() {
+    let m = model(&mini_as_is());
+    let mut app = App::new(&m, 7, (40, 60)).unwrap();
+    // a tap on the map walks there (`walk STD.MOVE`)
+    app.draw();
+    let (x, y) = player_at(&app);
+    let (sx, sy) = screen_of(&app, x + 1, y + 1);
+    app.mouse_press(click(), sx, sy, ms(10)).unwrap();
+    app.mouse_release();
+    run_ticks(&mut app, 10, 5);
+    assert_eq!(player_at(&app), (x + 1, y + 1), "walked to the tapped cell");
+    // without the player, ohita runs the next round at once (`pass`)
+    let p = app.r.w.s.player.unwrap();
+    app.r.w.destroy(p, &Env::new(BodyKind::Handler, "test", None, "test")).unwrap();
+    let turn = app.r.w.s.game.turn();
+    tap(&mut app, "pass", 1000);
+    assert_eq!(app.r.w.s.game.turn(), turn + 1);
+}
+
+#[test]
+fn a_sized_map_area_is_placed_as_a_panel() {
+    // the minigame's phone layout: `- m map size 20x8 center`
+    let m = model(&mini_as_is());
+    let mut app = App::new(&m, 7, (40, 40)).unwrap();
+    app.draw();
+    let r = app.view.map_rect.unwrap();
+    assert_eq!((r.x, r.w, r.h), (10, 20, 8), "centred across the 40 columns (D 11.1)");
+    // `right bottom` puts it in the area's bottom right corner
+    let mut f = mini_with(|g| *g = g.replace("- keys GAME\n", "- keys GAME\n- layout CORNER\n"));
+    f.game.get_mut("ui/main.rlml").unwrap().push_str("\nlayout CORNER\n\n```\nm\nl\n```\n\nlegend:\n- m map size 10x4 right bottom\n- l LOG size.height 3\n");
+    let m = model(&f);
+    let mut app = App::new(&m, 7, (40, 12)).unwrap();
+    app.draw();
+    let r = app.view.map_rect.unwrap();
+    assert_eq!((r.x, r.y, r.w, r.h), (30, 0, 10, 4), "at the right edge; the map's row is as high as the map, and the log takes the room left");
+    // a tap still finds its cell
+    let p = app.r.w.s.at(app.r.w.s.player.unwrap()).unwrap();
+    let map = app.r.w.s.active_map().unwrap();
+    let (sx, sy) = screen_of(&app, p.x, p.y);
+    assert_eq!(rlml_app::draw::cell_at(&app.view, map, sx, sy), Some(p));
 }

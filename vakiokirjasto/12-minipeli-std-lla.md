@@ -9,6 +9,9 @@ game MINI
 - start CAVE_A
 - at SPAWN
 - keys GAME
+- layout MAIN
+- layout PHONE when portrait and width < 70
+- walk STD.MOVE
 - PLAYER HERO
 
 include lib/std.rlml
@@ -55,6 +58,7 @@ keys GAME
 
 menu PAUSE
 - RESUME
+- SAVE save
 - QUIT
 
 log LOG history 50
@@ -67,12 +71,13 @@ layers
 - FOG fog
 ```
 
-Asettelu (`- m map`, `- l LOG`), kartat `CAVE_A` ja `CAVE_B` sekä `tiles.glyphs ascii` ovat esimerkkikansiossa, ja kielitiedostossa on `HERO.NAME`, `RAT.NAME` ja tauon tekstit. Peli alkaa nimiöstä `SPAWN`, ja kummankin luolan `START` on vastakkaisten portaiden ruudussa, joten paluu tuo pelaajan portaille. Kohdat, jotka testissä jäivät auki, kulkevat nyt näin:
+Asettelut, kosketusnapit (`panel PAD`), kartat `CAVE_A` ja `CAVE_B` sekä `tiles.glyphs ascii` ovat esimerkkikansiossa, ja kielitiedostossa on `HERO.NAME`, `RAT.NAME`, tauon ja nappien tekstit. Peli alkaa nimiöstä `SPAWN`, ja kummankin luolan `START` on vastakkaisten portaiden ruudussa, joten paluu tuo pelaajan portaille. Kohdat, jotka testissä jäivät auki, kulkevat nyt näin:
 
 - **Liike:** `MOVE.EAST` palauttaa `STEP`-komennon, joka kysyy eston ytimillä `CAN_STEP` ja `BLOCKER` ja siirtää ytimellä `DO_STEP` (luku [5](05-komennot.md)).
 - **Lyönti:** rotan suhde pelaajaan on `50 - |-100 - 0|` = −50, joten törmäys palauttaa `ATTACK`-komennon ja `HUNTER` hyökkää näkemäänsä tai kuulemaansa pelaajaan (luvut [6](06-tekoaly.md) ja [7](07-suhteet-ja-vihamielisyys.md)).
 - **Kuolema:** `APPLY_DAMAGE` ja `DEATH` tuhoavat kuolleen, myös pelaajan, ja maailma jatkaa `round 250ms` -tahdilla (luku [8](08-kasittelijat.md)).
 - **Valaistus:** `- default blocks none lit` valaisee koko luolan, joten pelaaja ja rotat näkevät koko näkösäteensä (`sight radius`). Ilman sitä mikään ruutu ei ole valaistu, ja jokainen näkee vain viereiset ruudut (moottoridokumentti, luku [7.2](../moottori/07-esitys.md#72-kartan-piirtäminen)).
+- **Kosketusnapit:** pystyssä olevassa puhelimessa (`PHONE`) lokin alla ovat napit `button`-kenttinä (dataformaatit, luku [11.5](../dataformaatit/11-kayttoliittyman-data.md#115-paneelit)). Ne tekevät samat toiminnot kuin näppäimet: suunnat, `WAIT`, `pass`, `open PAUSE` ja `TAKE_EXIT`. Portaat-nappi näkyy aina, koska `TAKE_EXIT` epäonnistuu muualla eikä vie aikaa. Kartta on keskellä nappien yläpuolella (`- m map size 20x8 center`), ja sitä napauttamalla kävellään ruutuun (`walk STD.MOVE`).
 - **Kartanvaihto:** `TAKE_EXIT` kutsuu `travel`-funktiota, siirto tehdään toiminnon lopussa ja pelaaja saapuu kohdekartan `START`-nimiöön (luku [5](05-komennot.md)).
 
 ---

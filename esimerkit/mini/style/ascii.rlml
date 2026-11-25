@@ -4,6 +4,8 @@ colors
 - STONE 7a7a8e
 - DARK 1a1a22
 - FUR a07040
+- BUTTON 3a3a4a
+- BUTTON_DARK 26262f
 
 tiles.glyphs ascii
 - default ? fg ff00ff
@@ -18,3 +20,13 @@ layers
 - GROUND map
 - THINGS entities where it has render
 - FOG fog
+
+## Napit
+
+> Kosketusnapit ovat harmaita valkoisella tekstillä, ja muut kuin
+> suuntanapit tummempia. Painettu nappi vaalenee.
+
+panels
+- button fg ffffff bg BUTTON
+- button.dark bg BUTTON_DARK
+- button.pressed bg STONE

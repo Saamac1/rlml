@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (minipelin kosketusnapit):** minipelissä on pystyssä olevan puhelimen asettelu `PHONE` kosketusnappeineen, `walk STD.MOVE` karttaa napauttamalla kävelyyn ja taukovalikon `SAVE` (luku [12](12-minipeli-std-lla.md)).
+
 **Muutokset 17.11.2026 (seurattava):** `LEADER_OF` antaa ensin lähimmän ihmisen ohjaaman jäsenen (`controlled`) ja vasta sitten lähimmän muun jäsenen, joten `follow` ei ala seurata toisen istuimen seuraajaa, joka seisoo yhtä lähellä (luku [6.1](06-tekoaly.md#61-seuraaja)).
 
 **Muutokset 8.11.2026 (ohjaus lyhyillä vuoroilla):** `LEADER_OF`, `WAIT` ja `FOLLOWER` moottorin seuraamisen kenttinä `leader`, `rest` ja `follow_ai` (luku [6.1](06-tekoaly.md#61-seuraaja)).

@@ -438,7 +438,7 @@ impl View {
                 if !a.border {
                     border = Border::None;
                 }
-                written_map_rect(a, rect)
+                written_map_rect(a, rect, area)
             } else {
                 rect
             };
@@ -796,10 +796,15 @@ fn log_rows(world: &World, name: &str) -> Vec<String> {
 /// The map cell at a screen position of a map area, for tests and the
 /// mouse later.
 /// The map area's rect cut to its written cell size, border included
-/// (D 11.1, M 7.1).
-fn written_map_rect(a: rlml_core::model::MapArea, rect: Rect) -> Rect {
+/// (D 11.1, M 7.1): in the area's top left corner, or as `center`,
+/// `right` and `bottom` place a panel.
+fn written_map_rect(a: rlml_core::model::MapArea, rect: Rect, area: &Area) -> Rect {
     let cut = |len: usize, cells: Option<i32>| cells.map_or(len, |c| len.min(c.max(0) as usize));
-    Rect::new(rect.x, rect.y, cut(rect.w, a.width), cut(rect.h, a.height))
+    let (w, h) = (cut(rect.w, a.width), cut(rect.h, a.height));
+    let (sx, sy) = (rect.w - w, rect.h - h);
+    let x = if area.right { sx } else if area.center { sx / 2 } else { 0 };
+    let y = if area.bottom { sy } else if area.center { sy / 2 } else { 0 };
+    Rect::new(rect.x + x, rect.y + y, w, h)
 }
 
 /// The map cell under screen cell (x, y), where the map was last drawn

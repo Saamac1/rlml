@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (kartan paikka):** `center`, `right` ja `bottom` sijoittavat kirjoitetun kokoisen kartan alueeseensa kuten paneelin (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)).
+
 **Muutokset 24.11.2026 (napin sävy):** napin `look NIMI` ja `panels`-rivi `button.NIMI` (luvut [9.3](09-ulkoasu.md#93-paneelit-lokit-ja-esitys) ja [11.5](11-kayttoliittyman-data.md#115-paneelit)).
 
 **Muutokset 24.11.2026 (napit nurkkaan ja näppäimet nappeihin):** paneelialueen sanat `right` ja `bottom` (luku [11.1](11-kayttoliittyman-data.md#111-asettelu)) ja napin teksti `<AVAIN>.KEYS` näppäimistöä käyttäneelle (luku [11.5](11-kayttoliittyman-data.md#115-paneelit)).

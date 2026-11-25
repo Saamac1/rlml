@@ -8,6 +8,9 @@ game MINI
 - start CAVE_A
 - at SPAWN
 - keys GAME
+- layout MAIN
+- layout PHONE when portrait and width < 70
+- walk STD.MOVE
 - PLAYER HERO
 
 include lib/std.rlml

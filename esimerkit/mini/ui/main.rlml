@@ -1,6 +1,10 @@
 # Käyttöliittymä
 
-> Kartta ja sen alla kolmen rivin loki.
+> Kartta ja sen alla kolmen rivin loki. Pystyssä olevassa puhelimessa
+> (`PHONE`, `game.rlml`) lokin alla ovat kosketusnapit. Kartta-alue on
+> isomman luolan kokoinen (20×8) ja keskellä kuten napit (`center`), ja
+> loki saa loput rivit. Karttaa
+> napauttamalla tai klikkaamalla kävellään ruutuun (`walk`).
 
 layout MAIN
 
@@ -13,12 +17,60 @@ legend:
 - m map
 - l LOG size.height 3
 
+layout PHONE
+
+```
+m
+l
+p
+```
+
+legend:
+- m map size 20x8 center
+- l LOG read
+- p PAD size.height 9 center
+
+## Kosketusnapit
+
+> Suuntanapit odota-napin ympärillä. Ylhäällä vasemmalla `ohita` antaa
+> kierroksen kulua, kun pelaajalla ei ole vuoroa (`pass`, näppäin `z`),
+> ylhäällä oikealla `valikko` avaa taukovalikon (`esc`) ja alhaalla
+> oikealla `portaat` kulkee portaita (`>` ja `<`). Portaat-nappi näkyy
+> aina: muualla se ei tee mitään eikä vie aikaa. Muut kuin suuntanapit ovat
+> tummempia (`look dark`). Pohjassa pidetty nappi toistaa. Lokia
+> napauttamalla avautuu koko loki (`read`).
+
+panel PAD
+
+```
+pppppppp nnnnnnnn mmmmmmmm
+pppppppp nnnnnnnn mmmmmmmm
+pppppppp nnnnnnnn mmmmmmmm
+wwwwwwww cccccccc eeeeeeee
+wwwwwwww cccccccc eeeeeeee
+wwwwwwww cccccccc eeeeeeee
+         ssssssss xxxxxxxx
+         ssssssss xxxxxxxx
+         ssssssss xxxxxxxx
+```
+
+legend:
+- p button pass text PAD.PASS look dark
+- n button MOVE.NORTH text PAD.NORTH
+- m button open PAUSE text PAD.MENU look dark
+- w button MOVE.WEST text PAD.WEST
+- c button WAIT text PAD.WAIT look dark
+- e button MOVE.EAST text PAD.EAST
+- s button MOVE.SOUTH text PAD.SOUTH
+- x button TAKE_EXIT text PAD.STAIRS look dark
+
 log LOG history 50
 - STD.MESSAGE.COMBAT
 - STD.MESSAGE.SENSE
 
 menu PAUSE
 - RESUME
+- SAVE save
 - QUIT
 
 ## Näppäimet

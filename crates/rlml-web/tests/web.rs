@@ -262,11 +262,12 @@ fn saves_outlive_the_page() {
     use rlml_core::rt::store::Slot;
     let m = Box::leak(Box::new(rlml_web::bundle::load(&mini(), "game.rlml").unwrap()));
     let mut opfs = std::collections::BTreeMap::new();
-    // the first page: an empty folder, two waits, then Quit from the pause menu
+    // the first page: an empty folder, two waits, then Quit, the pause
+    // menu's third item
     let mut g = Game::new(m, 7, (40, 12)).unwrap();
     g.storage(vec![]).unwrap();
     assert!(g.store_changes().is_empty(), "nothing written yet");
-    for (i, k) in ["s", "s", "esc", "j", "enter"].iter().enumerate() {
+    for (i, k) in ["s", "s", "esc", "j", "j", "enter"].iter().enumerate() {
         g.push(Event::Key(parse_binding(k).unwrap()));
         g.step(Duration::from_millis(10 * i as u64 + 10)).unwrap();
     }
