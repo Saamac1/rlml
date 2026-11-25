@@ -1,0 +1,21 @@
+# Formatting check on every branch and pull request: the code is in
+# rustfmt's default style (cargo fmt --all). A ruleset on main can
+# require this check, so unformatted code does not get into main.
+name: Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
