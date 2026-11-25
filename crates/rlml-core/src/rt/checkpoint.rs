@@ -78,6 +78,7 @@ impl<'m> Runner<'m> {
     /// A rollback loads its own state, so the rest is skipped.
     pub(crate) fn save_calls(&mut self) {
         let calls = std::mem::take(&mut self.w.saves);
+        let checkpoint = calls.point == Some(Point::Checkpoint);
         match calls.point {
             Some(Point::Rollback) => match self.checkpoint.clone() {
                 Some(snap) => {
@@ -91,6 +92,16 @@ impl<'m> Runner<'m> {
         }
         if calls.delete_checkpoint {
             self.checkpoint = None;
+        }
+        if calls.delete_auto {
+            self.delete_auto = true;
+            self.auto_off = true;
+        }
+        // step 5: one automatic save for every request of the action
+        let rules = &self.rules;
+        let due = calls.autosave || checkpoint && rules.on_checkpoint || calls.arrived && rules.on_arrive;
+        if due && !self.auto_off {
+            self.due.push(self.save());
         }
     }
 }

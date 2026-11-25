@@ -80,10 +80,12 @@ pub struct SaveCalls {
     pub point: Option<Point>,
     /// `delete_save(checkpoint)`, or the checkpoint part of `all`.
     pub delete_checkpoint: bool,
-    /// `delete_save(auto)`, or that part of `all`; saving comes later.
+    /// `delete_save(auto)`, or that part of `all`.
     pub delete_auto: bool,
-    /// `autosave()`; saving comes later.
+    /// `autosave()`.
     pub autosave: bool,
+    /// A member arrived on a map: the `on arrive` point (M 5.4).
+    pub arrived: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -163,6 +165,16 @@ impl<'m> World<'m> {
 
     /// A data value of type `ty` as written; dice and ranges in number
     /// fields stay unrolled until the instance is created (M 3.2 step 4).
+    /// Is the player's own save stopped: a member is on a `nosave` map
+    /// (D 8.1, M 5.2)? Automatic saves and checkpoints go on.
+    pub fn save_blocked(&self) -> bool {
+        let members = self.s.players().into_iter().chain(self.s.player);
+        members.filter_map(|e| self.s.at(e)).any(|p| {
+            let name = &self.s.maps[p.map].name;
+            self.m.defs.get(name).and_then(|d| d.block()).is_some_and(|b| b.has_arg("nosave"))
+        })
+    }
+
     pub fn data_value(&self, ty: &Ty, text: &str, ns: Option<&str>) -> RtResult<Value> {
         let t = text.trim();
         if t == "none" {

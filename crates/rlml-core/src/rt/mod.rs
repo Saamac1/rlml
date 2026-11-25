@@ -11,6 +11,7 @@ pub mod run;
 pub mod save;
 pub mod senses;
 pub mod state;
+pub mod store;
 pub mod travel;
 pub mod verbs;
 pub mod value;

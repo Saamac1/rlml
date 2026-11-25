@@ -45,6 +45,7 @@ pub fn check(m: &Model, main: &str, r: &mut Report) {
     c.labels();
     c.game(main);
     c.settings(main);
+    c.autosave();
     c.tiles_section();
     c.style();
     c.layouts();
@@ -691,6 +692,34 @@ impl Checker<'_> {
             let has = self.m.section_rows("tiles.glyphs").next().is_none() || self.m.sections.iter().any(|b| b.kind == "tiles.glyphs" && b.args.first().is_some_and(|a| a.text == style));
             if !has {
                 self.r.push(settings["style"].warn(format!("no `tiles.glyphs {style}` section: every tile uses the default look")));
+            }
+        }
+    }
+
+    /// The `autosave` section's rows (D 3.4).
+    fn autosave(&mut self) {
+        for (_, item) in self.m.section_rows("autosave") {
+            let (_, item) = item.marker();
+            let words: Vec<&str> = item.tokens.iter().map(|t| t.text.as_str()).collect();
+            let count = |w: Option<&&str>| w.is_some_and(|w| w.parse::<u32>().is_ok());
+            let bad = match words.as_slice() {
+                ["slots", rest @ ..] if rest.len() != 1 || !count(rest.first()) => Some("`slots` takes a count: `slots 0`, `slots 1` or `slots N` (D 3.4)"),
+                ["manual", rest @ ..] if rest.len() != 1 || !count(rest.first()) => Some("`manual` takes a count, 0 for none (D 3.4)"),
+                ["quit", rest @ ..] if !matches!(rest, ["save"] | ["none"]) => Some("`quit` is save or none (D 3.4)"),
+                ["on", "input"] => None,
+                ["on", "input", "every", n] if n.parse::<u32>().is_ok_and(|n| n >= 1) => None,
+                ["on", "input", ..] => Some("`on input` takes `every N` with N at least 1 (D 3.4)"),
+                ["on", "scene" | "checkpoint" | "arrive"] => None,
+                ["on", ..] => Some("`on` is input, scene, checkpoint or arrive (D 3.4)"),
+                ["slots" | "manual" | "quit", ..] => None,
+                [k, ..] => {
+                    self.r.push(item.err(format!("unknown `autosave` row `{k}` (D 3.4)")));
+                    continue;
+                }
+                [] => None,
+            };
+            if let Some(msg) = bad {
+                self.r.push(item.err(msg.to_string()));
             }
         }
     }

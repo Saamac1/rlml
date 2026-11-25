@@ -2007,6 +2007,9 @@ impl World<'_> {
                 self.emit("leave", vec![Value::Entity(t.who), Value::Pos(p)], &env)?;
                 self.emit("depart", vec![Value::Entity(t.who), Value::Name(name), Value::Pos(p)], &env)?;
             }
+            if self.s.seat_of(t.who).is_some() || self.s.player == Some(t.who) {
+                self.saves.arrived = true;
+            }
             let name = self.s.maps[id].name.clone();
             self.emit("arrive", vec![Value::Entity(t.who), Value::Name(name), Value::Pos(to)], &env)?;
         }

@@ -35,6 +35,12 @@ use crate::model::Model;
 pub struct Save {
     /// The `game` block's name; a save of another game does not load.
     pub game: String,
+    /// When it was written among the store's saves: later is larger.
+    pub stamp: u64,
+    /// The session it belongs to (M 5.5: `delete_save(auto)`).
+    pub session: u64,
+    /// The `slots` locked for the session (M 5.4).
+    pub slots: u32,
     pub now: Snapshot,
     pub checkpoint: Option<Snapshot>,
     /// The log's messages, presentation for the reading view (M 5.2).
@@ -727,6 +733,13 @@ impl Save {
         w.word("game");
         w.text(&self.game);
         w.line();
+        w.word("stamp");
+        self.stamp.put(&mut w);
+        w.word("session");
+        self.session.put(&mut w);
+        w.word("slots");
+        self.slots.put(&mut w);
+        w.line();
         w.word("now");
         self.now.put(&mut w);
         w.line();
@@ -748,6 +761,12 @@ impl Save {
         }
         r.keyword("game")?;
         let game = r.text()?;
+        r.keyword("stamp")?;
+        let stamp = Get::get(&mut r)?;
+        r.keyword("session")?;
+        let session = Get::get(&mut r)?;
+        r.keyword("slots")?;
+        let slots = Get::get(&mut r)?;
         r.keyword("now")?;
         let now = <Snapshot as Get>::get(&mut r)?;
         r.keyword("checkpoint")?;
@@ -757,7 +776,7 @@ impl Save {
         if r.peek().is_some() {
             return Err(r.err("text after the save".into()));
         }
-        Ok(Save { game, now, checkpoint, log })
+        Ok(Save { game, stamp, session, slots, now, checkpoint, log })
     }
 }
 
@@ -768,7 +787,7 @@ fn game_name(m: &Model) -> String {
 impl<'m> Runner<'m> {
     /// The game as a save, between actions (M 5.2).
     pub fn save(&self) -> Save {
-        Save { game: game_name(self.w.m), now: self.snapshot(), checkpoint: self.checkpoint.as_deref().cloned(), log: self.w.log.clone() }
+        Save { game: game_name(self.w.m), stamp: 0, session: 0, slots: 0, now: self.snapshot(), checkpoint: self.checkpoint.as_deref().cloned(), log: self.w.log.clone() }
     }
 
     /// A runner that goes on from `save` (M 5.2): `begin` does not run, and

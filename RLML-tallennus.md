@@ -156,6 +156,25 @@ Alla on alkuperäinen tehtävälista.
 
 ### 5. Tallennuspaikat, automaattinen tallennus ja valikot
 
+Tehty 25.11.2026 haarassa `claude/tallennuspaikat`:
+- **Ydin (`rt::store`).** `Store`, `MemStore`, `AutosaveRules` (`autosave`-osio) sekä `Saves`, joka hoitaa paikat:
+  - pino `auto-N`, omat paikat `manual-N`, lopetuspaikka `quit` ja permadeathin ainoa paikka `game`,
+  - leima, joka järjestää paikat kirjoitusjärjestykseen, ja pelikerran tunnus `delete_save(auto)`-kutsua varten,
+  - lukittu `slots`-määrä, joka kulkee tallennuksen mukana.
+- **Tallennuskohdat.** Ajoitin ottaa tallennuksen kohdissa `on input every N` (matkan askeleet eivät laske), `on checkpoint` ja `on arrive` sekä `autosave()`-kutsusta, yksi tallennus toimintoa kohden, ja jättää ne `Runner::due`-jonoon. Sovellus kirjoittaa ne paikkoihin.
+- **`nosave`** estää oman tallennuksen ja lopetuksen tallennuksen (`World::save_blocked`), ja valikon `save`-kohta näkyy himmeänä.
+- **Latauksen tarkistus** kattaa `autosave`-osion rivit.
+- **Sovellus.** `save`, `quit` ja `new_game` tallentavat `quit`-rivin mukaan. `load_game` avaa luettelon, ja moottorin valikossa on `ENGINE.LOAD_GAME`, kun tallennuksia on. Permadeath-pelissä oma tallennus lopettaa pelin.
+- **Pääte.** `rlml play --saves DIR` tallentaa kansioon. Oletuskansio on `<käyttäjädata>/rlml/PELI/saves`, Linuxilla `~/.local/share`. Kirjoitus tehdään väliaikaistiedostoon, joka nimetään lopuksi oikeaksi.
+- **Poikkeamat suunnitelmasta:**
+  - Kirjoitus on synkroninen, eikä taustasäiettä tehty.
+  - Oma tallennus valitsee paikan itse (ensimmäinen vapaa, sitten vanhin), eikä paikan valintavalikkoa ole.
+  - Kansiopolussa on `rlml/` ennen pelin nimeä.
+  - `on scene` luetaan, mutta se laukeaa vasta kohtausten myötä.
+- **Testit:** `crates/rlml-core/tests/slots.rs` (paikat ja tallennuskohdat), sovelluksen tallennustestit tiedostossa `crates/rlml-app/tests/app.rs` sekä levytallennuksen yksikkötesti. Lisäksi kokeiltiin oikeaa `rlml play` -komentoa pseudopäätteessä: lopetus kirjoitti tiedoston `quit.save`, ja moottorin valikko latasi sen.
+
+Alla on alkuperäinen tehtävälista.
+
 - **`Store`-trait** `rlml-core`en ja `MemStore`. `rlml` saa levytoteutuksen käyttäjädatakansioon `<käyttäjädata>/PELI/saves/`, samaan paikkaan kuin asetukset (D 3.2). Kirjoitus tehdään väliaikaiseen tiedostoon, joka nimetään lopuksi oikeaksi (M 5.4).
 - **`autosave`-osio malliin:** `slots`, `manual` ja `quit` sekä kohdat `input every N`, `scene`, `checkpoint` ja `arrive`. Latauksessa tarkistetaan arvot. Paikkamäärä lukitaan pelikerran tilaan (M 5.4, "Lukitus").
 - **Ajo:**

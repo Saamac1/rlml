@@ -177,7 +177,9 @@ impl Layer {
             if item.hide.as_ref().is_some_and(|e| holds(w, &menu, e)) {
                 continue;
             }
-            let enabled = !item.disabled.as_ref().is_some_and(|e| holds(w, &menu, e));
+            // `save` shows dim where the player cannot save (M 5.2)
+            let no_save = item.action == ItemAction::Engine("save".into()) && w.save_blocked();
+            let enabled = !no_save && !item.disabled.as_ref().is_some_and(|e| holds(w, &menu, e));
             rows.push(Row { item: i, enabled });
         }
         let cursor = rows.iter().position(|r| r.enabled).unwrap_or(0);

@@ -1439,3 +1439,103 @@ fn a_button_look_colors_it_over_the_buttons_row() {
     let fg = app.draw().get(cells[1].x, cells[1].y).and_then(|c| c.style).and_then(|s| s.fg);
     assert_eq!(fg, Some(Rgb(0, 0, 0)), "the rest from `button`");
 }
+
+// ---- saving (M 5.2, M 5.4) ----
+
+/// The minigame with `save` on `w`, the `autosave` section `autosave`
+/// and `edit` on its caves.
+fn saving(autosave: &str, edit_caves: impl FnOnce(&mut String)) -> MemFiles {
+    let mut f = mini_with(|g| g.push_str(&format!("\n{autosave}\n")));
+    let ui = f.game.get_mut("ui/main.rlml").unwrap();
+    *ui = ui.replace("- pass z", "- pass z\n- save w");
+    edit_caves(f.game.get_mut("maps/caves.rlml").unwrap());
+    f
+}
+
+fn with_store<'m>(m: &'m Model) -> App<'m> {
+    let mut app = App::new(m, 7, (40, 12)).unwrap();
+    app.set_store(Box::new(rlml_core::rt::store::MemStore::default()));
+    app
+}
+
+fn saved(app: &App) -> Vec<String> {
+    let mut names: Vec<String> = app.saves.as_ref().unwrap().list().iter().map(|l| l.slot.name()).collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn quit_saves_and_the_engine_menu_loads_it() {
+    let m = model(&saving("", |_| {}));
+    let mut app = with_store(&m);
+    press(&mut app, "s s");
+    let state = app.r.w.s.clone();
+    press(&mut app, "esc j enter");
+    assert!(!app.playing);
+    assert_eq!(saved(&app), ["quit"], "without `autosave`, leaving has its own slot (D 3.4)");
+    let s = screen(&mut app);
+    assert!(s.contains("Load game"), "the engine's menu offers the saves: {s}");
+    press(&mut app, "j enter");
+    let s = screen(&mut app);
+    assert!(s.contains("quit · CAVE_A · turn 2"), "{s}");
+    press(&mut app, "enter");
+    assert!(app.playing && app.players_turn());
+    assert!(app.r.w.s == state, "the game goes on from where it was left (M 5.2)");
+    press(&mut app, "s");
+    assert_eq!(app.r.w.s.game.turn(), 3);
+}
+
+#[test]
+fn the_players_save_takes_its_own_slot() {
+    let m = model(&saving("autosave\n- slots 2\n- manual 2", |_| {}));
+    let mut app = with_store(&m);
+    press(&mut app, "s w");
+    assert_eq!(app.note.as_deref(), Some("saved: save 1"));
+    assert!(app.playing);
+    press(&mut app, "s w");
+    assert_eq!(saved(&app), ["manual-1", "manual-2"]);
+}
+
+#[test]
+fn a_permadeath_save_ends_the_game() {
+    let m = model(&saving("autosave\n- slots 1", |_| {}));
+    let mut app = with_store(&m);
+    press(&mut app, "s w");
+    assert!(!app.playing, "`slots 1`: the player's save ends the game (M 5.4)");
+    assert_eq!(saved(&app), ["game"]);
+}
+
+#[test]
+fn no_save_on_a_nosave_map() {
+    let m = model(&saving("", |c| *c = c.replace("map CAVE_A\n", "map CAVE_A nosave\n")));
+    let mut app = with_store(&m);
+    press(&mut app, "w");
+    assert_eq!(app.note.as_deref(), Some("the game cannot be saved here"));
+    press(&mut app, "esc j enter");
+    assert!(saved(&app).is_empty(), "leaving does not save on a `nosave` map either (M 5.2)");
+}
+
+#[test]
+fn the_save_item_is_dim_on_a_nosave_map() {
+    let mut f = saving("", |c| *c = c.replace("map CAVE_A\n", "map CAVE_A nosave\n"));
+    let ui = f.game.get_mut("ui/main.rlml").unwrap();
+    *ui = ui.replace("menu PAUSE\n- RESUME\n", "menu PAUSE\n- RESUME\n- SAVE save\n");
+    let m = model(&f);
+    let mut app = with_store(&m);
+    press(&mut app, "esc");
+    let layer = app.menus.layers.last().unwrap();
+    let save = layer.rows.iter().find(|r| layer.menu.items[r.item].key == "SAVE").unwrap();
+    assert!(!save.enabled, "the item shows dim (M 5.2)");
+}
+
+#[test]
+fn automatic_saves_fill_the_stack() {
+    let m = model(&saving("autosave\n- slots 2\n- on input every 2", |_| {}));
+    let mut app = with_store(&m);
+    press(&mut app, "s");
+    assert_eq!(saved(&app), ["auto-1"], "the start's wait and the next one");
+    press(&mut app, "s s s s s");
+    assert_eq!(saved(&app), ["auto-1", "auto-2"], "two slots, the oldest replaced");
+    let list = app.saves.as_ref().unwrap().list();
+    assert_eq!(list[0].save.now.s.game.turn(), 5, "the newest is the last even wait");
+}

@@ -18,6 +18,7 @@ use std::time::Duration;
 use rlml_core::model::Model;
 use rlml_core::rt::run::{Runner, Status};
 use rlml_core::rt::state::SeatId;
+use rlml_core::rt::store::{AutosaveRules, Saved, Saves, Slot, Store};
 use rlml_core::rt::travel::OrderGoal;
 use rlml_core::rt::verbs::{Ask, Target};
 use rlml_core::rt::value::{CommandValue, Value};
@@ -81,17 +82,28 @@ fn docked_menus(m: &Model) -> Vec<Menu> {
 const HOLD_DELAY: Duration = Duration::from_millis(350);
 const HOLD_REPEAT: Duration = Duration::from_millis(140);
 
-fn engine_menu() -> Menu {
+/// The engine's menu: a new game, the saves when there are some, and
+/// leaving (M 8).
+fn engine_menu(saves: bool) -> Menu {
     let item = |key: &str, action: &str| Item { key: key.into(), action: ItemAction::Engine(action.into()), hide: None, disabled: None, label: None };
-    Menu {
-        full: ENGINE_MENU.into(),
-        ns: None,
-        context: "MENU".into(),
-        is_final: true,
-        width: None,
-        height: None,
-        items: vec![item("NEW_GAME", "new_game"), item("EXIT", "exit")],
-        verbs: false,
+    let mut items = vec![item("NEW_GAME", "new_game")];
+    if saves {
+        items.push(item("LOAD_GAME", "load_game"));
+    }
+    items.push(item("EXIT", "exit"));
+    Menu { full: ENGINE_MENU.into(), ns: None, context: "MENU".into(), is_final: true, width: None, height: None, items, verbs: false }
+}
+
+/// The list of saves `load_game` opens; a row loads its slot.
+pub const LOAD_MENU: &str = "<load>";
+
+/// A slot as the list of saves shows it.
+fn slot_label(slot: Slot) -> String {
+    match slot {
+        Slot::Auto(n) => format!("auto {n}"),
+        Slot::Manual(n) => format!("save {n}"),
+        Slot::Quit => "quit".into(),
+        Slot::Only => "game".into(),
     }
 }
 
@@ -184,6 +196,8 @@ pub struct App<'m> {
     /// A key of the keyboard has been pressed: buttons show their keys
     /// (`<KEY>.KEYS`, D 11.5).
     pub keyboard: bool,
+    /// The game's save slots, when the front end gives a store (M 5.4).
+    pub saves: Option<Saves<Box<dyn Store>>>,
 }
 
 /// The asked parameters' list menu as a layer.
@@ -333,6 +347,7 @@ impl<'m> App<'m> {
             type_last: Duration::ZERO,
             baud: None,
             keyboard: false,
+            saves: None,
         };
         app.baud = crate::draw::log_baud(&app.r.w, "");
         match app.title() {
@@ -351,22 +366,119 @@ impl<'m> App<'m> {
         self.m.resolve_kind(g.namespace.as_deref(), item.word(1)?, &[rlml_core::model::Kind::Menu]).ok().map(|d| d.full.clone())
     }
 
+    /// Saves go to `store` from now on (M 5.4); the game being played
+    /// becomes a session of its own there.
+    pub fn set_store(&mut self, store: Box<dyn Store>) {
+        self.saves = Some(Saves::new(store, AutosaveRules::read(self.m)));
+    }
+
     /// Starts a new game with `seed` and runs it to the player's first turn
     /// (M 5.1); the menus close.
     fn start(&mut self, seed: u64) -> RtResult<()> {
         let mut w = World::new_game(self.m, seed)?;
         w.begin()?;
-        self.r = Runner::new(w);
+        if let Some(saves) = self.saves.as_mut() {
+            saves.new_session(self.m);
+        }
         self.seed = seed;
+        self.games += 1;
+        self.play(Runner::new(w))
+    }
+
+    /// Goes on from a save (M 5.2): `begin` does not run.
+    fn load(&mut self, slot: Slot) -> RtResult<()> {
+        let Some(saves) = self.saves.as_mut() else { return Ok(()) };
+        let save = saves.load(self.m, slot)?;
+        let r = Runner::load(self.m, &save)?;
+        self.seed = r.w.s.game.seed;
+        self.play(r)
+    }
+
+    /// Plays `r` from its next turn: the view starts over and the menus
+    /// close.
+    fn play(&mut self, r: Runner<'m>) -> RtResult<()> {
+        self.r = r;
         self.view = View { truecolor: self.view.truecolor, ..View::default() };
         self.menus.clear();
         self.frames.clear();
         self.last_frame = None;
         self.status = Status::NoPlayer { rounds: 0 };
         self.playing = true;
-        self.games += 1;
         self.assign_devices();
         self.advance(0)
+    }
+
+    /// The runner's automatic saves and `delete_save(auto)`, to the store
+    /// (M 5.4, M 5.5). Without a store they go nowhere.
+    fn write_saves(&mut self) {
+        let due = std::mem::take(&mut self.r.due);
+        let delete = std::mem::take(&mut self.r.delete_auto);
+        let Some(saves) = self.saves.as_mut() else { return };
+        if delete {
+            saves.delete_auto();
+        }
+        for save in due {
+            if let Err(e) = saves.autosave(save) {
+                self.note = Some(format!("the game was not saved: {e}"));
+            }
+        }
+    }
+
+    /// Leaving the game being played saves it by the `quit` row (M 5.4).
+    fn save_on_leaving(&mut self) {
+        if !self.playing {
+            return;
+        }
+        if let Some(saves) = self.saves.as_mut()
+            && let Err(e) = saves.quit(&self.r)
+        {
+            self.note = Some(format!("the game was not saved: {e}"));
+        }
+    }
+
+    /// The player's own save (`save`, M 5.2): not on a `nosave` map, and
+    /// in a permadeath game it ends the game.
+    fn save_game(&mut self) {
+        if !self.playing {
+            return;
+        }
+        if self.r.w.save_blocked() {
+            self.note = Some("the game cannot be saved here".into());
+            return;
+        }
+        let Some(saves) = self.saves.as_mut() else {
+            self.note = Some("saving is not available here".into());
+            return;
+        };
+        match saves.manual(&self.r) {
+            Ok(Saved::In(slot)) => self.note = Some(format!("saved: {}", slot_label(slot))),
+            Ok(Saved::AndEnds) => {
+                self.note = Some("saved".into());
+                self.quit_game();
+            }
+            Err(e) => self.note = Some(format!("the game was not saved: {e}")),
+        }
+    }
+
+    /// `load_game`: the saves, newest first, in a list to choose from.
+    fn open_load_menu(&mut self) {
+        let list = self.saves.as_ref().map(|s| s.list()).unwrap_or_default();
+        if list.is_empty() {
+            self.note = Some("no saves".into());
+            return;
+        }
+        let items = list
+            .iter()
+            .map(|l| {
+                let s = &l.save.now.s;
+                let map = s.last_player_map.or(s.player.and_then(|p| s.at(p)).map(|p| p.map)).and_then(|m| s.maps.get(m)).map_or("", |m| m.name.as_str());
+                let label = format!("{} · {map} · turn {}", slot_label(l.slot), s.game.turn());
+                Item { key: l.slot.name(), action: ItemAction::Engine(format!("load:{}", l.slot.name())), hide: None, disabled: None, label: Some(label) }
+            })
+            .collect();
+        let menu = Menu { full: LOAD_MENU.into(), ns: None, context: "MENU".into(), is_final: false, width: None, height: None, items, verbs: false };
+        let layer = menu::Layer::open(&mut self.r.w, menu);
+        self.menus.layers.push(layer);
     }
 
     /// Gives the seats their devices: keyboard part 1, then the pads in
@@ -411,7 +523,8 @@ impl<'m> App<'m> {
                 self.menus.open(&mut self.r.w, &title, false);
             }
             None => {
-                let layer = menu::Layer::open(&mut self.r.w, engine_menu());
+                let has_saves = self.saves.as_ref().is_some_and(|s| !s.list().is_empty());
+                let layer = menu::Layer::open(&mut self.r.w, engine_menu(has_saves));
                 self.menus.layers.push(layer);
             }
         }
@@ -804,6 +917,7 @@ impl<'m> App<'m> {
                 frames.push(f);
             }
         })?;
+        self.write_saves();
         Ok(())
     }
 
@@ -992,10 +1106,21 @@ impl<'m> App<'m> {
             "close" => self.menus.close(),
             "resume" => self.menus.close(),
             "new_game" => {
+                // a game under way ends as by `quit` (M 8)
+                self.save_on_leaving();
                 // the first game takes the seed given, later ones new seeds
                 let seed = if self.games > 0 { self.next_seed() } else { self.seed };
                 self.start(seed)?;
                 self.last_round = now;
+            }
+            "save" => self.save_game(),
+            "load_game" => self.open_load_menu(),
+            a if a.starts_with("load:") => {
+                if let Some(slot) = Slot::parse(&a["load:".len()..]) {
+                    self.save_on_leaving();
+                    self.load(slot)?;
+                    self.last_round = now;
+                }
             }
             "travel_to" if self.players_turn() => {
                 if let (Some(n), Some(p)) = (self.r.awaiting(), self.pointer_cell())
@@ -1026,7 +1151,10 @@ impl<'m> App<'m> {
             "travel_to" | "follow" | "look" | "verbs" => {}
             "tab.next" => self.step_tab(1),
             "tab.prev" => self.step_tab(-1),
-            "quit" if self.playing => self.quit_game(),
+            "quit" if self.playing => {
+                self.save_on_leaving();
+                self.quit_game();
+            }
             "quit" | "exit" => self.quit = true,
             other => self.note = Some(format!("`{other}` is not supported yet")),
         }

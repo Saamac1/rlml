@@ -14,6 +14,8 @@ use std::collections::BTreeMap;
 use super::eval::{BodyKind, Env, Outcome, Scope, Suspended};
 use super::checkpoint::Snapshot;
 use super::input::InputLog;
+use super::save::Save;
+use super::store::AutosaveRules;
 use super::state::{SeatId, Wake};
 use super::travel::{Order, Travel, TravelFields};
 use super::value::{CommandValue, EntityId, MapId, Value};
@@ -55,6 +57,18 @@ pub struct Runner<'m> {
     /// The last checkpoint (M 5.3); checkpoint 0 is the state the runner
     /// starts from, after `begin`. `delete_save(checkpoint)` removes it.
     pub checkpoint: Option<Box<Snapshot>>,
+    /// The `autosave` section's points (M 5.4).
+    pub rules: AutosaveRules,
+    /// Automatic saves taken at actions' ends, for the front end to write.
+    pub due: Vec<Save>,
+    /// `delete_save(auto)` was called: the front end removes the session's
+    /// automatic saves.
+    pub delete_auto: bool,
+    /// No more automatic saves this session.
+    pub auto_off: bool,
+    /// Input waits counted for `on input every N`, and the wake counted last.
+    inputs_seen: u32,
+    counted: Option<Wake>,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -65,7 +79,24 @@ impl<'m> Runner<'m> {
     pub fn new(w: World<'m>) -> Runner<'m> {
         let fields = TravelFields::read(w.m);
         let inputs = InputLog { seed: w.s.game.seed, seats: w.s.seats.len() as SeatId, ..InputLog::default() };
-        let mut r = Runner { w, waiting: BTreeMap::new(), woke: BTreeMap::new(), awaiting: None, travels: BTreeMap::new(), orders: BTreeMap::new(), fields, inputs, checkpoint: None };
+        let rules = AutosaveRules::read(w.m);
+        let mut r = Runner {
+            w,
+            waiting: BTreeMap::new(),
+            woke: BTreeMap::new(),
+            awaiting: None,
+            travels: BTreeMap::new(),
+            orders: BTreeMap::new(),
+            fields,
+            inputs,
+            checkpoint: None,
+            rules,
+            due: vec![],
+            delete_auto: false,
+            auto_off: false,
+            inputs_seen: 0,
+            counted: None,
+        };
         // calls in `begin` are its own: checkpoint 0 is taken here anyway
         r.w.saves = Default::default();
         r.w.see();
@@ -127,6 +158,9 @@ impl<'m> Runner<'m> {
     pub fn run_with(&mut self, rounds: i64, seen: &mut dyn FnMut(&mut World)) -> RtResult<Status> {
         let status = self.run_on(rounds, seen)?;
         self.w.see();
+        if status == Status::Input {
+            self.input_point();
+        }
         Ok(status)
     }
 
@@ -199,6 +233,23 @@ impl<'m> Runner<'m> {
                 self.round()?;
                 seen(&mut self.w);
             }
+        }
+    }
+
+    /// `on input every N` (M 5.4): a save at every Nth wait for input,
+    /// waits of all seats counted together. A wait is counted once, and
+    /// travels' steps are none (M 8.1).
+    fn input_point(&mut self) {
+        let Some(every) = self.rules.on_input else { return };
+        let Some(n) = self.awaiting else { return };
+        let wake = self.w.s.player.and_then(|p| self.w.s.wake_of(p));
+        if self.travels.contains_key(&n) || self.orders.contains_key(&n) || wake == self.counted {
+            return;
+        }
+        self.counted = wake;
+        self.inputs_seen += 1;
+        if self.inputs_seen.is_multiple_of(every) && !self.auto_off {
+            self.due.push(self.save());
         }
     }
 
