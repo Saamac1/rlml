@@ -105,11 +105,13 @@ scene HEAD_GLOWS() timeline:
 
 // ---- sotilas (RS 9.9: taustakohtaus pelin ajassa) ----
 
+// Vartiopaikkojen väli on 12 ruutua, ja kumpikin matka kestää 12
+// kierrosta, joten sotilas ottaa enintään askeleen Dorothyn vuoroa kohti.
 scene PATROL(soldier: entity) timeline background:
-    track ROUTE loop 12:
-        00 02 move(soldier, to: label(POST_A))
-        05 02 move(soldier, to: label(POST_B))
-        10    log(SOLDIER.ALL_CLEAR, speaker: soldier)
+    track ROUTE loop 30:
+        00 12 move(soldier, to: label(POST_A))
+        15 12 move(soldier, to: label(POST_B))
+        28    log(SOLDIER.ALL_CLEAR, speaker: soldier)
 
 // ---- ilmapallo (RS 9: korutiini, joka päättyy valikkoon) ----
 

@@ -2669,8 +2669,9 @@ fn the_oz_example_plays_its_dialogues() {
         app.players_turn(),
         "HEAD_GLOWS is done; its loop ended with it"
     );
-    // the Scarecrow: THINK opens WHAT in the next choice
-    press(&mut app, "j j h h h k enter");
+    // the Scarecrow, along row 3 out of the patrol's way: THINK opens
+    // WHAT in the next choice
+    press(&mut app, "j h h h enter");
     assert!(screen(&mut app).contains("aivoja"));
     press(&mut app, "enter");
     let s = screen(&mut app);
@@ -2726,5 +2727,23 @@ fn the_oz_example_plays_its_dialogues() {
     press(&mut app, "enter");
     app.tick(ms(30_000)).unwrap();
     assert!(app.players_turn());
+    // the patrol's steps are in-between frames, `frame 40ms` apart (M 7.2)
+    let soldier = |app: &App| {
+        let s = &app.r.w.s;
+        (0..s.entities.len())
+            .find(|&e| s.get(e).alive && s.get(e).kind.ends_with("SOLDIER"))
+            .and_then(|e| s.at(e))
+    };
+    let mut moved = false;
+    for _ in 0..4 {
+        app.frames.clear();
+        let before = soldier(&app);
+        press(&mut app, "s");
+        if soldier(&app) != before {
+            moved = true;
+            assert!(!app.frames.is_empty(), "a step shows as a frame");
+        }
+    }
+    assert!(moved, "the soldier walks");
     replays_the_same(&m, &app);
 }

@@ -27,3 +27,11 @@ layers
 - GROUND map
 - THINGS entities where it has render
 - FOG fog
+
+## Esitys
+
+> Välikehys näyttää jokaisen askeleen, myös sotilaan partion, ennen kuin
+> Dorothy saa taas vuoron (D 9.3, M 7.2).
+
+presentation
+- frame 40ms
