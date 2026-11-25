@@ -287,6 +287,18 @@ fn check_decl(
             }
             b.rows(&timeline.rows);
             b.timeline_rows(&timeline.rows, None, !timeline.background);
+            if timeline.background {
+                let all =
+                    std::iter::once(&timeline.rows).chain(timeline.tracks.iter().map(|t| &t.rows));
+                for rows in all {
+                    b.background_rows(rows, timeline.realtime);
+                }
+                for t in &timeline.tracks {
+                    if let Some(len) = &t.looped {
+                        b.time_unit(len, timeline.realtime);
+                    }
+                }
+            }
         }),
     }
     last
@@ -730,6 +742,70 @@ impl Body<'_> {
                 }
                 _ => {}
             }
+        }
+    }
+
+    /// RS 9.9: a background scene's clock is rounds, written as bare
+    /// numbers, or with `realtime` presentation time in `ms` and `s`; a
+    /// realtime scene neither changes the state nor says a line.
+    fn background_rows(&mut self, rows: &[Row], realtime: bool) {
+        for r in rows {
+            match r {
+                Row::Action {
+                    time,
+                    span,
+                    action,
+                    pos,
+                    ..
+                } => {
+                    if let Some(Time::At(e) | Time::After(e)) = time {
+                        self.time_unit(e, realtime);
+                    }
+                    if let Some(e) = span {
+                        self.time_unit(e, realtime);
+                    }
+                    let Action::Call(c) = action else { continue };
+                    if realtime && !self.presents(c) {
+                        self.error(*pos, format!("`{c}` changes the state or the log, and a realtime background scene only presents (RS 9.9)"));
+                    }
+                }
+                Row::When {
+                    rows, otherwise, ..
+                } => {
+                    self.background_rows(rows, realtime);
+                    self.background_rows(otherwise, realtime);
+                }
+                Row::Mark { .. } => {}
+            }
+        }
+    }
+
+    fn time_unit(&mut self, e: &Expr, realtime: bool) {
+        match (&e.kind, realtime) {
+            (ExprKind::Time(_, t), false) => self.error(e.pos, format!("`{t}`: a background scene counts rounds as bare numbers; presentation time is for `background realtime` (RS 9.9)")),
+            (ExprKind::Int(n), true) => self.error(e.pos, format!("`{n}`: a realtime background scene counts presentation time in `ms` or `s` (RS 9.9)")),
+            _ => {}
+        }
+    }
+
+    /// Is a call presentation only (RS 9.9)? `say` waits for the player,
+    /// and `log` writes the game's log, which a save keeps.
+    fn presents(&self, c: &Expr) -> bool {
+        let ExprKind::Call(f, _) = &c.kind else {
+            return false;
+        };
+        match &f.kind {
+            ExprKind::Word(n) => {
+                !matches!(n.as_str(), "say" | "log") && sigs::kind_of(n) == Some(sigs::FnKind::Present)
+            }
+            ExprKind::Name { name, .. } => self
+                .m
+                .resolve(self.decl.namespace.as_deref(), name)
+                .ok()
+                .is_some_and(|d| {
+                    matches!(&d.source, DefSource::Decl(x) if matches!(x.item.kind, ItemKind::Function { present: true, .. }))
+                }),
+            _ => false,
         }
     }
 

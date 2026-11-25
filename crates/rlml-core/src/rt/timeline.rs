@@ -46,14 +46,19 @@ struct Entry {
 }
 
 #[derive(Debug, Clone)]
-struct LoopTrack {
+struct LoopPlan {
     name: String,
     len: i64,
     entries: Vec<Entry>,
-    /// The moment the current round started.
-    round: i64,
-    next: usize,
-    stopped: bool,
+}
+
+/// A loop track as it runs: the moment its round started, its next row,
+/// and whether `stop(track:)` stopped it.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct LoopRun {
+    pub round: i64,
+    pub next: usize,
+    pub stopped: bool,
 }
 
 /// The cells a tween changes, one step at a time.
@@ -71,7 +76,11 @@ pub enum Steps {
 }
 
 impl Steps {
-    fn len(&self) -> usize {
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn len(&self) -> usize {
         match self {
             Steps::Move { route, .. } => route.len(),
             Steps::Tiles { cells, .. } => cells.len(),
@@ -79,12 +88,14 @@ impl Steps {
     }
 }
 
-#[derive(Debug, Clone)]
-struct Tween {
-    start: i64,
-    span: i64,
-    done: usize,
-    steps: Steps,
+/// A state-changing tween under way: its start and duration on the
+/// scene's clock, the steps done and its cells (RS 9.1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Tween {
+    pub start: i64,
+    pub span: i64,
+    pub done: usize,
+    pub steps: Steps,
 }
 
 impl Tween {
@@ -98,18 +109,56 @@ impl Tween {
     }
 }
 
-/// A timeline that runs: its rows, its loops, its clock and its tweens.
+/// A timeline's rows with their moments, laid out as it starts. It
+/// follows from the scene and its arguments, so a save keeps only the
+/// `TlState` (RS 11.1).
 #[derive(Debug, Clone)]
-pub struct TimelineRun {
+pub struct Plan {
     entries: Vec<Entry>,
-    next: usize,
-    loops: Vec<LoopTrack>,
-    gates: Vec<Option<bool>>,
-    tweens: Vec<Tween>,
-    /// The clock in milliseconds from the scene's start.
-    pub clock: i64,
+    loops: Vec<LoopPlan>,
+    gates: usize,
     /// When the last row without a loop ends, its duration included.
     pub end: i64,
+}
+
+impl Plan {
+    /// The state of a timeline that has not run yet.
+    pub fn fresh(&self) -> TlState {
+        TlState {
+            next: 0,
+            loops: vec![LoopRun::default(); self.loops.len()],
+            gates: vec![None; self.gates],
+            tweens: vec![],
+            clock: 0,
+        }
+    }
+}
+
+/// How far a timeline has run: its clock, its next row, its loops, the
+/// `when` blocks decided and its tweens under way.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct TlState {
+    pub next: usize,
+    pub loops: Vec<LoopRun>,
+    pub gates: Vec<Option<bool>>,
+    pub tweens: Vec<Tween>,
+    /// The clock from the scene's start: milliseconds in the foreground,
+    /// microsteps in a background scene.
+    pub clock: i64,
+}
+
+impl TlState {
+    /// When the next tween step is due.
+    pub fn next_step(&self) -> Option<i64> {
+        self.tweens.iter().map(Tween::next_at).min()
+    }
+}
+
+/// A foreground timeline: its rows and how far it has run.
+#[derive(Debug, Clone)]
+pub struct TimelineRun {
+    pub plan: Plan,
+    pub st: TlState,
 }
 
 /// How far a timeline got.
@@ -134,13 +183,16 @@ struct Flat<'a> {
     /// Unknown marks are left out: the first pass only collects marks.
     lenient: bool,
     track: usize,
+    /// Microsteps in a bare number: 120 in a background scene, whose
+    /// clock counts rounds (M 6.1); 1 in the foreground.
+    unit: i64,
 }
 
 impl World<'_> {
-    fn time_ms(&mut self, e: &Expr, env: &mut Env) -> RtResult<i64> {
+    fn time_ms(&mut self, e: &Expr, env: &mut Env, unit: i64) -> RtResult<i64> {
         match self.eval(e, env)? {
             Value::Time(ms) => Ok(ms as i64),
-            Value::Number(n) => Ok(n),
+            Value::Number(n) => Ok(n * unit),
             v => Err(self.rt_err(env, e.pos, format!("a time, not `{v}`"))),
         }
     }
@@ -157,8 +209,8 @@ impl World<'_> {
     ) -> RtResult<Option<i64>> {
         Ok(Some(match time {
             None => prev,
-            Some(Time::At(e)) => self.time_ms(e, env)?,
-            Some(Time::After(e)) => plus + self.time_ms(e, env)?,
+            Some(Time::At(e)) => self.time_ms(e, env, f.unit)?,
+            Some(Time::After(e)) => plus + self.time_ms(e, env, f.unit)?,
             Some(Time::Mark { name, offset }) => {
                 let Some(t) = f.marks.iter().find(|(n, _)| n == name).map(|(_, t)| *t) else {
                     if f.lenient {
@@ -171,7 +223,7 @@ impl World<'_> {
                 };
                 match offset {
                     Some((plus, e)) => {
-                        let d = self.time_ms(e, env)?;
+                        let d = self.time_ms(e, env, f.unit)?;
                         if *plus { t + d } else { t - d }
                     }
                     None => t,
@@ -229,7 +281,7 @@ impl World<'_> {
                         continue;
                     };
                     let span = match span {
-                        Some(e) => Some(self.time_ms(e, env)?),
+                        Some(e) => Some(self.time_ms(e, env, f.unit)?),
                         None => None,
                     };
                     let what = match action {
@@ -289,8 +341,14 @@ impl World<'_> {
     }
 
     /// A timeline's rows on its clock, as the scene starts: times are read
-    /// once, in the scene's names (RS 9.1).
-    pub(crate) fn timeline_new(&mut self, tl: &Timeline, env: &mut Env) -> RtResult<TimelineRun> {
+    /// once, in the scene's names (RS 9.1). A background scene's bare
+    /// numbers are rounds: `unit` is 120 microsteps then (RS 9.9).
+    pub(crate) fn timeline_new(
+        &mut self,
+        tl: &Timeline,
+        env: &mut Env,
+        unit: i64,
+    ) -> RtResult<TimelineRun> {
         let tracks: Vec<(usize, &Vec<Row>)> = std::iter::once((0, &tl.rows))
             .chain(
                 tl.tracks
@@ -314,6 +372,7 @@ impl World<'_> {
                     out: vec![],
                     lenient: true,
                     track,
+                    unit,
                 };
                 self.flatten(rows, 0, None, &[], &mut f, env)?;
                 (gates, seq) = (f.gates, f.seq);
@@ -330,6 +389,7 @@ impl World<'_> {
                 out: vec![],
                 lenient: false,
                 track,
+                unit,
             };
             self.flatten(rows, 0, None, &[], &mut f, env)?;
             (gates, seq) = (f.gates, f.seq);
@@ -345,7 +405,7 @@ impl World<'_> {
         let mut loops = Vec::new();
         for (i, t) in tl.tracks.iter().enumerate() {
             let Some(len) = &t.looped else { continue };
-            let len = self.time_ms(len, env)?.max(1);
+            let len = self.time_ms(len, env, unit)?.max(1);
             let mut f = Flat {
                 marks: &mut marks,
                 gates,
@@ -353,29 +413,26 @@ impl World<'_> {
                 out: vec![],
                 lenient: false,
                 track: i + 1,
+                unit,
             };
             self.flatten(&t.rows, 0, None, &[], &mut f, env)?;
             (gates, seq) = (f.gates, f.seq);
             let mut rows = f.out;
             rows.sort_by_key(|(seq, e)| (e.at, *seq));
-            loops.push(LoopTrack {
+            loops.push(LoopPlan {
                 name: t.name.clone(),
                 len,
                 entries: rows.into_iter().map(|(_, e)| e).collect(),
-                round: 0,
-                next: 0,
-                stopped: false,
             });
         }
-        Ok(TimelineRun {
+        let plan = Plan {
             entries,
-            next: 0,
             loops,
-            gates: vec![None; gates],
-            tweens: vec![],
-            clock: 0,
+            gates,
             end,
-        })
+        };
+        let st = plan.fresh();
+        Ok(TimelineRun { plan, st })
     }
 
     /// Is a call with a duration a tween that changes the state, a step at
@@ -392,12 +449,14 @@ impl World<'_> {
     /// for a sub-scene, given in `sub`.
     fn run_entry(
         &mut self,
-        run: &mut TimelineRun,
+        plan: &Plan,
+        st: &mut TlState,
         e: &Entry,
+        at: i64,
         env: &mut Env,
         sub: &mut Option<CommandValue>,
     ) -> RtResult<bool> {
-        if !e.gates.iter().all(|(g, side)| run.gates[*g] == Some(*side)) {
+        if !e.gates.iter().all(|(g, side)| st.gates[*g] == Some(*side)) {
             return Ok(false);
         }
         if let Some(c) = &e.cond
@@ -407,7 +466,7 @@ impl World<'_> {
         }
         match &e.what {
             What::Mark => {}
-            What::Gate(id, c) => run.gates[*id] = Some(self.truth(c, env)?),
+            What::Gate(id, c) => st.gates[*id] = Some(self.truth(c, env)?),
             What::Wait(WaitArg::Confirm) => {
                 if !self.scene_skipping {
                     self.pause = Some(Pause::Confirm);
@@ -446,18 +505,20 @@ impl World<'_> {
                 self.row_span = 0;
                 r?;
                 if let (Some(steps), Some(span)) = (self.tween_out.take(), span)
-                    && steps.len() > 0
+                    && !steps.is_empty()
                 {
-                    run.tweens.push(Tween {
-                        start: e.at,
+                    st.tweens.push(Tween {
+                        start: at,
                         span,
                         done: 0,
                         steps,
                     });
                 }
                 for name in std::mem::take(&mut self.stop_tracks) {
-                    for l in run.loops.iter_mut().filter(|l| l.name == name) {
-                        l.stopped = true;
+                    for (l, run) in plan.loops.iter().zip(st.loops.iter_mut()) {
+                        if l.name == name {
+                            run.stopped = true;
+                        }
                     }
                 }
                 if self.pause.is_some() {
@@ -501,30 +562,32 @@ impl World<'_> {
     /// do not run when the scene is skipped (RS 9.8).
     pub(crate) fn timeline_run(
         &mut self,
-        run: &mut TimelineRun,
+        plan: &Plan,
+        st: &mut TlState,
         env: &mut Env,
         until: Option<i64>,
     ) -> RtResult<TlFlow> {
-        let limit = until.unwrap_or(run.clock).max(run.clock);
+        let limit = until.unwrap_or(st.clock).max(st.clock);
         loop {
             // the next moment: a tween's step, a row, a loop's row
-            let tween = run
+            let tween = st
                 .tweens
                 .iter()
                 .enumerate()
                 .map(|(i, t)| (t.next_at(), i))
                 .min();
-            let row = run.entries.get(run.next).map(|e| (e.at, e.track));
+            let row = plan.entries.get(st.next).map(|e| (e.at, e.track));
             let skipping = self.scene_skipping;
-            let looped = run
+            let looped = plan
                 .loops
                 .iter()
+                .zip(&st.loops)
                 .enumerate()
-                .filter(|(_, l)| !l.stopped && !skipping && !l.entries.is_empty())
-                .map(|(i, l)| {
-                    let (at, track) = match l.entries.get(l.next) {
-                        Some(e) => (l.round + e.at, e.track),
-                        None => (l.round + l.len + l.entries[0].at, l.entries[0].track),
+                .filter(|(_, (l, run))| !run.stopped && !skipping && !l.entries.is_empty())
+                .map(|(i, (l, run))| {
+                    let (at, track) = match l.entries.get(run.next) {
+                        Some(e) => (run.round + e.at, e.track),
+                        None => (run.round + l.len + l.entries[0].at, l.entries[0].track),
                     };
                     ((at, track), i)
                 })
@@ -535,13 +598,13 @@ impl World<'_> {
                 .min();
             match t {
                 Some(t) if t <= limit => {
-                    run.clock = run.clock.max(t);
+                    st.clock = st.clock.max(t);
                     if let Some((at, i)) = tween
                         && at == t
                     {
-                        let mut tw = run.tweens.remove(i);
+                        let mut tw = st.tweens.remove(i);
                         if self.tween_step(&mut tw, env)? {
-                            run.tweens.insert(i, tw);
+                            st.tweens.insert(i, tw);
                         }
                         continue;
                     }
@@ -551,46 +614,42 @@ impl World<'_> {
                         (Some(r), None) => r.0 == t,
                         _ => false,
                     };
-                    if row_first {
-                        let e = run.entries[run.next].clone();
+                    let mut sub = None;
+                    let stopped = if row_first {
+                        let e = &plan.entries[st.next];
+                        st.next += 1;
+                        self.run_entry(plan, st, e, t, env, &mut sub)?
+                    } else if let Some((_, i)) = looped {
+                        let (l, run) = (&plan.loops[i], &mut st.loops[i]);
+                        if run.next >= l.entries.len() {
+                            run.round += l.len;
+                            run.next = 0;
+                        }
+                        let e = &l.entries[run.next];
                         run.next += 1;
-                        let mut sub = None;
-                        if self.run_entry(run, &e, env, &mut sub)? {
-                            return Ok(match sub {
-                                Some(call) => TlFlow::Sub(call),
-                                None => TlFlow::Pause,
-                            });
-                        }
-                        continue;
-                    }
-                    if let Some((_, i)) = looped {
-                        let l = &mut run.loops[i];
-                        if l.next >= l.entries.len() {
-                            l.round += l.len;
-                            l.next = 0;
-                        }
-                        let e = l.entries[l.next].clone();
-                        l.next += 1;
-                        let mut sub = None;
-                        if self.run_entry(run, &e, env, &mut sub)? {
-                            return Ok(match sub {
-                                Some(call) => TlFlow::Sub(call),
-                                None => TlFlow::Pause,
-                            });
-                        }
+                        self.run_entry(plan, st, e, t, env, &mut sub)?
+                    } else {
+                        false
+                    };
+                    if stopped {
+                        return Ok(match sub {
+                            Some(call) => TlFlow::Sub(call),
+                            None => TlFlow::Pause,
+                        });
                     }
                 }
                 _ => {
-                    run.clock = limit;
-                    let rest = run.next < run.entries.len()
-                        || !run.tweens.is_empty()
-                        || run.clock < run.end;
+                    st.clock = limit;
+                    let rest = st.next < plan.entries.len()
+                        || !st.tweens.is_empty()
+                        || st.clock < plan.end;
                     let loops = !skipping
-                        && run
+                        && plan
                             .loops
                             .iter()
-                            .any(|l| !l.stopped && !l.entries.is_empty());
-                    let only_loops = run.entries.is_empty();
+                            .zip(&st.loops)
+                            .any(|(l, run)| !run.stopped && !l.entries.is_empty());
+                    let only_loops = plan.entries.is_empty();
                     return Ok(if rest || (only_loops && loops) {
                         TlFlow::Running
                     } else {

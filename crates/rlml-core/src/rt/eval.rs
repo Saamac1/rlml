@@ -2684,19 +2684,20 @@ impl World<'_> {
             // a light is the cells it lights (M 9.3)
             "light" => Value::Area(self.area(&a0, env, pos)?),
             "tile" | "carve" => self.engine_tile(f, &args, env, pos)?,
-            "stop" => match self.arg(&args, usize::MAX, "track") {
-                Some(Value::Name(t)) => {
+            "stop" => match (self.arg(&args, usize::MAX, "track"), &a0) {
+                (Some(Value::Name(t)), _) => {
                     self.stop_tracks
                         .push(t.rsplit('.').next().unwrap_or(t).to_string());
                     Value::None
                 }
-                _ => {
-                    return Err(self.rt_err(
-                        env,
-                        pos,
-                        "`stop(handle)` comes with background scenes",
-                    ));
+                // a background scene ends (RS 9.9); a handle already ended
+                // does nothing
+                (_, Value::Handle(h)) => {
+                    self.s.backgrounds.retain(|b| b.handle != *h);
+                    Value::None
                 }
+                (_, Value::None) => Value::None,
+                _ => return Err(self.rt_err(env, pos, "`stop` takes a handle or `track:`")),
             },
             "sees" => {
                 let b = self.area(self.arg(&args, 1, "b").unwrap_or(&Value::None), env, pos)?;
@@ -2813,17 +2814,40 @@ impl World<'_> {
                 let Value::Scene(call) = a0 else {
                     return Err(self.rt_err(env, pos, "`start` takes a scene"));
                 };
-                let background = self.decl_of(&call.name).is_some_and(|(item, _, _)| {
-                    matches!(&item.kind, ItemKind::Timeline { timeline, .. } if timeline.background)
-                });
-                // until background scenes run (RLML-kohtaukset.md step 5) a
-                // background timeline is left out with a warning
-                if background {
-                    self.warnings.push(format!(
-                        "{}:{}: the background scene `{}` is left out: background scenes do not run yet",
-                        env.file, pos.line, call.name
-                    ));
-                    return Ok(Value::None);
+                let kind = self
+                    .decl_of(&call.name)
+                    .and_then(|(item, _, _)| match &item.kind {
+                        ItemKind::Timeline { timeline, .. } if timeline.background => {
+                            Some(timeline.realtime)
+                        }
+                        _ => None,
+                    });
+                // a background scene runs beside the turns from the next
+                // round boundary, and `start` gives its handle (RS 9.9)
+                if let Some(realtime) = kind {
+                    // `scope: map` is the only scope; `map` reads as the map
+                    let scope_map = self.arg(&args, usize::MAX, "scope").is_some();
+                    let bind = match self.arg(&args, usize::MAX, "bind") {
+                        Some(Value::Entity(e)) => vec![*e],
+                        Some(Value::Collection(v)) => {
+                            v.iter().filter_map(Value::as_entity).collect()
+                        }
+                        _ => vec![],
+                    };
+                    let handle = self.s.next_handle;
+                    self.s.next_handle += 1;
+                    self.s.backgrounds.push(super::state::Background {
+                        handle,
+                        call,
+                        opener: env.actor.or(self.s.player),
+                        map: env.map,
+                        scope_map,
+                        bind,
+                        realtime,
+                        base: None,
+                        st: Default::default(),
+                    });
+                    return Ok(Value::Handle(handle));
                 }
                 let opener = env.actor.or(self.s.player);
                 self.s.scene_queue.push(super::state::QueuedScene {

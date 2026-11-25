@@ -329,6 +329,8 @@ pub enum Value {
     Sound(Sound),
     /// Presentation time in milliseconds.
     Time(u64),
+    /// A background scene's handle, from `start` (RS 9.9).
+    Handle(u64),
     Size(u32, u32),
     All,
     None,
@@ -399,6 +401,7 @@ impl Value {
             Value::Component(_) => "component",
             Value::Sound(_) => "sound",
             Value::Time(_) => "time",
+            Value::Handle(_) => "handle",
             Value::Size(..) => "size",
             Value::All => "all",
             Value::None => "none",
@@ -431,6 +434,7 @@ impl fmt::Display for Value {
             Value::Component(c) => write!(f, "{}(…)", c.name),
             Value::Sound(s) => write!(f, "sound {}", s.kind),
             Value::Time(ms) => write!(f, "{ms}ms"),
+            Value::Handle(h) => write!(f, "scene#{h}"),
             Value::Size(w, h) => write!(f, "{w}x{h}"),
             Value::All => f.write_str("all"),
             Value::None => f.write_str("none"),

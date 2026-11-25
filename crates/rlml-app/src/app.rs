@@ -180,8 +180,10 @@ pub struct App<'m> {
     /// when, for the turn marker's blink (M 7.1).
     clock: Duration,
     turn_start: Option<(rlml_core::rt::value::EntityId, Duration)>,
-    /// The last tick a timeline's clock went on at (RS 9.5).
+    /// The last tick a timeline's clock went on at (RS 9.5), and the
+    /// realtime background scenes' (RS 9.9).
     last_scene: Duration,
+    last_realtime: Duration,
     /// A timeline's `shake` until when and how strong, and its `pan`: from,
     /// to, its start and its duration (RS 9.1).
     shake: Option<(Duration, i32)>,
@@ -411,6 +413,7 @@ impl<'m> App<'m> {
             clock: Duration::ZERO,
             turn_start: None,
             last_scene: Duration::ZERO,
+            last_realtime: Duration::ZERO,
             shake: None,
             pan: None,
             pads: vec![],
@@ -2494,6 +2497,13 @@ impl<'m> App<'m> {
                 self.button_action(action, now)?;
             }
         }
+        // realtime background scenes go on, also while the game waits
+        // (RS 9.9)
+        if self.playing {
+            let ms = now.saturating_sub(self.last_realtime).as_millis() as i64;
+            self.r.realtime_tick(ms)?;
+        }
+        self.last_realtime = now;
         self.effects(now);
         // the game's time stops while a menu is open or the log is read
         // (M 7.4, M 8)
@@ -2588,7 +2598,10 @@ impl<'m> App<'m> {
         }
         // a timeline's clock, a shake and a pan move at about 30 frames a
         // second (RS 9.5)
-        if self.r.scene_clock_runs() || self.shake.is_some_and(|(until, _)| self.clock < until) {
+        if self.r.scene_clock_runs()
+            || self.r.realtime_runs()
+            || self.shake.is_some_and(|(until, _)| self.clock < until)
+        {
             return SCENE_PACE;
         }
         // the teletype types on at the frames' pace (D 9.3)

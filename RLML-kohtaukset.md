@@ -194,6 +194,36 @@ Alla on alkuperäinen tehtävälista.
 
 ### 5. Taustakohtaukset
 
+Tehty 25.11.2026 haarassa `claude/kohtaukset-5`:
+- **Pelin ajan kohtaus (`rt::background`).**
+  - Kello on mikroaskelia, ja paljas luku on 120 mikroaskelta eli kierros.
+  - Kello alkaa ensimmäiseltä kierroksen rajalta `start`-kutsun jälkeen.
+  - Rivit ajetaan kierroksen vaiheessa 3 `turn`-tapahtumien jälkeen (M 6.1.4).
+  - Tweenin askeleet ovat vaiheen 4 herätyksiä, ja ne ajetaan ennen saman hetken toimijoita.
+  - Jokainen hetki on toiminto.
+- **Hallinta.**
+  - `start` palauttaa kahvan (`Value::Handle`), ja `stop(kahva)` päättää kohtauksen.
+  - `bind` päättää kohtauksen, kun yksikin sidottu entiteetti tuhoutuu.
+  - `scope: map` päättää kohtauksen, kun kartalla ei ole enää jäseniä.
+  - Useita kohtauksia voi kulkea yhtä aikaa aloitusjärjestyksessä.
+- **Tallennus.**
+  - `State.backgrounds` tallentaa kahvan, kutsun, `scope`- ja `bind`-tiedot, kellon alun ja ajon tilan (`TlState`): seuraavan rivin, silmukoiden vaiheet, `when`-portit ja tweenien jäljellä olevat askeleet.
+  - Rivit rakennetaan latauksessa uudelleen kutsusta.
+  - Vanhat tallennukset latautuvat ilman taustakohtauksia.
+- **`background realtime`.**
+  - Kohtaus kulkee käyttöliittymän kellolla (`Runner::realtime_tick`), myös syötettä odotettaessa.
+  - Sen kello ei ole tilaa, joten toisto on sama ilman käyttöliittymää.
+  - Lataus hylkää tilan muutokset, `say`- ja `log`-kutsut sekä väärät aikayksiköt. Pelin ajan kohtaus kirjoittaa paljaat luvut ja `realtime`-kohtaus ajat (`ms`, `s`).
+- **Väliaikaiset säännöt.**
+  - Taustakohtauksen `say` kirjoittaa repliikkinsä lokiin mutta ei vielä näytä ikkunaa.
+  - `wait scene` jätetään taustakohtauksessa väliin varoituksella.
+- **Oz-esimerkki.**
+  - `PATROL` kulkee.
+  - Se alkaa `after begin` -käsittelijässä, koska uuden pelin pelaaja ei saavu kartalle (`arrive`).
+- **Testit:** `crates/rlml-core/tests/background.rs`: partio kierroksittain ja toistona, tallennus ja lataus kesken kävelyn, `stop`, `bind` ja `scope: map`, `realtime`-kohtaus sekä lataustarkistukset.
+
+Alla on alkuperäinen tehtävälista.
+
 - **`background`:**
   - pelin aika kierroksina,
   - rivit ajetaan kierroksen rajalla (M 6.1.4),

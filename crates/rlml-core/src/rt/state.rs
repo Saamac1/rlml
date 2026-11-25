@@ -260,6 +260,10 @@ pub struct State {
     /// Scenes started so far: the next start's number for its
     /// presentation stream (M 4.1).
     pub scene_starts: u64,
+    /// Background scenes that run, in starting order (RS 9.9).
+    pub backgrounds: Vec<Background>,
+    /// The next background scene's handle.
+    pub next_handle: u64,
 }
 
 /// A foreground scene in the queue: its call, who started it and the map
@@ -269,6 +273,27 @@ pub struct QueuedScene {
     pub call: super::value::CommandValue,
     pub opener: Option<EntityId>,
     pub map: Option<MapId>,
+}
+
+/// A background scene that runs (RS 9.9): its handle, its call, who
+/// started it on which map, its `scope: map` and `bind`, and how far its
+/// timeline has run. Its rows follow from the call, so they are not kept
+/// (RS 11.1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Background {
+    pub handle: u64,
+    pub call: super::value::CommandValue,
+    pub opener: Option<EntityId>,
+    pub map: Option<MapId>,
+    pub scope_map: bool,
+    pub bind: Vec<EntityId>,
+    /// `background realtime`: presentation time; its clock is the front
+    /// end's, not state.
+    pub realtime: bool,
+    /// The game time of its clock's 0: the first round boundary after the
+    /// start; `None` until then.
+    pub base: Option<i64>,
+    pub st: super::timeline::TlState,
 }
 
 impl State {

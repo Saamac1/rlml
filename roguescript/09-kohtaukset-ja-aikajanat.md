@@ -243,14 +243,15 @@ scene CANDLES() timeline background realtime:
 | --- | --- | --- |
 | Kello | pelin aika, kierroksina (paljas luku) | esitysaika (`ms`, `s`) |
 | Kulkee | pelivuorojen mukana | myös kun peli odottaa syötettä |
-| Tilan muutokset | sallittu, kirjataan heti | latausvirhe |
+| Tilan muutokset | sallittu, kirjataan heti | latausvirhe, myös `log` |
 | `say` | sallittu, näytetään heti kierroksen rajalla | latausvirhe |
 | Etualan kohtauksen aikana | pysähtyy | jatkaa |
 
 - Rivit suoritetaan kierroksen rajalla, kierroksen tapahtumien ja ajastimien jälkeen ja ennen toimijoiden vuoroja (moottoridokumentti, luku [6.1.4](../moottori/06-ajo.md#614-mikroaskeleen-vaiheet)). Pelin aikaa käyttävän tweenin askeleet jaetaan keston mikroaskelille, ja moottori ajaa ne kohtauksen herätyksinä toimijoiden välissä. Graafisessa esitystavassa `move` liukuu sujuvasti.
 - **Käynnistys:** `start(SCENE(…), scope: map, bind: guard)` palauttaa kahvan, ja `stop(kahva)` pysäyttää kohtauksen. Kohtauksia voi olla käynnissä useita yhtä aikaa.
+- **Kello.** Pelin ajan kohtauksen kello alkaa ensimmäiseltä kierroksen rajalta `start`-kutsun jälkeen, joten rivi `00` ajetaan sillä rajalla. `realtime`-kohtauksen kello on esitysaikaa eikä kuulu pelin tilaan: tallennus säilyttää kohtauksen, ja ladattaessa sen kello alkaa alusta (moottoridokumentti, luku [5.2](../moottori/05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)). Siksi `realtime`-kohtauksessa ei saa olla myöskään `log`-kutsua, koska loki tallentuu.
 - `scope: map` päättää kohtauksen, kun pelaaja poistuu kartalta. Ilman sitä kohtaus on yleinen.
-- `bind: X` päättää kohtauksen, kun entiteetti X tuhoutuu (`removed`). Arvo voi olla yksi entiteetti tai kokoelma (luku [2.6](02-yleinen-syntaksi.md#26-tyypit)).
+- `bind: X` päättää kohtauksen, kun entiteetti X tuhoutuu (`removed`). Arvo voi olla yksi entiteetti tai kokoelma (luku [2.6](02-yleinen-syntaksi.md#26-tyypit)), ja kokoelmasta kohtaus päättyy, kun yksikin sen jäsen tuhoutuu.
 - Taustakohtaus päättyy itsestään, kun sen silmukattomat raidat ovat valmiita.
 
 ```roguescript

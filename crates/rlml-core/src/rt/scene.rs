@@ -104,7 +104,7 @@ impl<'m> Runner<'m> {
             ItemKind::Timeline { params, timeline } => {
                 self.w
                     .bind_params(params, call.args.clone(), &mut env, ns.as_deref(), item.pos)?;
-                let run = self.w.timeline_new(timeline, &mut env)?;
+                let run = self.w.timeline_new(timeline, &mut env, 1)?;
                 Ok(Level {
                     frames: vec![],
                     env,
@@ -331,14 +331,14 @@ impl<'m> Runner<'m> {
             let flow = if let Some(mut run) = top.timeline.take() {
                 let mut env = top.env.clone();
                 let by = std::mem::replace(&mut clock, Clock::Now);
-                let to_end = Some(run.end.max(run.clock));
+                let to_end = Some(run.plan.end.max(run.st.clock));
                 let until = match by {
                     _ if self.w.scene_skipping => to_end,
                     Clock::Now => None,
-                    Clock::Tick(ms) => Some(run.clock + ms),
+                    Clock::Tick(ms) => Some(run.st.clock + ms),
                     Clock::Out => to_end,
                 };
-                let flow = self.w.timeline_run(&mut run, &mut env, until);
+                let flow = self.w.timeline_run(&run.plan, &mut run.st, &mut env, until);
                 let scene = self.scene.as_mut().expect("the scene runs");
                 let top = scene.stack.last_mut().expect("its level runs");
                 top.timeline = Some(run);

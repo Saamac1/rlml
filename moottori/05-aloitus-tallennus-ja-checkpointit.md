@@ -30,7 +30,7 @@ Checkpoint 0 on tila `begin`-käsittelijöiden jälkeen. Jonoon laitetut etualan
 | etualan kohtaus, dialogi ja open-valikko | ei mitään: tallennus on estetty, ja automaattinen tallennus ottaa kohtausta edeltävän tilan (luku [5.4](#54-automaattinen-tallennus)) |
 | jonossa oleva etualan kohtaus | nimi ja argumentit |
 | kohtausten käynnistyslaskuri | seuraava järjestysnumero esityksen virralle (luku [4.1](04-satunnaisuus-ja-toistettavuus.md#41-satunnaisvirrat)) |
-| taustakohtaus | nimi, argumentit, `scope`, `bind`, kellon arvo ja silmukoiden vaiheet |
+| taustakohtaus | kahva, nimi, argumentit, `scope`, `bind`, kellon arvo ja silmukoiden vaiheet; `realtime`-kohtauksen kello on esitystä, joten se alkaa ladattaessa alusta |
 | pakka | nostopinon järjestys ja poistopakka |
 | taulu | ei mitään |
 | ajoitus | `game.time`, herätysjono järjestysnumeroineen, seuraava järjestysnumero ja karttojen kellot (luku [6.1.8](06-ajo.md#618-aktiiviset-kartat-ja-jäädytys)) |

@@ -85,6 +85,10 @@ pub struct Runner<'m> {
     pub scene_clock: bool,
     /// `rewind` gives the scene its answers again: no log rows.
     pub(crate) scene_silent: bool,
+    /// Background scenes' rows, laid out from their calls; not state.
+    pub(crate) bg_plans: super::background::BgPlans,
+    /// `background realtime` scenes' clocks; not state (RS 9.9).
+    pub(crate) realtime: super::background::Realtime,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -122,6 +126,8 @@ impl<'m> Runner<'m> {
             scene_saved: false,
             scene_clock: false,
             scene_silent: false,
+            bg_plans: Default::default(),
+            realtime: Default::default(),
         };
         // calls in `begin` are its own: checkpoint 0 is taken here anyway
         r.w.saves = Default::default();
@@ -210,6 +216,15 @@ impl<'m> Runner<'m> {
                 return Ok(Status::NoPlayer { rounds: 0 });
             };
             let now = self.clock(map);
+            // phase 4: background tweens' steps are wakes too; they go first
+            // at their moment (M 6.1.4)
+            if let Some((at, h)) = self.next_background_step()
+                && at <= self.w.s.game.time
+            {
+                self.run_background(h, at)?;
+                seen(&mut self.w);
+                continue;
+            }
             // phase 4: the wakes of this moment, by sequence number
             if let Some(wake) = self.w.s.next_wake(map)
                 && wake.at <= now
@@ -283,6 +298,9 @@ impl<'m> Runner<'m> {
                 .next_wake(map)
                 .map(|w| self.w.s.game.time + (w.at - now));
             let next = next_wake.map_or(boundary, |t| t.min(boundary));
+            let next = self
+                .next_background_step()
+                .map_or(next, |(t, _)| t.min(next));
             self.w.s.game.time = next;
             if next == boundary {
                 self.round()?;
@@ -369,7 +387,9 @@ impl<'m> Runner<'m> {
                 .emit_to("turn", vec![Value::Entity(e)], &env, Scope::Components)?;
         }
         self.w.emit_to("turn", vec![], &env, Scope::General)?;
-        self.end_action()
+        self.end_action()?;
+        // phase 3: the background scenes' rows of this round (M 6.1.4)
+        self.background_round()
     }
 
     /// The start of a wake: `hear` for new sounds, then `wake` (M 6.8,
@@ -390,6 +410,9 @@ impl<'m> Runner<'m> {
         self.w.flush_created(&env)?;
         self.seat_events()?;
         self.save_calls();
+        // a background scene ends with its bound entity or its map's last
+        // member (RS 9.9)
+        self.prune_backgrounds();
         // step 6: the queued foreground scenes (M 6.1.7)
         self.start_scenes()
     }

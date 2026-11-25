@@ -24,7 +24,9 @@ on BUMP(who, other) as ASK_SCARECROW when who == player and other has SUSPICION:
 on BUMP(who, other) as TOTO_AND_THE_SCREEN when who == player and other has SCREEN_MARK and not game.STORY.unmasked:
     start(SCREEN_FALLS(other))
 
-on arrive(who, map, p) as START_PATROL when who == player and map == THRONE_ROOM:
+// Dorothy aloittaa salista, ja uuden pelin pelaaja ei saavu (`arrive`),
+// joten partio alkaa heti pelin alussa
+after begin() as START_PATROL:
     s = entities(in: label(SOLDIER_POST)).first
     start(PATROL(s), scope: map, bind: s)
 

@@ -25,7 +25,10 @@ use super::input::InputLog;
 use super::path::{LoopState, PathLoop};
 use super::rng::Rng;
 use super::run::Runner;
-use super::state::{DeckState, Game, Instance, MapState, Place, QueuedScene, Seat, State, Wake};
+use super::state::{
+    Background, DeckState, Game, Instance, MapState, Place, QueuedScene, Seat, State, Wake,
+};
+use super::timeline::{LoopRun, Steps, TlState, Tween};
 use super::value::{Area, Card, CommandValue, ComponentValue, Dir, Pos, Side, Sound, Value};
 use super::world::{LogEntry, Noise, RtResult, World};
 use crate::model::Model;
@@ -288,6 +291,48 @@ form!(Sound, "sound", kind, at, source, level);
 form!(Noise, "noise", at, kind, source, time);
 form!(LogEntry, "msg", key, args, speech);
 form!(QueuedScene, "queued", call, opener, map);
+form!(
+    Background, "bg", handle, call, opener, map, scope_map, bind, realtime, base, st
+);
+form!(TlState, "tl", next, loops, gates, tweens, clock);
+form!(LoopRun, "track", round, next, stopped);
+form!(Tween, "tween", start, span, done, steps);
+
+impl Put for Steps {
+    fn put(&self, w: &mut Out) {
+        match self {
+            Steps::Move { e, route } => {
+                w.open("move");
+                (e, route).put(w);
+            }
+            Steps::Tiles { cells, tile, layer } => {
+                w.open("tiles");
+                (cells, (tile, layer)).put(w);
+            }
+        }
+        w.close();
+    }
+}
+
+impl Get for Steps {
+    fn get(r: &mut In) -> RtResult<Self> {
+        let tag = r.peek_tag().unwrap_or("").to_string();
+        r.open(&tag)?;
+        let s = match tag.as_str() {
+            "move" => {
+                let (e, route) = Get::get(r)?;
+                Steps::Move { e, route }
+            }
+            "tiles" => {
+                let (cells, (tile, layer)) = Get::get(r)?;
+                Steps::Tiles { cells, tile, layer }
+            }
+            t => return Err(r.err(format!("no tween `{t}`"))),
+        };
+        r.close()?;
+        Ok(s)
+    }
+}
 form!(Wake, "wake", entity, at, seq);
 form!(DeckState, "deck", draw, discard);
 form!(Seat, "seat", n, members, active);
@@ -450,6 +495,7 @@ impl Put for Value {
             Value::Component(c) => c.put(w),
             Value::Sound(s) => s.put(w),
             Value::Time(ms) => one(w, "ms", ms),
+            Value::Handle(h) => one(w, "handle", h),
             Value::Size(a, b) => one(w, "size", &(a, b)),
             Value::All => w.word("all"),
             Value::None => w.word("none"),
@@ -514,6 +560,7 @@ impl Get for Value {
             "deckname" => Value::Deck(Get::get(r)?),
             "table" => Value::Table(Get::get(r)?),
             "ms" => Value::Time(Get::get(r)?),
+            "handle" => Value::Handle(Get::get(r)?),
             "scene" => Value::Scene(<CommandValue as Get>::get(r)?),
             "size" => {
                 let (a, b) = Get::get(r)?;
@@ -714,6 +761,8 @@ impl Put for State {
         w.line();
         (&self.profile, self.camera).put(w);
         (&self.scene_queue, self.scene_starts).put(w);
+        w.line();
+        (&self.backgrounds, self.next_handle).put(w);
         w.close();
     }
 }
@@ -742,6 +791,12 @@ impl Get for State {
         let (acting, last_player_map) = Get::get(r)?;
         let (profile, camera) = Get::get(r)?;
         let (scene_queue, scene_starts) = Get::get(r)?;
+        // saves from before background scenes have none
+        let (backgrounds, next_handle) = if r.at_close() {
+            (vec![], 0)
+        } else {
+            Get::get(r)?
+        };
         r.close()?;
         Ok(State {
             entities,
@@ -761,6 +816,8 @@ impl Get for State {
             camera,
             scene_queue,
             scene_starts,
+            backgrounds,
+            next_handle,
         })
     }
 }
