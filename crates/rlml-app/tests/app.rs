@@ -2292,13 +2292,15 @@ fn the_profile_lives_over_games_and_the_engine_menu_resets_it() {
 // ---- the minigame's touch buttons (esimerkit/mini/ui/main.rlml) ----
 
 /// The middle cell of the minigame's button whose action is `action`
-/// written as its legend does: a command, `pass` or `open PAUSE`.
+/// written as its legend does: a command, `pass`, `open PAUSE` or
+/// `read LOG`.
 fn pad_button(app: &App, action: &str) -> (usize, usize) {
     use rlml_app::menu::ItemAction;
     let found = app.view.buttons.iter().find(|(_, a)| match a {
         ItemAction::Command(c) => c.ends_with(&format!(".{action}")) || c == action,
         ItemAction::Engine(e) => e == action,
         ItemAction::Open { menu, .. } => format!("open {menu}") == action,
+        ItemAction::Read(log) => format!("read {log}") == action,
         _ => false,
     });
     let (r, _) = found.unwrap_or_else(|| panic!("no button {action}: {:?}", app.view.buttons));
@@ -2349,6 +2351,40 @@ fn the_minigames_buttons_play_it() {
     assert!(app.menus.is_open());
     let s = screen(&mut app);
     assert!(s.contains("Tallenna"), "{s}");
+}
+
+#[test]
+fn the_oz_example_plays_on_a_phone_held_upright() {
+    let m = model(&oz());
+    let mut app = App::new(&m, 7, (40, 60)).unwrap();
+    let s = screen(&mut app);
+    for t in ["↑", "↓", "←", "→", "odota", "valikko", "loki"] {
+        assert!(s.contains(t), "{t}:\n{s}");
+    }
+    assert_eq!(app.view.buttons.len(), 7);
+    // taps answer the Guardian: the name field, then his line
+    let tap_map = |app: &mut App, t: u64| {
+        app.draw();
+        let r = app.view.map_rect.unwrap();
+        app.mouse_press(click(), r.x + 1, r.y + 1, ms(t)).unwrap();
+        app.mouse_release();
+    };
+    assert!(screen(&mut app).contains("Seis!"));
+    tap_map(&mut app, 10);
+    tap_map(&mut app, 20);
+    tap_map(&mut app, 30);
+    assert!(app.players_turn(), "{}", screen(&mut app));
+    let (x, y) = player_at(&app);
+    tap(&mut app, "MOVE.SOUTH", 40);
+    assert_eq!(player_at(&app), (x, y + 1));
+    let time = app.r.w.s.game.time;
+    tap(&mut app, "WAIT", 50);
+    assert!(app.r.w.s.game.time > time, "odota waits a turn");
+    // loki reads the log: the Guardian's lines are in it
+    tap(&mut app, "read LOG", 60);
+    let s = screen(&mut app);
+    assert!(s.contains("Loki") && s.contains("Seis!"), "{s}");
+    replays_the_same(&m, &app);
 }
 
 #[test]

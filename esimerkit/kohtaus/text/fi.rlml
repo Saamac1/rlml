@@ -50,3 +50,11 @@ HOME.EXIT Poistu
 
 LOG.TITLE Loki
 LOG.READ ↑↓ selaa  esc sulje
+
+PAD.NORTH ↑
+PAD.SOUTH ↓
+PAD.WEST ←
+PAD.EAST →
+PAD.WAIT odota
+PAD.MENU valikko
+PAD.LOG loki

@@ -23,12 +23,16 @@
     white-space: pre; pointer-events: none;
   }
   #stats[hidden] { display: none; }
+  /* the phone's keyboard for a scene's field: an input the player does not
+     see, 16px so that the page does not zoom in */
+  #typing { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; margin: 0; padding: 0; border: 0; opacity: 0; font-size: 16px; }
 </style>
 </head>
 <body>
 <canvas id="screen"></canvas>
 <pre id="message">Ladataan…</pre>
 <pre id="stats" hidden></pre>
+<form id="typing-form" autocomplete="off"><input id="typing" type="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></form>
 <script type="module" src="main.js"></script>
 </body>
 </html>

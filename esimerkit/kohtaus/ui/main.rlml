@@ -14,6 +14,48 @@ m
 legend:
 - m map
 
+layout PHONE
+
+```
+m
+p
+```
+
+legend:
+- m map size 15x10 center
+- p PAD size.height 9 center
+
+## Kosketusnapit
+
+> Pystyssä olevassa puhelimessa (`PHONE`, `game.rlml`) kartan alla ovat
+> kosketusnapit kuten minipelissä: suuntanapit odota-napin ympärillä,
+> ylhäällä vasemmalla `loki` ja oikealla `valikko`. Hahmoja päin
+> kävellään puhumaan, ja repliikin kuittaa napauttamalla. Dialogin kohdan
+> voi valita napauttamalla. Pohjassa pidetty nappi toistaa.
+
+panel PAD
+
+```
+llllllll nnnnnnnn mmmmmmmm
+llllllll nnnnnnnn mmmmmmmm
+llllllll nnnnnnnn mmmmmmmm
+wwwwwwww cccccccc eeeeeeee
+wwwwwwww cccccccc eeeeeeee
+wwwwwwww cccccccc eeeeeeee
+         ssssssss
+         ssssssss
+         ssssssss
+```
+
+legend:
+- l button read LOG text PAD.LOG look dark
+- n button MOVE.NORTH text PAD.NORTH
+- m button open PAUSE text PAD.MENU look dark
+- w button MOVE.WEST text PAD.WEST
+- c button WAIT text PAD.WAIT look dark
+- e button MOVE.EAST text PAD.EAST
+- s button MOVE.SOUTH text PAD.SOUTH
+
 log LOG history 50
 - STD.MESSAGE.COMBAT
 - SPEECH

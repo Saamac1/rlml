@@ -128,6 +128,13 @@ impl WebGame {
         Ok(WebGame { g })
     }
 
+    /// The scene's field that waits for typing: `text`, `number`, or
+    /// empty without one (RS 9.7). The page opens the phone's keyboard
+    /// for it.
+    pub fn field(&self) -> String {
+        self.g.field().into()
+    }
+
     /// A key by its binding name, for the next step.
     pub fn key(&mut self, name: &str) {
         if let Ok(b) = parse_binding(name) {

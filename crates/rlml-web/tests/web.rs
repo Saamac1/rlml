@@ -402,11 +402,31 @@ fn the_scene_example_plays_in_the_workers_loop() {
     ));
     let mut g = Game::new(m, 7, (60, 24)).unwrap();
     assert!(g.app.r.in_scene(), "the Guardian of the Gates asks a name");
-    // a name, the spectacles, and Dorothy's turn
-    for k in ["enter", "enter", "enter"] {
+    assert_eq!(g.field(), "", "his line first");
+    g.push(Event::Key(parse_binding("enter").unwrap()));
+    g.step(Duration::from_millis(10)).unwrap();
+    assert_eq!(
+        g.field(),
+        "text",
+        "the name field: the page brings up the keyboard"
+    );
+    // the keys the page's hidden input sends: letters, a backspace, enter
+    for k in ["D", "o", "r", "x", "backspace", "a", "enter"] {
         g.push(Event::Key(parse_binding(k).unwrap()));
-        g.step(Duration::from_millis(10)).unwrap();
     }
+    g.step(Duration::from_millis(20)).unwrap();
+    assert_eq!(g.field(), "", "answered");
+    let me = g.app.r.w.s.player.unwrap();
+    assert_eq!(
+        g.app
+            .r
+            .w
+            .name_text("fi", &rlml_core::rt::value::Value::Entity(me)),
+        "Dora"
+    );
+    // the spectacles, and Dorothy's turn
+    g.push(Event::Key(parse_binding("enter").unwrap()));
+    g.step(Duration::from_millis(30)).unwrap();
     assert!(g.app.players_turn());
     // the patrol walks on the rounds while Dorothy waits
     let soldier = |g: &Game| {

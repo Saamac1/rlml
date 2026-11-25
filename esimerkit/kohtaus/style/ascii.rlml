@@ -9,6 +9,8 @@ colors
 - FLOOR_GREEN 3a5a48
 - GOLD e0c050
 - STRAW d8c070
+- BUTTON 1f4a34
+- BUTTON_DARK 12301f
 
 tiles.glyphs ascii
 - default ? fg ff00ff
@@ -27,6 +29,16 @@ layers
 - GROUND map
 - THINGS entities where it has render
 - FOG fog
+
+## Napit
+
+> Kosketusnapit ovat smaragdinvihreitä valkoisella tekstillä, ja loki,
+> odota ja valikko tummempia. Painettu nappi vaalenee.
+
+panels
+- button fg ffffff bg BUTTON
+- button.dark bg BUTTON_DARK
+- button.pressed bg EMERALD
 
 ## Esitys
 

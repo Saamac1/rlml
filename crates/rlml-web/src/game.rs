@@ -157,6 +157,24 @@ impl Game {
         self.app.quit
     }
 
+    /// The scene's field that waits for typing: `text`, `number`, or empty
+    /// without one (RS 9.7). The page brings up the phone's keyboard for
+    /// it.
+    pub fn field(&self) -> &'static str {
+        use rlml_core::rt::world::{AskKind, Pause};
+        match self.app.r.scene_pause() {
+            Some(Pause::Ask {
+                kind: AskKind::Text { .. },
+                ..
+            }) => "text",
+            Some(Pause::Ask {
+                kind: AskKind::Number { .. },
+                ..
+            }) => "number",
+            _ => "",
+        }
+    }
+
     /// The time until a step matters without an event.
     pub fn wait(&self) -> Duration {
         self.app.wait()

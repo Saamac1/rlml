@@ -85,10 +85,22 @@ function step() {
     record('input', t1 - t0);
     record('tick', t2 - t1);
     persist();
+    tellField();
   } catch (e) {
     return fail(e);
   }
   show();
+}
+
+// a scene's field opens or closes: the page brings up the phone's
+// keyboard for it
+let field = '';
+function tellField() {
+  const f = game.field();
+  if (f !== field) {
+    field = f;
+    postMessage({ t: 'field', kind: f });
+  }
 }
 
 // the game's folder: rlml/GAME in OPFS, or null where there is none
@@ -196,6 +208,7 @@ onmessage = async (e) => {
       return;
     }
     postMessage({ t: 'ready', keys: game.bound_keys() });
+    tellField();
     show();
   } else if (m.t === 'resize' && !game) {
     size = m;

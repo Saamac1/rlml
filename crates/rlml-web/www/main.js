@@ -145,10 +145,59 @@ let bound = new Set();
 let worker = null;
 const send = (m) => worker && worker.postMessage(m);
 
+// the phone's keyboard for a scene's field (RS 9.7): a canvas cannot bring
+// it up, so a hidden input takes the typing while the field is open. A tap
+// focuses it, and what it holds goes to the game as keys: the input is
+// compared with what was sent, so composing, suggestions and corrections
+// arrive as backspaces and letters. A space in front keeps a backspace on
+// an empty field an input event.
+const typing = document.getElementById('typing');
+const typingForm = document.getElementById('typing-form');
+const LEAD = ' ';
+let fieldKind = '';
+let typed = '';
+function typingFocused() {
+  return document.activeElement === typing;
+}
+function openKeyboard() {
+  typing.inputMode = fieldKind === 'number' ? 'numeric' : 'text';
+  typing.value = LEAD;
+  typed = '';
+  typing.focus({ preventScroll: true });
+}
+typing.addEventListener('input', () => {
+  if (!typing.value.startsWith(LEAD)) {
+    // the lead went: a backspace on an empty field
+    typing.value = LEAD + typed;
+    return;
+  }
+  const now = typing.value.slice(LEAD.length);
+  let same = 0;
+  while (same < now.length && same < typed.length && now[same] === typed[same]) same++;
+  for (let i = same; i < typed.length; i++) send({ t: 'key', name: 'backspace' });
+  for (const ch of now.slice(same)) {
+    const name = key_binding(ch, '', false, false, false);
+    if (name !== undefined) send({ t: 'key', name });
+  }
+  typed = now;
+});
+// the keyboard's enter or done gives the answer
+typingForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  send({ t: 'key', name: 'enter' });
+});
+function fieldChanged(kind) {
+  fieldKind = kind;
+  if (!kind && typingFocused()) typing.blur();
+}
+
 // keys
 addEventListener('keydown', (e) => {
   // the browser's own (cmd+r, cmd+w) and keys still being composed
   if (!worker || e.metaKey || e.isComposing) return;
+  // the hidden input's letters, backspace and enter come as its input and
+  // its form's submit
+  if (typingFocused() && (e.key.length === 1 || ['Backspace', 'Enter', 'Unidentified', 'Process'].includes(e.key))) return;
   const name = key_binding(e.key, e.code, e.ctrlKey, e.altKey, e.shiftKey);
   if (name === undefined) return;
   if (bound.has(name)) e.preventDefault();
@@ -240,6 +289,12 @@ function lift(e) {
     // a tap shorter than the hold: a click now, let go a moment later so
     // the button shows it was pressed
     clearTimeout(t.timer);
+    // with a field open, the first tap brings up the keyboard; a tap
+    // after it gives the answer as before
+    if (!t.swiping && fieldKind && !typingFocused()) {
+      openKeyboard();
+      return;
+    }
     if (!t.swiping) {
       pressAt(t.cell, 'click');
       setTimeout(() => send({ t: 'release' }), 120);
@@ -340,6 +395,9 @@ async function start() {
         break;
       case 'error':
         show(m.text, true);
+        break;
+      case 'field':
+        fieldChanged(m.kind);
         break;
     }
   };

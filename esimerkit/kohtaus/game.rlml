@@ -23,6 +23,9 @@ game KOHTAUS
 - start THRONE_ROOM
 - at START
 - keys GAME
+- layout MAIN
+- layout PHONE when portrait and width < 70
+- walk STD.MOVE
 - PLAYER DOROTHY
 - STORY
 
