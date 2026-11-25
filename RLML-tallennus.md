@@ -118,6 +118,19 @@ Alla on alkuperäinen tehtävälista.
 
 ### 4. Tiedostomuoto
 
+Tehty 25.11.2026 haarassa `claude/tallennusmuoto`:
+- **Muoto.** `rt::save` sisältää `Save`-rakenteen (pelin nimi, nykyinen kuva, checkpoint ja viestit) sekä metodit `write`, `read`, `Runner::save` ja `Runner::load`. Arvot ovat sulkulausekkeita, ja jokainen ylimmän tason osio, ilmentymä ja kartta on omalla rivillään. Kartan tilet kirjoitetaan ajoina (`"FLOOR" 13`). Minipelin tallennus vie noin 7,6 kt.
+- **Poikkeamat suunnitelmasta:**
+  - Datan tiivistettä ei kirjoiteta, koska data ei estä latausta (M 5.2). Lataus tarkistaa vain pelin nimen.
+  - Viestiloki tallentuu kokonaan, koska `World::log` ei vielä rajaa määrää `history`-asetuksen mukaan.
+- **Testit:**
+  - Golden-transkriptit (myös portaat kahden kartan välillä ja ryhmä) tallennetaan, luetaan ja ladataan jokaisessa syötteen odotuksessa, ja loput näppäimet antavat saman tilan, virran ja viestit. Lisäksi `read(write(s)) == s`.
+  - Checkpoint säilyy tallennuksen yli.
+  - Kesken `wait`-odotuksen tallennettu komento jatkuu ladattuna.
+  - `other_game_saves_and_replays` (ohitettu, `RLML_GAME=…`) ajaa toisen pelin `testit/*.keys`-läpipeluut. Kapteeni Aaltolan neljä läpipeluuta (1 488 näppäintä) toistuvat lokistaan samoiksi ja pysyvät samoina, kun ne tallennetaan ja ladataan joka 60. näppäimen kohdalla.
+
+Alla on alkuperäinen tehtävälista.
+
 - `rt::save`: `write(&Snapshot) -> String` ja `read(&Model, &str) -> RtResult<Snapshot>`.
 - Ensimmäinen rivi on `rlml-save 1`, ja sen jälkeen tulevat pelin nimi ja datan tiiviste. Tiiviste on tiedoksi: speksin mukaan ladattu peli käyttää aloitushetken `game`-arvoja (M 5.2), joten eroava data ei estä latausta.
 - Osiot vastaavat M 5.2:n taulukkoa:

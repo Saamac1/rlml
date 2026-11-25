@@ -8,6 +8,7 @@ pub mod rng;
 pub mod path;
 pub mod play;
 pub mod run;
+pub mod save;
 pub mod senses;
 pub mod state;
 pub mod travel;

@@ -187,3 +187,22 @@ fn a_changed_body_drops_the_wait() {
     assert_eq!(r.w.s.game.time, 120, "no cost is paid: the turn comes at the wake");
     assert!(r.w.warnings.iter().any(|w| w.contains("DIG")), "{:?}", r.w.warnings);
 }
+
+#[test]
+fn a_saved_wait_goes_on_after_loading() {
+    use rlml_core::rt::save::Save;
+    let m = model(GAME);
+    let mut r = start(&m);
+    command(&mut r, "SEARCH");
+    let p = r.w.s.player.unwrap();
+    assert!(r.waiting.contains_key(&p), "SEARCH waits at the third spot");
+    let text = r.save().write();
+    let save = Save::read(&text).unwrap();
+    assert_eq!(save.now.s, r.w.s);
+    let mut loaded = Runner::load(&m, &save).unwrap();
+    assert_eq!(loaded.waiting, r.waiting, "the path, the set, the round and the locals (M 5.2)");
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    assert_eq!(loaded.run(0).unwrap(), Status::Input);
+    assert_eq!(counter(&loaded, "searched"), 9);
+    assert!(loaded.w.s == r.w.s, "the loaded game went as the one that was not saved");
+}

@@ -21,14 +21,14 @@ use super::world::{Noise, Point};
 pub struct Snapshot {
     pub s: State,
     pub rng: Rng,
-    sounds: Vec<Noise>,
-    sounds_made: u64,
-    heard_mark: BTreeMap<EntityId, u64>,
-    heard: BTreeMap<EntityId, Vec<Sound>>,
-    last_view: Option<(MapId, BTreeSet<(i32, i32)>)>,
-    switch: Option<(MapId, MapId)>,
-    waiting: BTreeMap<EntityId, Suspended>,
-    woke: BTreeMap<EntityId, Wake>,
+    pub(crate) sounds: Vec<Noise>,
+    pub(crate) sounds_made: u64,
+    pub(crate) heard_mark: BTreeMap<EntityId, u64>,
+    pub(crate) heard: BTreeMap<EntityId, Vec<Sound>>,
+    pub(crate) last_view: Option<(MapId, BTreeSet<(i32, i32)>)>,
+    pub(crate) switch: Option<(MapId, MapId)>,
+    pub(crate) waiting: BTreeMap<EntityId, Suspended>,
+    pub(crate) woke: BTreeMap<EntityId, Wake>,
 }
 
 impl<'m> Runner<'m> {

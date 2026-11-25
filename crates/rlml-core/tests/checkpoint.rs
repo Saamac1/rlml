@@ -200,3 +200,25 @@ fn a_rollback_replays() {
     assert!(got.w.s == r.w.s, "moments go back in the log, and the replay follows\n{text}");
     assert_eq!(got.w.rng, r.w.rng);
 }
+
+#[test]
+fn the_checkpoint_goes_with_the_save() {
+    use rlml_core::rt::save::Save;
+    let m = model(&example("mini"));
+    let mut r = start(&m);
+    input(&mut r, "STD.WAIT");
+    input(&mut r, "PRAY");
+    let altar = r.snapshot();
+    input(&mut r, "STD.WAIT");
+    // saved and loaded after the prayer: the rollback still finds the altar
+    let text = r.save().write();
+    let mut r = Runner::load(&m, &Save::read(&text).unwrap()).unwrap();
+    assert_eq!(r.run(0).unwrap(), Status::Input);
+    for _ in 0..40 {
+        input(&mut r, "STD.WAIT");
+        if r.w.s.game.time == altar.s.game.time {
+            break;
+        }
+    }
+    assert!(r.w.s == altar.s, "death in the loaded game went back to the prayer (M 5.3)");
+}

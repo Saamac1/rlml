@@ -692,6 +692,38 @@ fn golden_of(f: MemFiles, name: &str, keys: &str) {
         panic!("{name}: the transcript differs from line {}:\n got:  {:?}\n want: {:?}", line + 1, got.lines().nth(line), want.lines().nth(line));
     }
     replays_the_same(&m, &keys);
+    saves_at_every_turn(&m, &keys);
+}
+
+/// At every input wait the game is saved as text, read back and loaded,
+/// and the rest of the keys give the same game as without the save
+/// (M 5.2).
+fn saves_at_every_turn(m: &Model, keys: &[&str]) {
+    use rlml_core::rt::play::Session;
+    use rlml_core::rt::save::Save;
+    let mut whole = Session::start(m, 7).unwrap();
+    for k in keys {
+        whole.press(k).unwrap();
+    }
+    for cut in 0..=keys.len() {
+        let mut s = Session::start(m, 7).unwrap();
+        for k in &keys[..cut] {
+            s.press(k).unwrap();
+        }
+        let save = s.r.save();
+        let text = save.write();
+        let read = Save::read(&text).unwrap_or_else(|e| panic!("{e}\n{text}"));
+        assert!(read == save, "the save reads back as written (cut {cut})");
+        assert_eq!(read.write(), text);
+        s.r = Runner::load(m, &read).unwrap();
+        s.r.run(0).unwrap();
+        for k in &keys[cut..] {
+            s.press(k).unwrap();
+        }
+        assert!(s.r.w.s == whole.r.w.s, "saved and loaded after key {cut}, the game went otherwise");
+        assert_eq!(s.r.w.rng, whole.r.w.rng, "cut {cut}");
+        assert_eq!(s.r.w.log, whole.r.w.log, "cut {cut}");
+    }
 }
 
 /// The keys' input log, written and read back, replays to the same game:
@@ -1381,4 +1413,44 @@ fn control_that_will_move_counts_as_controlled() {
     assert!(!r.w.s.controlled(c), "the other member, played by its rule");
     r.w.s.unschedule(a);
     assert!(r.w.s.controlled(c), "the controlled member cannot act: control moves to `c` when it wakes (M 6.1.10)");
+}
+
+/// Another game's play-through tests, saved and loaded at every 60th key
+/// and replayed from their input log: `RLML_GAME=DIR cargo test -p
+/// rlml-core --test run_mini other_game -- --ignored` with the keys in
+/// `DIR/testit/*.keys`.
+#[test]
+#[ignore]
+fn other_game_saves_and_replays() {
+    let Some(dir) = std::env::var_os("RLML_GAME") else { return };
+    let dir = std::path::PathBuf::from(dir);
+    let mut f = files(&[]);
+    read_tree(&dir, &dir, &mut f.game);
+    let m = model(&f);
+    let mut tests: Vec<_> = std::fs::read_dir(dir.join("testit")).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "keys")).collect();
+    tests.sort();
+    for t in tests {
+        let text = std::fs::read_to_string(&t).unwrap();
+        let keys: Vec<&str> = text.split_whitespace().collect();
+        replays_the_same(&m, &keys);
+        let mut whole = rlml_core::rt::play::Session::start(&m, 7).unwrap();
+        for k in &keys {
+            whole.press(k).unwrap();
+        }
+        for cut in (0..keys.len()).step_by(60) {
+            let mut s = rlml_core::rt::play::Session::start(&m, 7).unwrap();
+            for k in &keys[..cut] {
+                s.press(k).unwrap();
+            }
+            let save = rlml_core::rt::save::Save::read(&s.r.save().write()).unwrap();
+            s.r = Runner::load(&m, &save).unwrap();
+            s.r.run(0).unwrap();
+            for k in &keys[cut..] {
+                s.press(k).unwrap();
+            }
+            assert!(s.r.w.s == whole.r.w.s, "{}: saved after key {cut}, the game went otherwise", t.display());
+            assert_eq!(s.r.w.log, whole.r.w.log, "{}: cut {cut}", t.display());
+        }
+        eprintln!("ok {} ({} keys)", t.display(), keys.len());
+    }
 }
