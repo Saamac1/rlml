@@ -1875,3 +1875,58 @@ fn a_scene_shows_its_lines_and_takes_confirm_tap_and_skip() {
     assert!(!screen(&mut app).contains("Tervetuloa"), "the minigame's log does not take SPEECH");
     replays_the_same(&m, &app);
 }
+
+// ---- dialogues: the Oz example (RS 9.7, RLML-kohtaukset.md step 2) ----
+
+fn oz() -> MemFiles {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut f = MemFiles::default();
+    read_tree(&repo, &repo.join("lib"), &mut f.engine);
+    let game = repo.join("esimerkit/kohtaus");
+    read_tree(&game, &game, &mut f.game);
+    f
+}
+
+#[test]
+fn the_oz_example_plays_its_dialogues() {
+    let m = model(&oz());
+    let mut app = App::new(&m, 7, (60, 24)).unwrap();
+    // the Guardian of the Gates asks a name: typed into the field
+    assert!(screen(&mut app).contains("Seis!"));
+    press(&mut app, "enter");
+    for c in "Dorothy".chars() {
+        app.key(Binding::key(KeyCode::Char(c), Mods::default()), ms(10)).unwrap();
+    }
+    assert!(screen(&mut app).contains("Dorothy_"), "the field shows what is typed");
+    press(&mut app, "enter");
+    assert!(screen(&mut app).contains("vihreät lasit") || screen(&mut app).contains("lasit lukitaan"));
+    press(&mut app, "enter");
+    assert!(app.players_turn());
+    let me = app.r.w.s.player.unwrap();
+    assert_eq!(app.r.w.name_text("fi", &rlml_core::rt::value::Value::Entity(me)), "Dorothy");
+    // Oz: HOME, WITCH dimmed until he has spoken his price, BYE
+    press(&mut app, "k k k enter");
+    let s = screen(&mut app);
+    assert!(s.contains("Haluan kotiin Kansasiin.") && s.contains("Kerro vielä noidasta."), "the choice as a menu:\n{s}");
+    let layer = app.menus.layers.last().unwrap();
+    assert_eq!(layer.menu.full, rlml_app::app::DIALOGUE_MENU);
+    assert_eq!(layer.rows.iter().map(|r| r.enabled).collect::<Vec<_>>(), [true, false, true], "WITCH is dim (RS 9.7)");
+    press(&mut app, "esc");
+    press(&mut app, "esc");
+    assert!(app.menus.layers.last().is_some_and(|l| l.menu.full == rlml_app::app::DIALOGUE_MENU), "a dialogue has no back; pause opens and closes over it");
+    press(&mut app, "enter");
+    assert!(screen(&mut app).contains("Lännen noita"));
+    press(&mut app, "enter");
+    assert!(app.players_turn(), "HEAD_GLOWS is a timeline, left out until step 4");
+    // the Scarecrow: THINK opens WHAT in the next choice
+    press(&mut app, "j j h h h k enter");
+    assert!(screen(&mut app).contains("aivoja"));
+    press(&mut app, "enter");
+    let s = screen(&mut app);
+    assert!(s.contains("Mitä nurkassa liikkuu?"), "{s}");
+    press(&mut app, "enter");
+    assert!(screen(&mut app).contains("Päät eivät köhi."), "promised: the screen's secret");
+    press(&mut app, "enter");
+    assert!(app.players_turn());
+    replays_the_same(&m, &app);
+}

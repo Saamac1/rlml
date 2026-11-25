@@ -101,6 +101,9 @@ fn engine_menu(saves: bool, profile: bool) -> Menu {
 /// The list of saves `load_game` opens; a row loads its slot.
 pub const LOAD_MENU: &str = "<load>";
 
+/// A dialogue's `choice` as a menu in context `DIALOGUE` (M 7.5).
+pub const DIALOGUE_MENU: &str = "<dialogue>";
+
 /// A slot as the list of saves shows it.
 fn slot_label(slot: Slot) -> String {
     match slot {
@@ -211,6 +214,10 @@ pub struct App<'m> {
     /// The seats' devices came from the join screen or a join: a pad that
     /// connects does not take a seat then.
     chosen_devices: bool,
+    /// A scene's field: what the player has typed (RS 9.7).
+    pub field: String,
+    /// The menu a scene's `open` showed, until it closes.
+    scene_menu: Option<String>,
 }
 
 /// The asked parameters' list menu as a layer.
@@ -365,6 +372,8 @@ impl<'m> App<'m> {
             joining: None,
             last_device: Device::Keyboard(1),
             chosen_devices: false,
+            field: String::new(),
+            scene_menu: None,
         };
         app.baud = crate::draw::log_baud(&app.r.w, "");
         match app.title() {
@@ -765,7 +774,7 @@ impl<'m> App<'m> {
         let mut f = if self.playing { self.view.draw(&mut self.r.w, &self.lang, w, h) } else { Frame::new(w, h) };
         // a scene's line over the map, under any menu (M 7.4)
         if let Some(pause) = self.r.scene_pause().cloned() {
-            menu::draw_say(&mut f, &self.r.w, &self.lang, &pause);
+            menu::draw_say(&mut f, &self.r.w, &self.lang, &pause, Some(&self.field));
         }
         self.menu_drawn = match self.menus.layers.last() {
             Some(layer) => menu::draw(&mut f, &self.r.w, &self.lang, layer),
@@ -1091,7 +1100,7 @@ impl<'m> App<'m> {
             }
         })?;
         self.write_saves();
-        Ok(())
+        self.sync_scene()
     }
 
     /// A key at time `now` (M 8).
@@ -1106,8 +1115,117 @@ impl<'m> App<'m> {
             self.quit = true;
             return Ok(());
         }
+        // a scene's field takes the keys as text (RS 9.7)
+        if self.field_key(&b)? {
+            return self.sync_scene();
+        }
         let device = Device::Keyboard(self.input.keys.part_of(&b));
-        self.press(device, Press::Key(b), now)
+        self.press(device, Press::Key(b), now)?;
+        self.sync_scene()
+    }
+
+    /// A key for a scene's field: a character, `backspace`, `enter` to give
+    /// the answer, `esc` to cancel it. `false` without a field.
+    fn field_key(&mut self, b: &Binding) -> RtResult<bool> {
+        use rlml_core::rt::world::{AskKind, Pause};
+        let Some(Pause::Ask { kind, .. }) = self.r.scene_pause().cloned() else { return Ok(false) };
+        if self.menus.is_open() {
+            return Ok(false);
+        }
+        let Binding::Key(code, mods) = b else { return Ok(false) };
+        match code {
+            KeyCode::Char(c) if !mods.ctrl && !mods.alt => {
+                let fits = match kind {
+                    AskKind::Number { .. } => c.is_ascii_digit() || (*c == '-' && self.field.is_empty()),
+                    AskKind::Text { max } => self.field.chars().count() < max,
+                };
+                if fits {
+                    self.field.push(*c);
+                }
+            }
+            KeyCode::Backspace => {
+                self.field.pop();
+            }
+            KeyCode::Enter => self.field_answer()?,
+            KeyCode::Esc => {
+                self.field.clear();
+                self.r.scene_answer(Value::None)?;
+                self.advance(0)?;
+            }
+            _ => {}
+        }
+        Ok(true)
+    }
+
+    /// The field's text as its answer: a number in range or the text; an
+    /// empty field is `none`.
+    fn field_answer(&mut self) -> RtResult<()> {
+        use rlml_core::rt::world::{AskKind, Pause};
+        let Some(Pause::Ask { kind, .. }) = self.r.scene_pause().cloned() else { return Ok(()) };
+        let v = match kind {
+            _ if self.field.is_empty() => Value::None,
+            AskKind::Number { .. } => match self.field.parse::<i64>() {
+                Ok(n) => Value::Number(n),
+                Err(_) => return Ok(()),
+            },
+            AskKind::Text { .. } => Value::Text(self.field.clone()),
+        };
+        if self.r.scene_answer(v)? {
+            self.field.clear();
+            self.advance(0)?;
+        }
+        Ok(())
+    }
+
+    /// The scene's menus as it waits: a `choice` as the dialogue menu, the
+    /// menu `open` waits for, and a closed one answered (RS 9.7).
+    fn sync_scene(&mut self) -> RtResult<()> {
+        use rlml_core::rt::world::Pause;
+        let pause = self.r.scene_pause().cloned();
+        // the menu `open` showed has closed
+        if let Some(name) = self.scene_menu.clone()
+            && self.menus.position(&name).is_none()
+            && self.reading.is_none()
+        {
+            self.scene_menu = None;
+            if matches!(pause, Some(Pause::Open { .. })) {
+                self.r.scene_closed()?;
+                self.advance(0)?;
+                return self.sync_scene();
+            }
+        }
+        match pause {
+            Some(Pause::Choice { scene, items, .. }) => {
+                let cursor = self.menus.layers.last().filter(|l| l.menu.full == DIALOGUE_MENU).map(|l| l.cursor);
+                self.menus.layers.retain(|l| l.menu.full != DIALOGUE_MENU);
+                let rows = items
+                    .iter()
+                    .map(|i| {
+                        let text = self.r.w.text(&self.lang, &format!("{scene}.{}", i.name), &i.args);
+                        let label = match i.adjust {
+                            Some((now, _, _)) => format!("{text}  ◂ {now} ▸"),
+                            None => text,
+                        };
+                        Item { key: i.name.clone(), action: ItemAction::Engine("confirm".into()), hide: None, disabled: None, label: Some(label) }
+                    })
+                    .collect();
+                let menu = Menu { full: DIALOGUE_MENU.into(), ns: None, context: "DIALOGUE".into(), is_final: true, width: None, height: None, items: rows, verbs: false };
+                let mut layer = menu::Layer::open(&mut self.r.w, menu);
+                for (row, item) in layer.rows.iter_mut().zip(&items) {
+                    row.enabled = item.enabled;
+                }
+                layer.cursor = cursor.filter(|&c| c < layer.rows.len()).or_else(|| layer.rows.iter().position(|r| r.enabled)).unwrap_or(0);
+                self.menus.layers.push(layer);
+            }
+            Some(Pause::Open { name, .. }) if self.scene_menu.is_none() => {
+                self.menus.layers.retain(|l| l.menu.full != DIALOGUE_MENU);
+                self.open(&name, false);
+                self.scene_menu = Some(name);
+            }
+            Some(Pause::Open { .. }) => {}
+            _ => self.menus.layers.retain(|l| l.menu.full != DIALOGUE_MENU),
+        }
+        Ok(())
     }
 
     /// A pad press at time `now` (M 8.2).
@@ -1117,7 +1235,8 @@ impl<'m> App<'m> {
         self.clock = now;
         self.note = None;
         self.pad_connected(id);
-        self.press(Device::Pad(id), Press::Pad(p), now)
+        self.press(Device::Pad(id), Press::Pad(p), now)?;
+        self.sync_scene()
     }
 
     /// A press from a device, routed by M 8.2: `ALWAYS` from every device,
@@ -1261,6 +1380,19 @@ impl<'m> App<'m> {
 
     /// An engine action from a key or a menu item (M 8, M 9.1).
     fn engine(&mut self, a: &str, now: Duration) -> RtResult<()> {
+        // an `adjust` item moves with left and right (RS 9.7); a dialogue
+        // has no `back`
+        if let Some(layer) = self.menus.layers.last().filter(|l| l.menu.full == DIALOGUE_MENU) {
+            let item = layer.rows.get(layer.cursor).map(|r| layer.menu.items[r.item].key.clone());
+            match (a, item) {
+                ("cursor.west" | "cursor.east", Some(item)) => {
+                    self.r.scene_adjust(&item, if a == "cursor.east" { 1 } else { -1 })?;
+                    return self.sync_scene();
+                }
+                ("back" | "close", _) => return Ok(()),
+                _ => {}
+            }
+        }
         // a scene's own actions (RS 9.8): `rewind` comes with timelines
         if self.r.in_scene() && !self.menus.is_open() {
             match a {
@@ -1386,6 +1518,15 @@ impl<'m> App<'m> {
 
     /// `confirm` in a menu: the item under the cursor (M 7.5).
     fn choose(&mut self, now: Duration) -> RtResult<()> {
+        // a dialogue's item: chosen, or an `adjust` item raised (RS 9.7)
+        if let Some(layer) = self.menus.layers.last().filter(|l| l.menu.full == DIALOGUE_MENU) {
+            let Some(item) = layer.chosen().map(|i| i.key.clone()) else { return Ok(()) };
+            if !self.r.scene_choose(&item)? {
+                self.r.scene_adjust(&item, 1)?;
+            }
+            self.advance(0)?;
+            return self.sync_scene();
+        }
         if self.menus.layers.last().is_some_and(|l| l.menu.full == COIN_MENU) {
             return self.choose_coin(now);
         }
@@ -2226,6 +2367,11 @@ impl<'m> App<'m> {
     /// awaited seat's, read from keyboard part 1's rows, since the mouse
     /// has no part of its own. Menus take the mouse later.
     pub fn mouse_press(&mut self, b: Binding, x: usize, y: usize, now: Duration) -> RtResult<()> {
+        self.mouse_press_on(b, x, y, now)?;
+        self.sync_scene()
+    }
+
+    fn mouse_press_on(&mut self, b: Binding, x: usize, y: usize, now: Duration) -> RtResult<()> {
         if !self.mouse {
             return Ok(());
         }
@@ -2233,10 +2379,16 @@ impl<'m> App<'m> {
         self.typed_out(now);
         self.last_key = now;
         self.clock = now;
-        // a tap or a click confirms a scene's line (M 7.4)
+        // a tap or a click confirms a scene's line or gives its field's
+        // answer (M 7.4)
         if self.r.in_scene() && !self.menus.is_open() && b == Binding::mouse(termplate_core::keys::Mouse::Click) {
-            self.r.scene_confirm()?;
-            return self.advance(0);
+            if matches!(self.r.scene_pause(), Some(rlml_core::rt::world::Pause::Ask { .. })) {
+                self.field_answer()?;
+            } else {
+                self.r.scene_confirm()?;
+                self.advance(0)?;
+            }
+            return self.sync_scene();
         }
         // a held panel shows until the button goes up, or the next click
         if self.overlay.is_some() && !self.releases {

@@ -175,4 +175,97 @@ impl<'m> Runner<'m> {
         self.scene = Some(Box::new(ActiveScene { stack: vec![level], ..*scene }));
         self.run_scene()
     }
+
+    /// The top level's frames and env, taken out while the world runs
+    /// with them.
+    fn with_top<T>(&mut self, f: impl FnOnce(&mut super::world::World<'m>, &mut Vec<Frame>, &mut Env) -> RtResult<T>) -> RtResult<T> {
+        let scene = self.scene.as_mut().ok_or("no scene")?;
+        let top = scene.stack.last_mut().ok_or("no scene level")?;
+        let (mut frames, mut env) = (std::mem::take(&mut top.frames), top.env.clone());
+        let out = f(&mut self.w, &mut frames, &mut env);
+        let top = self.scene.as_mut().and_then(|s| s.stack.last_mut()).ok_or("no scene level")?;
+        top.frames = frames;
+        top.env = env;
+        out
+    }
+
+    /// A choice's item chosen (RS 9.7): its block runs, and the scene goes
+    /// on after the choice. A hidden, dimmed or `adjust` item is no choice.
+    pub fn scene_choose(&mut self, name: &str) -> RtResult<bool> {
+        let Some(Pause::Choice { items, options, .. }) = self.w.pause.clone() else { return Ok(false) };
+        let ok = items.iter().any(|i| i.name == name && i.enabled && i.adjust.is_none());
+        let Some(option) = options.iter().find(|o| o.name == name).filter(|_| ok) else { return Ok(false) };
+        let seat = self.scene_seat();
+        self.record(seat, Act::SceneChoose(name.to_string()));
+        self.w.pause = None;
+        if let crate::rs::ast::OptionBody::Block(body) = &option.body {
+            let body = body.clone();
+            self.with_top(|_, frames, _| {
+                frames.push(Frame::Block { stmts: body, i: 0 });
+                Ok(())
+            })?;
+        }
+        self.run_scene()?;
+        Ok(true)
+    }
+
+    /// An `adjust` item moved by one (`step` +1 or -1) (RS 9.7). The choice
+    /// stays, its items seen again: a moved value may enable another item.
+    pub fn scene_adjust(&mut self, name: &str, step: i64) -> RtResult<bool> {
+        let Some(Pause::Choice { scene, options, .. }) = self.w.pause.clone() else { return Ok(false) };
+        let Some(option) = options.iter().find(|o| o.name == name).cloned() else { return Ok(false) };
+        let moved = self.with_top(|w, _, env| w.adjust(&option, step, env))?;
+        if moved {
+            let seat = self.scene_seat();
+            self.record(seat, Act::SceneAdjust(name.to_string(), step.signum()));
+            let items = self.with_top(|w, _, env| w.choice_items(&options, env))?;
+            self.w.pause = Some(Pause::Choice { scene, items, options });
+        }
+        Ok(moved)
+    }
+
+    /// A field's answer (RS 9.7): a number in its range, a text cut to its
+    /// length, or `none` when the player cancels.
+    pub fn scene_answer(&mut self, v: super::value::Value) -> RtResult<bool> {
+        use super::value::Value;
+        use super::world::AskKind;
+        let Some(Pause::Ask { into, kind }) = self.w.pause.clone() else { return Ok(false) };
+        let v = match (kind, v) {
+            (_, Value::None) => Value::None,
+            (AskKind::Number { lo, hi }, Value::Number(n)) if (lo..=hi).contains(&n) => Value::Number(n),
+            (AskKind::Text { max }, Value::Text(t)) => Value::Text(t.chars().take(max).collect()),
+            _ => return Ok(false),
+        };
+        let seat = self.scene_seat();
+        match super::input::Arg::of(&v, &self.w.s) {
+            Ok(a) => self.record(seat, Act::SceneAnswer(a)),
+            Err(e) => {
+                self.inputs.broken.get_or_insert(e);
+            }
+        }
+        self.w.pause = None;
+        self.with_top(|_, _, env| {
+            env.locals.insert(into, v);
+            Ok(())
+        })?;
+        self.run_scene()?;
+        Ok(true)
+    }
+
+    /// The menu or panel `open` waited for closed (RS 9.7): `x = open …`
+    /// gets `none` until list menus give their choice.
+    pub fn scene_closed(&mut self) -> RtResult<bool> {
+        let Some(Pause::Open { into, .. }) = self.w.pause.clone() else { return Ok(false) };
+        let seat = self.scene_seat();
+        self.record(seat, Act::SceneClose);
+        self.w.pause = None;
+        if let Some(name) = into {
+            self.with_top(|_, _, env| {
+                env.locals.insert(name, super::value::Value::None);
+                Ok(())
+            })?;
+        }
+        self.run_scene()?;
+        Ok(true)
+    }
 }

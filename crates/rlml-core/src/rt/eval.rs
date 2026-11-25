@@ -310,6 +310,41 @@ impl World<'_> {
                     v => Err(self.rt_err(env, e.pos, format!("`wait scene` takes a scene, not `{v}`"))),
                 };
             }
+            // a dialogue's choice: every item's conditions now, once (RS 9.7);
+            // a skip stops here, as a choice needs the player (RS 9.8)
+            StmtKind::Choice(options) if env.kind == BodyKind::Scene => {
+                self.scene_skipping = false;
+                let items = self.choice_items(options, env)?;
+                self.pause = Some(super::world::Pause::Choice { scene: env.name.clone(), items, options: options.clone() });
+                return Ok(Some(Flow::Pause));
+            }
+            StmtKind::Open(call) | StmtKind::OpenValue { call, .. } if env.kind == BodyKind::Scene => {
+                let into = match &s.kind {
+                    StmtKind::OpenValue { name, .. } => Some(name.clone()),
+                    _ => None,
+                };
+                let name = match &call.kind {
+                    ExprKind::Call(f, _) => f.as_ref(),
+                    _ => call,
+                };
+                let ExprKind::Name { name, .. } = &name.kind else { return Err(self.rt_err(env, s.pos, "`open` takes a menu or a panel")) };
+                let full = self.resolve(env, name).map(|d| d.full.clone()).ok_or_else(|| self.rt_err(env, s.pos, format!("no menu or panel `{name}`")))?;
+                self.scene_skipping = false;
+                self.pause = Some(super::world::Pause::Open { name: full, into });
+                return Ok(Some(Flow::Pause));
+            }
+            StmtKind::WaitInput { name, kind, arg } if env.kind == BodyKind::Scene => {
+                let v = self.eval(arg, env)?;
+                let kind = match (kind.as_str(), v) {
+                    ("number", Value::Range(lo, Some(hi))) => super::world::AskKind::Number { lo, hi },
+                    ("number", Value::Number(hi)) => super::world::AskKind::Number { lo: 0, hi },
+                    ("text", Value::Number(n)) => super::world::AskKind::Text { max: n.max(1) as usize },
+                    (k, v) => return Err(self.rt_err(env, arg.pos, format!("`wait {k}` does not take `{v}`"))),
+                };
+                self.scene_skipping = false;
+                self.pause = Some(super::world::Pause::Ask { into: name.clone(), kind });
+                return Ok(Some(Flow::Pause));
+            }
             StmtKind::Wait(_) | StmtKind::WaitInput { .. } | StmtKind::Open(_) | StmtKind::OpenValue { .. } | StmtKind::Choice(_) => {
                 return Err(self.rt_err(env, s.pos, "scenes, dialogs, menus and input waits are not supported yet"));
             }
@@ -1062,6 +1097,68 @@ impl World<'_> {
 
     /// Binds a function's or command's parameters (RS 2.5): positional,
     /// named, then defaults; a number parameter rolls dice (D 5.2).
+    /// A choice's items as the player sees them: `hide when` drops an
+    /// item, `disabled when` dims it, its key's parameters and an
+    /// `adjust` item's value, all evaluated now (RS 9.7).
+    pub(crate) fn choice_items(&mut self, options: &[ChoiceOption], env: &mut Env) -> RtResult<Vec<super::world::ChoiceItem>> {
+        let mut out = Vec::new();
+        for o in options {
+            if let Some(h) = &o.hide
+                && self.truth(h, env)?
+            {
+                continue;
+            }
+            let enabled = match &o.disabled {
+                Some(d) => !self.truth(d, env)?,
+                None => true,
+            };
+            let mut args = Vec::new();
+            for a in &o.args {
+                if let Some(n) = &a.name {
+                    args.push((n.clone(), self.eval(&a.value, env)?));
+                }
+            }
+            let adjust = match &o.body {
+                OptionBody::Adjust { target, range, .. } => {
+                    let now = self.eval(target, env)?;
+                    let now = self.number(now, env, target.pos)?;
+                    let (lo, hi) = match self.eval(range, env)? {
+                        Value::Range(lo, Some(hi)) => (lo, hi),
+                        v => return Err(self.rt_err(env, range.pos, format!("`adjust` takes a range, not `{v}`"))),
+                    };
+                    Some((now, lo, hi))
+                }
+                OptionBody::Block(_) => None,
+            };
+            out.push(super::world::ChoiceItem { name: o.name.clone(), args, enabled, adjust });
+        }
+        Ok(out)
+    }
+
+    /// An `adjust` item moved by `step` (RS 9.7): within its range, and with
+    /// a pool, a raise takes one from it and a cut gives one back. `false`
+    /// when it cannot move.
+    pub(crate) fn adjust(&mut self, option: &ChoiceOption, step: i64, env: &mut Env) -> RtResult<bool> {
+        let OptionBody::Adjust { target, range, pool } = &option.body else { return Ok(false) };
+        let now = self.eval(target, env)?;
+        let now = self.number(now, env, target.pos)?;
+        let Value::Range(lo, Some(hi)) = self.eval(range, env)? else { return Ok(false) };
+        let to = now + step.signum();
+        if to < lo || to > hi {
+            return Ok(false);
+        }
+        if let Some(p) = pool {
+            let left = self.eval(p, env)?;
+            let left = self.number(left, env, p.pos)?;
+            if step > 0 && left <= 0 {
+                return Ok(false);
+            }
+            self.assign(p, Value::Number(left - step.signum()), env)?;
+        }
+        self.assign(target, Value::Number(to), env)?;
+        Ok(true)
+    }
+
     /// Binds a scene's parameters (RS 9).
     pub(crate) fn bind_params(&mut self, params: &[Param], args: Vec<(Option<String>, Value)>, env: &mut Env, ns: Option<&str>, pos: Pos) -> RtResult<()> {
         self.bind(params, args, env, ns, pos)
@@ -1766,8 +1863,11 @@ impl World<'_> {
             "start" => {
                 let Value::Scene(call) = a0 else { return Err(self.rt_err(env, pos, "`start` takes a scene")) };
                 let timeline = self.decl_of(&call.name).is_some_and(|(item, _, _)| matches!(item.kind, ItemKind::Timeline { .. }));
+                // until timelines run (RLML-kohtaukset.md steps 4 and 5) a
+                // timeline is left out with a warning
                 if timeline {
-                    return Err(self.rt_err(env, pos, format!("timeline scenes do not run yet (`{}`, RLML-kohtaukset.md step 4)", call.name)));
+                    self.warnings.push(format!("{}:{}: the timeline scene `{}` is left out: timelines do not run yet", env.file, pos.line, call.name));
+                    return Ok(Value::None);
                 }
                 let opener = env.actor.or(self.s.player);
                 self.s.scene_queue.push(super::state::QueuedScene { call, opener, map: env.map });

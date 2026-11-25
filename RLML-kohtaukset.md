@@ -84,6 +84,26 @@ Alla on alkuperäinen tehtävälista.
 
 ### 2. Dialogit, valikot ja kentät
 
+Tehty 25.11.2026 haarassa `claude/kohtaukset-2`:
+- **`choice`:**
+  - `hide when`, `disabled when` ja kohdan parametrit arvioidaan kerralla (`World::choice_items`).
+  - Valittu kohta ajaa lohkonsa, ja kohtaus jatkuu `choice`-lauseen jälkeen.
+  - Säädettävä kohta (`adjust … pool`) liikkuu yhden kerrallaan välinsä ja poolinsa rajoissa.
+  - Ohitus pysähtyy valintaan.
+- **`open VALIKKO(…)` ja `x = open …`** odottavat valikon sulkeutumista. `x` saa arvon `none`, kunnes listavalikot toimivat. Paneeli aukeaa modaalisena kuten sidonnasta.
+- **`x = wait number(a..b)` ja `x = wait text(N)`:** luku välin sisällä, teksti leikattuna, ja peruutus antaa `none`.
+- **Syötelokin rivit:** `scene.choose`, `scene.adjust`, `scene.answer` ja `scene.close`. Toisto ajaa ne.
+- **Sovellus:**
+  - valinta on valikko kontekstissa `DIALOGUE`: himmeät kohdat, säädettävä kohta muodossa `Voima ◂ 12 ▸`, vasen ja oikea säätävät, ja `confirm` nostaa arvoa yhdellä,
+  - dialogilla ei ole `back`-toimintoa,
+  - tekstikentässä näkyvät kirjoitettu teksti ja raja; `enter` antaa vastauksen, `esc` peruu ja napautus antaa vastauksen.
+- **`rlml run`:** numeronäppäin valitsee näkyvän kohdan, ja `enter` peruu kentän ja sulkee `open`-odotuksen.
+- **Speksin tarkennus.** Speksin mukaan `choice`-kohtien ehdot arvioidaan kerran (RS 9.7). Säädettävän kohdan jälkeen ne arvioidaan uudelleen, jotta Valmis-kohta aukeaa, kun pisteet on jaettu, kuten RS 9.7:n `CREATE` vaatii. Tarkennus on kirjattu lukuun RS 9.7 ja muutoslokiin.
+- **Väliaikainen sääntö.** Aikajanan käynnistys (`start`) jätetään väliin ajon varoituksella, kunnes vaiheet 4 ja 5 on tehty, joten Oz-esimerkki on pelattavissa.
+- **Testit:** `crates/rlml-core/tests/scenes.rs` (`KING.TALK`, `GNOME.RIDDLE` ja `CREATE` sovitettuina sekä `open`) ja sovellustesti, joka pelaa Oz-esimerkin portinvartijan, Ozin ja Variksenpelättimen dialogit.
+
+Alla on alkuperäinen tehtävälista.
+
 - **`choice`:**
   - kohdat tekstiavaimina,
   - `hide when` ja `disabled when` arvioidaan kerralla `choice`-lauseen alkaessa,

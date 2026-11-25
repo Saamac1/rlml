@@ -174,7 +174,7 @@ scene GNOME.RIDDLE(speaker: entity):
 
 **Kohdan parametrit.** `choice`-kohta voi saada tekstiavaimensa parametrit `say`-kutsun muodossa: `BUY_SWORD(PRICE: PRICE_OF(SWORD)) disabled when PRICE_OF(SWORD) > player.PURSE.coin:`. Parametrit lasketaan samalla kertaa kuin `hide when` ja `disabled when`.
 
-**Säädettävä kohta.** `NIMI adjust KENTTÄ a..b [pool NIMI]` ilman runkoa muuttaa kentän arvoa vasemmalla ja oikealla eikä päätä valintaa. `pool` on paikallinen nimi tai kenttä, josta korotukset vähennetään ja johon laskut palautetaan. Valinta päättyy tavalliseen kohtaan.
+**Säädettävä kohta.** `NIMI adjust KENTTÄ a..b [pool NIMI]` ilman runkoa muuttaa kentän arvoa vasemmalla ja oikealla eikä päätä valintaa. `pool` on paikallinen nimi tai kenttä, josta korotukset vähennetään ja johon laskut palautetaan. Valinta päättyy tavalliseen kohtaan. Säätö ei päätä valintaa, joten kohtien ehdot arvioidaan säädön jälkeen uudelleen: alla `DONE` aukeaa, kun pisteet on jaettu.
 
 ```roguescript
 scene CREATE(hero: entity):

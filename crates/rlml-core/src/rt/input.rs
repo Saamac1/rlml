@@ -67,6 +67,14 @@ pub enum Act {
     SceneSkip,
     /// A scene from its start again (`restart`).
     SceneRestart,
+    /// A choice's item (`scene.choose NAME`).
+    SceneChoose(String),
+    /// An `adjust` item moved (`scene.adjust NAME +1`).
+    SceneAdjust(String, i64),
+    /// A field's answer (`scene.answer VALUE`).
+    SceneAnswer(Arg),
+    /// The menu `open` waited for closed (`scene.close`).
+    SceneClose,
     /// The end of the log: the world went on to this moment.
     End,
 }
@@ -197,6 +205,10 @@ impl fmt::Display for Row {
             Act::SceneConfirm => f.write_str(" scene.confirm"),
             Act::SceneSkip => f.write_str(" skip"),
             Act::SceneRestart => f.write_str(" restart"),
+            Act::SceneChoose(n) => write!(f, " scene.choose {n}"),
+            Act::SceneAdjust(n, s) => write!(f, " scene.adjust {n} {s:+}"),
+            Act::SceneAnswer(a) => write!(f, " scene.answer {a}"),
+            Act::SceneClose => f.write_str(" scene.close"),
             Act::End => f.write_str(" end"),
         }
     }
@@ -319,6 +331,13 @@ fn read_row(line: &str) -> Result<Row, String> {
         "scene.confirm" => Act::SceneConfirm,
         "skip" => Act::SceneSkip,
         "restart" => Act::SceneRestart,
+        "scene.close" => Act::SceneClose,
+        "scene.choose" => Act::SceneChoose(rest.first().ok_or("`scene.choose` takes an item")?.clone()),
+        "scene.adjust" => Act::SceneAdjust(
+            rest.first().ok_or("`scene.adjust` takes an item")?.clone(),
+            rest.get(1).and_then(|s| s.parse().ok()).ok_or("`scene.adjust` takes +1 or -1")?,
+        ),
+        "scene.answer" => Act::SceneAnswer(read_arg(rest.first().ok_or("`scene.answer` takes a value")?)?),
         name => {
             let mut args = Vec::new();
             for w in rest {
@@ -504,16 +523,26 @@ impl<'m> Replay<'m> {
                 }
                 self.status = self.r.run(0)?;
             }
-            Act::SceneConfirm | Act::SceneSkip | Act::SceneRestart => {
+            Act::SceneConfirm | Act::SceneSkip | Act::SceneRestart | Act::SceneChoose(_) | Act::SceneAdjust(..) | Act::SceneAnswer(_) | Act::SceneClose => {
                 if !self.r.in_scene() {
                     return Err(err("no scene waits".into()));
                 }
-                match row.act {
-                    Act::SceneConfirm => self.r.scene_confirm(),
-                    Act::SceneSkip => self.r.scene_skip(),
-                    _ => self.r.scene_restart(),
+                let ok = match &row.act {
+                    Act::SceneConfirm => self.r.scene_confirm().map(|_| true),
+                    Act::SceneSkip => self.r.scene_skip().map(|_| true),
+                    Act::SceneRestart => self.r.scene_restart().map(|_| true),
+                    Act::SceneChoose(n) => self.r.scene_choose(n),
+                    Act::SceneAdjust(n, s) => self.r.scene_adjust(n, *s),
+                    Act::SceneAnswer(a) => {
+                        let v = a.value(&self.r.w.s).map_err(err)?;
+                        self.r.scene_answer(v)
+                    }
+                    _ => self.r.scene_closed(),
                 }
                 .map_err(err)?;
+                if !ok {
+                    return Err(err("the scene does not take the answer".into()));
+                }
                 self.status = self.r.run(0)?;
             }
             Act::Leave => {

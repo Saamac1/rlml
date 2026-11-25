@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 25.11.2026 (säädettävä kohta):** säädön jälkeen `choice`-kohtien ehdot arvioidaan uudelleen, jotta pisteiden jaon jälkeen aukeava kohta toimii (luku [9.7](09-kohtaukset-ja-aikajanat.md#97-dialogit)).
+
 **Muutokset 18.11.2026 (atlaksen lähialue):** atlaksen lehdellä ruutujoukot voivat sisältää naapurilehtien ruutuja, ja `move` naapurilehden ruutuun on reunan ylitys (luvut [2](02-yleinen-syntaksi.md) ja [6.1](06-ruudut-ja-paikkahaku.md#61-joukon-tuottavat-funktiot); moottoridokumentti, luku [6.10](../moottori/06-ajo.md#610-atlas)).
 
 **Muutokset 8.11.2026 (ohjaus lyhyillä vuoroilla):** komennon määre `noverb` piilottaa komennon verbikolikosta (luvut [7.1](07-komennot-ja-tekoaly.md#71-komennot) ja [12](12-kielioppi.md)).

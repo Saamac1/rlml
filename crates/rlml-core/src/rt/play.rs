@@ -120,6 +120,27 @@ impl<'m> Session<'m> {
         // a scene takes the engine's SCENE keys (M 8): `enter` or `space`
         // confirms, `tab` skips and `r` starts it again
         if self.r.in_scene() {
+            use super::world::Pause;
+            // a choice takes its visible items by number, from 1
+            if let Some(Pause::Choice { items, .. }) = self.r.scene_pause().cloned()
+                && let Some(i) = key.parse::<usize>().ok().filter(|i| *i >= 1)
+                && let Some(item) = items.get(i - 1)
+            {
+                let ok = self.r.scene_choose(&item.name)?;
+                self.r.run(0)?;
+                return Ok(if ok { format!("scene.choose {}", item.name) } else { format!("({} cannot be chosen)", item.name) });
+            }
+            // `enter` cancels a field and closes what `open` waits for
+            if matches!(self.r.scene_pause(), Some(Pause::Ask { .. })) && key == "enter" {
+                self.r.scene_answer(Value::None)?;
+                self.r.run(0)?;
+                return Ok("scene.answer none".into());
+            }
+            if matches!(self.r.scene_pause(), Some(Pause::Open { .. })) && key == "enter" {
+                self.r.scene_closed()?;
+                self.r.run(0)?;
+                return Ok("scene.close".into());
+            }
             let note = match key {
                 "enter" | "space" => {
                     self.r.scene_confirm()?;

@@ -313,11 +313,29 @@ impl Drawn {
 /// The scene's dialogue window (M 7.4): `say`'s line, its speaker's name
 /// in the border, at the bottom of the frame over the map; `wait confirm`
 /// shows only a small mark.
-pub fn draw_say(frame: &mut Frame, w: &World, lang: &str, pause: &rlml_core::rt::world::Pause) {
+pub fn draw_say(frame: &mut Frame, w: &World, lang: &str, pause: &rlml_core::rt::world::Pause, field: Option<&str>) {
     use rlml_core::rt::world::Pause;
+    if let Pause::Ask { kind, .. } = pause {
+        // a field: what has been typed, and a cursor (RS 9.7)
+        let typed = field.unwrap_or("");
+        let hint = match kind {
+            rlml_core::rt::world::AskKind::Number { lo, hi } => format!(" {lo}..{hi} "),
+            rlml_core::rt::world::AskKind::Text { max } => format!(" {}/{max} ", typed.chars().count()),
+        };
+        let width = (frame.width.saturating_sub(4)).clamp(10, 40).min(frame.width);
+        let r = Rect::new((frame.width - width) / 2, frame.height.saturating_sub(3), width, 3.min(frame.height));
+        frame.set_area(vec!["SCENE".into()]);
+        frame.fill(r, ' ', Role::Normal);
+        frame.border(r, Border::Single, Role::Border);
+        frame.text(r.x + 2, r.y, width.saturating_sub(4), &hint, Role::Title);
+        frame.text(r.x + 2, r.y + 1, width.saturating_sub(4), &format!("{typed}_"), Role::Normal);
+        return;
+    }
     let Pause::Say { key, args, speaker } = pause else {
-        let (x, y) = (frame.width.saturating_sub(3), frame.height.saturating_sub(1));
-        frame.text(x, y, 3, " ▼ ", Role::Title);
+        if matches!(pause, Pause::Confirm) {
+            let (x, y) = (frame.width.saturating_sub(3), frame.height.saturating_sub(1));
+            frame.text(x, y, 3, " ▼ ", Role::Title);
+        }
         return;
     };
     let text = w.text(lang, key, args);

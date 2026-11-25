@@ -143,9 +143,11 @@ fn defaults() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
         ("first", "home"),
         ("last", "end"),
     ];
+    // a dialogue's `adjust` items move with left and right (RS 9.7)
+    let dialogue: Vec<_> = menu.iter().copied().chain([("cursor.west", "left h"), ("cursor.east", "right l")]).collect();
     vec![
         ("MENU", menu.clone()),
-        ("DIALOGUE", menu),
+        ("DIALOGUE", dialogue),
         ("SCENE", vec![("confirm", "enter space"), ("skip", "tab"), ("restart", "r"), ("rewind", "backspace")]),
         // a free device's `join` is a joined one's `confirm` (M 8.2)
         ("JOIN", vec![("join", "enter"), ("back", "esc"), ("skip", "tab")]),

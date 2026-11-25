@@ -120,6 +120,33 @@ pub enum Pause {
     Say { key: String, args: Vec<(String, Value)>, speaker: Option<EntityId> },
     /// `wait confirm`: a confirmation without a text.
     Confirm,
+    /// `choice`: the items as the player sees them, and the options to go
+    /// on with (RS 9.7). `scene` names the item keys `<scene>.<item>`.
+    Choice { scene: String, items: Vec<ChoiceItem>, options: Vec<crate::rs::ast::ChoiceOption> },
+    /// `open MENU(…)`: the menu or panel, until it closes; `into` takes
+    /// `x = open …`'s value.
+    Open { name: String, into: Option<String> },
+    /// `x = wait number(a..b)` or `x = wait text(N)` (RS 9.7).
+    Ask { into: String, kind: AskKind },
+}
+
+/// A `choice` item as shown: its name (the text key's last part), the key's
+/// parameters, and for an `adjust` item its value and range.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChoiceItem {
+    pub name: String,
+    pub args: Vec<(String, Value)>,
+    pub enabled: bool,
+    pub adjust: Option<(i64, i64, i64)>,
+}
+
+/// What a field asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AskKind {
+    /// A number from `lo` to `hi`.
+    Number { lo: i64, hi: i64 },
+    /// A text of at most `max` characters.
+    Text { max: usize },
 }
 
 /// A `noise` call (M 6.8).
