@@ -195,8 +195,20 @@ Tulos (20.11.2026):
   (`tests/web.rs`) ja JavaScriptCoressa oikean wasmin kautta
   Kapteeni Aaltolassa.
 
+### 6. Tallennus ja profiili (RLML-tallennus.md, vaihe 7)
+
+- Peli pitää datakansionsa muistissa (`store.rs`, `Journal`). Worker lukee
+  sen OPFS:stä (`rlml/PELI/`) ennen kuin peli alkaa, ja jokaisen askeleen
+  jälkeen se kirjoittaa muutokset taustalla järjestyksessä
+  `createWritable`-virralla. Tiedosto saa uuden sisältönsä vasta, kun
+  virta suljetaan.
+- Tallennukset ovat polussa `saves/NIMI` ja profiili polussa `profile`
+  kuten päätteen datakansiossa.
+- Ilman OPFS:ää tallennukset säilyvät vain sivun ajan.
+- Kokeiltu ikkunattomassa Firefoxissa (25.11.2026). Tallennus kirjoittui OPFS:ään, ja uudelleenladattu sivu luki sen.
+
 ## Ei tässä vaiheessa
 
-Pelivalikko usealle pelille, File System Access API, OPFS ja `Store`-trait
-(tehdään tallennuksen kanssa), äänet, tilesetit ja ulkoinen generaattori
+Pelivalikko usealle pelille, File System Access API, äänet, tilesetit ja
+ulkoinen generaattori
 (`external` palauttaa `false`, M 9.3).

@@ -8,11 +8,21 @@
 //
 // Time is performance.now(). Each frame goes to the page as its changed
 // cells (cells.rs).
+//
+// Saves and the profile live in the origin private file system (OPFS), in
+// rlml/GAME/ as the data folder (D 3.2): saves/auto-1, profile. The game
+// keeps them in memory (store.rs); the folder is read before it starts,
+// and after each step its changes are written in the background, one at a
+// time and in order. Without OPFS the saves last as long as the page.
 
 import init, { WebGame } from './pkg/rlml_web.js';
 
 let game = null;
 let timer = null;
+// the game's data folder in OPFS, or null without OPFS
+let folder = null;
+// the writes so far, in order
+let writing = Promise.resolve();
 // in-between frames are showing: events wait for them to end
 let showing = false;
 // a new size that came while the game was loading
@@ -74,10 +84,63 @@ function step() {
     const t2 = performance.now();
     record('input', t1 - t0);
     record('tick', t2 - t1);
+    persist();
   } catch (e) {
     return fail(e);
   }
   show();
+}
+
+// the game's folder: rlml/GAME in OPFS, or null where there is none
+async function openFolder(name) {
+  try {
+    const root = await navigator.storage.getDirectory();
+    const rlml = await root.getDirectoryHandle('rlml', { create: true });
+    return await rlml.getDirectoryHandle(name || 'game', { create: true });
+  } catch (e) {
+    return null;
+  }
+}
+
+// every file under dir as [path, text]; a .tmp file is a write that broke off
+async function readFolder(dir, prefix, out) {
+  for await (const [name, h] of dir.entries()) {
+    if (h.kind === 'directory') {
+      await readFolder(h, `${prefix}${name}/`, out);
+    } else if (!name.endsWith('.tmp') && !name.endsWith('.crswap')) {
+      out.push([`${prefix}${name}`, await (await h.getFile()).text()]);
+    }
+  }
+  return out;
+}
+
+async function writeChange(path, text) {
+  const parts = path.split('/');
+  let dir = folder;
+  for (const p of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(p, { create: true });
+  const name = parts[parts.length - 1];
+  if (text === null) {
+    try { await dir.removeEntry(name); } catch (e) { /* already gone */ }
+    return;
+  }
+  const file = await dir.getFileHandle(name, { create: true });
+  // the file takes its new text when the stream closes
+  const w = await file.createWritable();
+  await w.write(text);
+  await w.close();
+}
+
+// the game's changes to its folder, written after the ones before
+function persist() {
+  if (!game) return;
+  const changes = game.store_changes();
+  if (!folder || changes.length === 0) return;
+  writing = writing
+    .then(async () => {
+      for (const [path, text] of changes) await writeChange(path, text);
+    })
+    // the game goes on; the saves it made stay in memory
+    .catch((e) => console.warn('rlml: a save was not written to OPFS:', e));
 }
 
 // 1 and 2
@@ -101,6 +164,7 @@ function show() {
     if (game.quit()) {
       // a tab cannot be closed: a new game starts
       game.restart();
+      persist();
       return show();
     }
     later(game.has_events() ? 0 : game.wait_ms());
@@ -124,6 +188,8 @@ onmessage = async (e) => {
     try {
       await init();
       game = new WebGame(JSON.parse(m.bundle), m.seed, m.cols, m.rows);
+      folder = await openFolder(game.game_name());
+      game.storage(folder ? await readFolder(folder, '', []) : []);
       resize(size || m);
     } catch (err) {
       postMessage({ t: 'error', text: `Pelin lataus ei onnistunut:\n\n${err && err.message ? err.message : err}` });

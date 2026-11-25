@@ -8,6 +8,7 @@ pub mod cells;
 pub mod game;
 pub mod keys;
 pub mod pads;
+pub mod store;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm;

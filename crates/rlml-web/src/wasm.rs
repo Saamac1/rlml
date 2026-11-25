@@ -209,4 +209,35 @@ impl WebGame {
     pub fn log_lines(&self) -> Vec<String> {
         self.g.log_lines()
     }
+
+    /// The game's name, for its data folder in OPFS.
+    pub fn game_name(&self) -> String {
+        self.g.name()
+    }
+
+    /// The data folder's files as `[path, text]` pairs (`store.rs`).
+    pub fn storage(&mut self, files: js_sys::Array) -> Result<(), JsValue> {
+        let mut out = Vec::new();
+        for pair in files.iter() {
+            let pair: js_sys::Array = pair.unchecked_into();
+            if let (Some(p), Some(t)) = (pair.get(0).as_string(), pair.get(1).as_string()) {
+                out.push((p, t));
+            }
+        }
+        self.g.storage(out).map_err(err)
+    }
+
+    /// What changed in the data folder since the last call: `[path, text]`
+    /// to write, `[path, null]` to remove.
+    pub fn store_changes(&mut self) -> js_sys::Array {
+        self.g
+            .store_changes()
+            .into_iter()
+            .map(|(p, t)| {
+                let text = t.map_or(JsValue::NULL, |t| JsValue::from_str(&t));
+                js_sys::Array::of2(&JsValue::from_str(&p), &text)
+            })
+            .map(JsValue::from)
+            .collect()
+    }
 }

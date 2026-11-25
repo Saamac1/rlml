@@ -27,6 +27,8 @@ pub struct Game {
     /// The frame the page shows now.
     shown: Option<Frame>,
     sheet: StyleSheet,
+    /// The data folder, once the worker has read it (`store.rs`).
+    journal: Option<crate::store::Journal>,
 }
 
 impl Game {
@@ -35,7 +37,35 @@ impl Game {
     pub fn new(m: &'static Model, seed: u64, size: (usize, usize)) -> RtResult<Game> {
         let mut app = App::new(m, seed, size)?;
         app.view.truecolor = true;
-        Ok(Game { m, seed, app, feed: Feed::default(), events: vec![], frames: VecDeque::new(), shown: None, sheet: StyleSheet::default() })
+        Ok(Game { m, seed, app, feed: Feed::default(), events: vec![], frames: VecDeque::new(), shown: None, sheet: StyleSheet::default(), journal: None })
+    }
+
+    /// The game's name, which names its data folder (D 3.2).
+    pub fn name(&self) -> String {
+        self.m.named_game().map(|g| g.name.clone()).unwrap_or_default()
+    }
+
+    /// The data folder's files as the worker read them: saves in `saves/`
+    /// and the profile. The game being played starts over with the
+    /// profile (M 5.1).
+    pub fn storage(&mut self, files: Vec<(String, String)>) -> RtResult<()> {
+        let j = crate::store::Journal::new(files);
+        self.attach(&j, true)?;
+        self.journal = Some(j);
+        self.shown = None;
+        Ok(())
+    }
+
+    fn attach(&mut self, j: &crate::store::Journal, restart: bool) -> RtResult<()> {
+        self.app.set_store(Box::new(j.store("saves/")));
+        self.app.set_profile_store(Box::new(j.store("")), restart)
+    }
+
+    /// What the game wrote to its data folder since the last call, for the
+    /// worker to write to OPFS: `(path, Some(text))` or `(path, None)` to
+    /// remove.
+    pub fn store_changes(&mut self) -> Vec<(String, Option<String>)> {
+        self.journal.as_ref().map(|j| j.take_changes()).unwrap_or_default()
     }
 
     /// A game over: the browser cannot close its tab, so a new game
@@ -44,10 +74,16 @@ impl Game {
         let size = self.app.size;
         let (pixels, releases) = (self.app.pixels, self.app.releases);
         let shown = self.shown.take();
+        let journal = self.journal.take();
         *self = Game::new(self.m, self.seed, size)?;
         self.app.pixels = pixels;
         self.app.releases = releases;
         self.shown = shown;
+        if let Some(j) = journal {
+            // the saves and the profile stay with the page
+            self.attach(&j, true)?;
+            self.journal = Some(j);
+        }
         Ok(())
     }
 

@@ -242,3 +242,48 @@ fn fits_tells_whether_the_layout_holds_in_a_window() {
     assert!(!g.app.fits(19, 11, (400, 300)), "the map is narrower than written");
     assert!(!g.app.fits(20, 10, (400, 300)), "the log loses a row");
 }
+
+/// What OPFS holds after the worker wrote `changes` over `files`.
+fn written(files: &mut std::collections::BTreeMap<String, String>, changes: Vec<(String, Option<String>)>) {
+    for (path, text) in changes {
+        match text {
+            Some(t) => {
+                files.insert(path, t);
+            }
+            None => {
+                files.remove(&path);
+            }
+        }
+    }
+}
+
+#[test]
+fn saves_outlive_the_page() {
+    use rlml_core::rt::store::Slot;
+    let m = Box::leak(Box::new(rlml_web::bundle::load(&mini(), "game.rlml").unwrap()));
+    let mut opfs = std::collections::BTreeMap::new();
+    // the first page: an empty folder, two waits, then Quit from the pause menu
+    let mut g = Game::new(m, 7, (40, 12)).unwrap();
+    g.storage(vec![]).unwrap();
+    assert!(g.store_changes().is_empty(), "nothing written yet");
+    for (i, k) in ["s", "s", "esc", "j", "enter"].iter().enumerate() {
+        g.push(Event::Key(parse_binding(k).unwrap()));
+        g.step(Duration::from_millis(10 * i as u64 + 10)).unwrap();
+    }
+    let left = g.app.r.w.s.clone();
+    let changes = g.store_changes();
+    assert_eq!(changes.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(), ["saves/quit"], "leaving saved in the data folder's saves/ (D 3.2)");
+    written(&mut opfs, changes);
+    assert!(g.store_changes().is_empty(), "each change is given once");
+    // the page is loaded again: the worker reads the folder before the game starts
+    let mut g = Game::new(m, 7, (40, 12)).unwrap();
+    g.storage(opfs.clone().into_iter().collect()).unwrap();
+    let saves = g.app.saves.as_mut().unwrap();
+    assert_eq!(saves.list().len(), 1);
+    let save = saves.load(m, Slot::Quit).unwrap();
+    let r = rlml_core::rt::run::Runner::load(m, &save).unwrap();
+    assert!(r.w.s == left, "the save of the first page loads as it was left");
+    // a tab cannot close: a new game in the same window keeps the folder
+    g.restart().unwrap();
+    assert_eq!(g.app.saves.as_ref().unwrap().list().len(), 1);
+}

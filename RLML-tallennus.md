@@ -228,6 +228,16 @@ Alla on alkuperäinen tehtävälista.
 
 ### 7. Web
 
+Tehty 25.11.2026 haarassa `claude/web-tallennus`:
+- **Rakenne.** Peli ajetaan Web Workerissa, jossa `localStorage` ei ole käytettävissä. Siksi `rlml-web/src/store.rs` sisältää muistissa olevan kirjanpidon (`Journal`), jonka kautta `Saves` ja `Profile` saavat tallennuspaikkansa (`saves/`, `profile`).
+- **Worker** lukee kansion OPFS:stä (`rlml/PELI/`) ennen pelin alkua (`WebGame::storage`). Jokaisen askeleen jälkeen se kirjoittaa muutokset (`WebGame::store_changes`) taustalla yksi kerrallaan `createWritable`-virralla, joka vaihtaa sisällön vasta suljettaessa.
+- **Uusi peli samassa ikkunassa** (`restart`) pitää kansion.
+- **`localStorage`-varaa ei tehty.** Ilman OPFS:ää tallennukset säilyvät vain sivun ajan.
+- **Testit:** natiivitesti `saves_outlive_the_page` jäljittelee sivun uudelleenlatausta. Ensimmäinen sivu lopettaa ja tallentaa, muutokset kirjoitetaan kuin OPFS:ään, ja toinen sivu lukee ne ja lataa tallennuksen samaksi tilaksi.
+- **Selaimessa:** käännetty `build.sh`:lla (wasm32 ja `wasm-bindgen` 0.2.130) ja ajettu ikkunattomassa Firefoxissa testisivulla, joka käyttää oikeaa workeria. Sivu 1 alkoi tyhjästä OPFS:stä, ja lopetus kirjoitti tiedoston `rlml/MINI/saves/quit`, jonka leima on 1. Uudelleenladattu sivu 2 löysi tiedoston ennen pelin alkua, ja sen lopetus kirjoitti leiman 2 ja pelikerran 2. Leima ja pelikerta lasketaan olemassa olevista tallennuksista, joten wasm luki sivun 1 tallennuksen. Latausvalikkoa ei kokeiltu selaimessa, mutta natiivitesti kattaa sen.
+
+Alla on alkuperäinen tehtävälista.
+
 - `rlml-web`: `Store` OPFS:n päälle. Jos OPFS ei ole käytettävissä, käytetään `localStorage`a pienille peleille. `Store` pysyy synkronisena ytimen puolella, ja web kirjoittaa välimuistista taustalla.
 - `RLML-web.md`:n "Ei tässä vaiheessa" -kohdasta poistetaan `Store`-trait ja OPFS.
 - **Valmis, kun** Kapteeni Aaltolan peli selaimessa tallentaa, sivu ladataan uudelleen ja peli jatkuu tallennuksesta.
