@@ -2,6 +2,8 @@
 
 # 9. Kohtaukset ja aikajanat
 
+Lyhyt opas esimerkkeineen: [Kohtausopas](kohtausopas.md).
+
 Kohtaus kirjoitetaan joko korutiinina (`scene NIMI():`) tai aikajanana (`scene NIMI() timeline:`). Haarautuva tarina ja dialogi kuuluvat korutiiniin ja ajoitettu esitys aikajanaan.
 
 Kohtauksen käynnistys:
