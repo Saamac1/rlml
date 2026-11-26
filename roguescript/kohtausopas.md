@@ -78,9 +78,10 @@ scene GATE_OPENS(lever: entity) timeline:
 - **Raidat** kulkevat rinnakkain yhteisellä kellolla:
 
   ```roguescript
-  track TORCHES loop 2s:
-      0000ms 1000ms fade(light(label(TORCH)), to: 80%)
-      1000ms 1000ms fade(light(label(TORCH)), to: 100%)
+  scene HALL_LIGHTS() timeline:
+      track TORCHES loop 2s:
+          0000ms 1000ms fade(light(label(TORCH)), to: 80%)
+          1000ms 1000ms fade(light(label(TORCH)), to: 100%)
   ```
 
   `loop` vaatii pituuden. Silmukan voi pysäyttää kutsulla `stop(track: NIMI)`. Kohtaus päättyy, kun kaikki silmukattomat raidat ovat valmiita.

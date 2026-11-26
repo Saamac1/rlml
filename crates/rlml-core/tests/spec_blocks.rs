@@ -36,9 +36,13 @@ fn corpus() -> Vec<RawCode> {
         let src = std::fs::read_to_string(&p).unwrap();
         let name = p.strip_prefix(&root).unwrap().to_string_lossy().to_string();
         let mut block: Option<RawCode> = None;
+        // a fence inside a list item is indented, and its lines are
+        // indented as much: Markdown's, not RogueScript's (CommonMark 4.5)
+        let mut fence = 0;
         for (i, line) in src.lines().enumerate() {
             match &mut block {
                 None if line.trim() == "```roguescript" => {
+                    fence = line.len() - line.trim_start().len();
                     block = Some(RawCode {
                         file: name.clone(),
                         line: i + 2,
@@ -47,7 +51,10 @@ fn corpus() -> Vec<RawCode> {
                     });
                 }
                 Some(_) if line.trim_start().starts_with("```") => out.push(block.take().unwrap()),
-                Some(b) => b.lines.push(line.to_string()),
+                Some(b) => {
+                    let indent = line.len() - line.trim_start_matches(' ').len();
+                    b.lines.push(line[indent.min(fence)..].to_string())
+                }
                 None => {}
             }
         }
@@ -98,7 +105,7 @@ const SNIPPETS: &[(&str, usize, &str)] = &[
     ),
     (
         "roguescript/09-kohtaukset-ja-aikajanat.md",
-        90,
+        92,
         "timeline rows",
     ),
 ];
