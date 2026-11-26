@@ -3052,14 +3052,13 @@ impl World<'_> {
             let Some(t) = m.tile(l, p.x, p.y) else {
                 continue;
             };
-            let blocks = self.tile_property(t, "blocks");
-            if blocks.iter().any(|b| b == what) {
+            if self.tile_blocks(t, what) {
                 return true;
             }
             if what == "move"
                 && let Some(mode) = &mode
             {
-                if blocks.iter().any(|b| b == mode) {
+                if self.tile_blocks(t, mode) {
                     return true;
                 }
                 let only = self.tile_property(t, "only");
@@ -3069,6 +3068,26 @@ impl World<'_> {
             }
         }
         false
+    }
+
+    /// Does a tile's own `blocks` hold `what`, down its ladder (D 7.5)?
+    /// The answer follows from the model alone and is kept.
+    fn tile_blocks(&self, tile: &str, what: &str) -> bool {
+        if let Some(&v) = self
+            .tile_blocks
+            .borrow()
+            .get(what)
+            .and_then(|w| w.get(tile))
+        {
+            return v;
+        }
+        let v = self.tile_property(tile, "blocks").iter().any(|b| b == what);
+        self.tile_blocks
+            .borrow_mut()
+            .entry(what.to_string())
+            .or_default()
+            .insert(tile.to_string(), v);
+        v
     }
 
     /// The entities' part of `blocks`: their own `blocks` component.

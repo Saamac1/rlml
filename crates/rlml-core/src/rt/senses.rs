@@ -11,7 +11,7 @@
 //!   loudest masks those `masking` levels below it (M 6.8).
 //! * `path` is A* with the tie-breaking of M 9.3.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
 use super::value::{Dir, EntityId, MapId, Pos, Sound, Value};
 use super::world::{RtResult, World};
@@ -108,12 +108,15 @@ impl World<'_> {
     /// A tile flag (`lit`, `forget`) down the ladder: the nearest row that
     /// names it, `false` when written `lit false` (D 7.5).
     pub fn tile_flag(&self, tile: &str, flag: &str) -> bool {
-        let key = (tile.to_string(), flag.to_string());
-        if let Some(&v) = self.flags.borrow().get(&key) {
+        if let Some(&v) = self.flags.borrow().get(flag).and_then(|f| f.get(tile)) {
             return v;
         }
         let v = self.find_tile_flag(tile, flag);
-        self.flags.borrow_mut().insert(key, v);
+        self.flags
+            .borrow_mut()
+            .entry(flag.to_string())
+            .or_default()
+            .insert(tile.to_string(), v);
         v
     }
 
@@ -149,14 +152,29 @@ impl World<'_> {
         false
     }
 
-    fn blocks_sight(&self, map: MapId, x: i32, y: i32) -> bool {
-        self.blocks(Pos { map, x, y }, "sight", None, true)
+    /// The cells on `map` where an entity's own `blocks` holds `sight`,
+    /// found once for a view instead of once for each cell it casts over.
+    fn sight_blockers(&self, map: MapId) -> HashSet<(i32, i32)> {
+        self.s
+            .entities_on(map)
+            .into_iter()
+            .filter(|&e| self.entity_blocks(e, "sight"))
+            .filter_map(|e| self.s.at(e))
+            .map(|p| (p.x, p.y))
+            .collect()
+    }
+
+    /// `blocks(p, sight)` with the map's sight-blocking entities found
+    /// beforehand.
+    fn blocks_sight(&self, map: MapId, x: i32, y: i32, blockers: &HashSet<(i32, i32)>) -> bool {
+        self.blocks_tiles(Pos { map, x, y }, "sight", None) || blockers.contains(&(x, y))
     }
 
     /// Is a cell lit: a `lit` tile in it or next to it, or a `light`
     /// source's reach (M 7.2)?
     pub fn lit(&self, p: Pos) -> bool {
-        self.lit_in(p, &self.light_reach(p.map))
+        let blockers = self.sight_blockers(p.map);
+        self.lit_in(p, &self.light_reach_with(p.map, &blockers))
     }
 
     /// `lit` with the map's light reach computed beforehand, so a view
@@ -178,7 +196,7 @@ impl World<'_> {
 
     /// The cells the `light` sources on a map reach: within the radius and
     /// in the source's line of sight.
-    fn light_reach(&self, map: MapId) -> BTreeSet<(i32, i32)> {
+    fn light_reach_with(&self, map: MapId, blockers: &HashSet<(i32, i32)>) -> BTreeSet<(i32, i32)> {
         let mut out = BTreeSet::new();
         for e in self.s.entities_on(map) {
             let Some(light) = self.s.get(e).get("light") else {
@@ -186,7 +204,9 @@ impl World<'_> {
             };
             let r = light.get("radius").and_then(Value::as_number).unwrap_or(0);
             let Some(at) = self.s.at(e) else { continue };
-            for (x, y) in line_of_sight((at.x, at.y), r, &|x, y| self.blocks_sight(map, x, y)) {
+            for (x, y) in line_of_sight((at.x, at.y), r, &|x, y| {
+                self.blocks_sight(map, x, y, blockers)
+            }) {
                 if at.distance(Pos { map, x, y }) <= r {
                     out.insert((x, y));
                 }
@@ -202,11 +222,12 @@ impl World<'_> {
         let at = self.s.at(e)?;
         let num = |f: &str, d: i64| sight.get(f).and_then(Value::as_number).unwrap_or(d);
         let (radius, dark) = (num("radius", 0), num("dark", 1));
+        let blockers = self.sight_blockers(at.map);
         let in_sight = line_of_sight((at.x, at.y), radius.max(dark), &|x, y| {
-            self.blocks_sight(at.map, x, y)
+            self.blocks_sight(at.map, x, y, &blockers)
         });
         let m = &self.s.maps[at.map];
-        let reach = self.light_reach(at.map);
+        let reach = self.light_reach_with(at.map, &blockers);
         Some(
             in_sight
                 .into_iter()

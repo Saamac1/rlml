@@ -129,6 +129,24 @@ Alla on alkuperäinen tehtävälista.
 - **Tallennus** muuntaa slotit nimiksi kirjoitettaessa ja nimet sloteiksi luettaessa. Tallennusmuoto ei muutu. `body_hash` lasketaan edelleen lähteen jäsennyspuusta.
 - **Valmis, kun** ulkoinen käytös ei muutu: kaikki testit, toistot ja vanhat tallennukset toimivat sellaisinaan, ja vaiheen 1 mittaus näyttää eron.
 
+### 2b. Näkökenttä (mittauksen löydös)
+
+Tehty 26.11.2026 haarassa `claude/nakokentta`. Tämä ei ollut alkuperäisessä suunnitelmassa, vaan jakelutaulujen jälkeen näkökenttä oli suurin kulu (Kapteeni Aaltolassa 43 %, Oz-esimerkissä 50 %).
+- **Syy.** Jokainen ruutu, jonka yli näkökenttä tai valo katsoo, kysyi `blocks(p, sight)`. Se kävi läpi kaikki pelin entiteetit (`entities_at`) ja rakensi tilen nimiketjun uusina merkkijonoina (`tile_property`). Myös `tile_flag` varasi kaksi merkkijonoa jokaista valaistuskyselyä varten.
+- **Korjaus.**
+  - Näkökenttä ja valon ulottuvuus keräävät kartan näköä estävät entiteetit kerran ruutujoukoksi (`sight_blockers`).
+  - Tilen oma esto (`tile_blocks`) ja liput (`tile_flag`) muistetaan tilen nimen mukaan ilman varauksia. Ne riippuvat vain mallista, joten muistia ei tarvitse tyhjentää.
+  - Pelin tilaa ei pidetä välimuistissa, joten mitään ei tarvitse mitätöidä.
+- **Käytös ei muuttunut.** `rlml run` tuottaa Kapteeni Aaltolassa, minipelissä, Oz-esimerkissä ja ryhmäesimerkissä rivilleen saman tulosteen kuin ennen.
+
+| Mittaus | Aika / painallus ennen | Jälkeen | Näkökenttä ennen | Jälkeen |
+| --- | ---: | ---: | ---: | ---: |
+| Kapteeni Aaltola | 0,43 ms | 0,30 ms | 103 ms | 44 ms |
+| Minipeli | 1,04 ms | 0,88 ms | 1 ms | 1 ms |
+| Oz-esimerkki | 0,12 ms | 0,11 ms | 20 ms | 12 ms |
+
+Ilman laskureita Kapteeni Aaltolan läpipeluu vie nyt 0,30 ms painallusta kohden, kun perustaso oli 0,80 ms. Seuraavat kulut ovat minipelin rottien tekoäly (37 %) ja kuuleminen (28 %) sekä näkökentän oma varjonheitto ja valaistu-tarkistus.
+
 ### 3. Inspector, luku
 
 - **Ytimen rajapinta** `rt::inspect`. Se lukee tilaa milloin tahansa ja palauttaa rakenteen, jota TUI, web ja MCP voivat näyttää.

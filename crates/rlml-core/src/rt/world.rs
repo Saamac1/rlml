@@ -82,7 +82,15 @@ pub struct World<'m> {
     pub(crate) looks: std::cell::RefCell<std::collections::HashMap<String, super::view::Look>>,
     /// Tile flags (`lit`, `forget`) by tile name and flag, resolved once
     /// for the same reason (D 7.5).
-    pub(crate) flags: std::cell::RefCell<std::collections::HashMap<(String, String), bool>>,
+    /// Tile flags (`lit`, `forget`) and the tiles' own `blocks` values,
+    /// by flag or blocked thing and then tile: they follow from the model
+    /// alone, so they are kept for good.
+    pub(crate) flags: std::cell::RefCell<
+        std::collections::HashMap<String, std::collections::HashMap<String, bool>>,
+    >,
+    pub(crate) tile_blocks: std::cell::RefCell<
+        std::collections::HashMap<String, std::collections::HashMap<String, bool>>,
+    >,
     /// The profile's fields written since the front end last took them
     /// (M 5.6), component and field.
     pub profile_touched: std::collections::BTreeSet<(String, String)>,
@@ -250,6 +258,7 @@ impl<'m> World<'m> {
             map_area: m.map_area(),
             looks: Default::default(),
             flags: Default::default(),
+            tile_blocks: Default::default(),
             profile_touched: Default::default(),
             profile_start: vec![],
             held_view: None,
