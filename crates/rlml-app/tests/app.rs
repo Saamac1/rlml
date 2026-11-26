@@ -2876,3 +2876,51 @@ fn f12_opens_the_inspector_in_development_mode() {
     assert_ne!(player_at(&app), at, "the game goes on");
     replays_the_same(&m, &app);
 }
+
+#[test]
+fn f5_reloads_the_game_between_actions() {
+    let m = model(&mini_with(|_| {}));
+    let f5 = || Binding::key(KeyCode::F(5), Mods::default());
+    let mut app = App::new(&m, 7, (60, 30)).unwrap();
+    app.dev = true;
+    // the files read again: first with a load error, then changed
+    let mut versions = vec![
+        mini_with(|g| g.push_str("\n```roguescript\ncommand BROKEN( cost 0:\n```\n")),
+        mini_with(|g| g.push_str("\ncomponent RELOADED\n")),
+    ]
+    .into_iter();
+    app.reloader = Some(Box::new(move || {
+        let f = versions.next().unwrap();
+        let (m, r) = rlml_core::check_game(&f, "game.rlml");
+        if r.has_errors() {
+            return Err(r.errors().map(|d| d.to_string()).collect());
+        }
+        let m: &'static Model = Box::leak(Box::new(m));
+        Ok(m)
+    }));
+    press(&mut app, "l");
+    let at = player_at(&app);
+    let hash = app.r.w.m.source_hash;
+    app.key(f5(), ms(10)).unwrap();
+    assert!(
+        app.note
+            .as_deref()
+            .is_some_and(|n| n.contains("load errors, the old version stays")),
+        "{:?}",
+        app.note
+    );
+    assert_eq!(app.r.w.m.source_hash, hash);
+    app.key(f5(), ms(20)).unwrap();
+    assert_eq!(app.note.as_deref(), Some("reloaded"));
+    assert_ne!(app.r.w.m.source_hash, hash, "the new files");
+    assert!(app.r.w.m.defs.contains_key("RELOADED"));
+    assert_eq!(player_at(&app), at, "the state went over");
+    assert!(app.players_turn() && app.dev && app.reloader.is_some());
+    press(&mut app, "l");
+    assert_ne!(player_at(&app), at, "the game goes on");
+    let text = app.r.input_log().write().unwrap();
+    assert!(
+        text.contains("\nfrom "),
+        "the log's segment starts at the reload"
+    );
+}

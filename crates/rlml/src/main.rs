@@ -65,7 +65,8 @@ is the last game's log, written also when a runtime error ends it.
 play keeps the game's saves (DIR/saves) and profile (DIR/profile) in
 DIR, by default the user data folder's rlml/GAME (~/.local/share on
 Linux). --dev is development mode: f12 opens the inspector over the
-game, which stands while it is open.
+game, which stands while it is open, and f5 reads and checks the files
+again and goes on with them between actions (M 5.7).
 replay plays an input log and prints a transcript as run does: the
 frame after each row of the log.
 inspect plays the keys as run does and prints the game's state at each
@@ -212,7 +213,25 @@ fn main() -> ExitCode {
             .map(|g| g.name.clone())
             .unwrap_or_default();
         let data = data.or_else(|| rlml_tui::saves::user_data(&game_name));
-        return match rlml_tui::term::play(&model, seed, log_out.as_deref(), data.as_deref(), dev) {
+        // development mode: f5 reads and checks the files again; each
+        // model read stays in memory, as the game borrows it (M 5.7)
+        let reloader: Option<rlml_tui::term::Reloader<'_>> = dev.then(|| {
+            Box::new(move || {
+                let (m, report) = rlml_core::check_game(&files, &main);
+                if report.has_errors() {
+                    return Err(report.errors().map(|d| d.to_string()).collect());
+                }
+                let m: &'static rlml_core::model::Model = Box::leak(Box::new(m));
+                Ok(m)
+            }) as rlml_tui::term::Reloader<'_>
+        });
+        return match rlml_tui::term::play(
+            &model,
+            seed,
+            log_out.as_deref(),
+            data.as_deref(),
+            reloader,
+        ) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("{e}");

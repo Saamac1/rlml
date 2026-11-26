@@ -232,6 +232,11 @@ pub struct App<'m> {
     /// The inspector's lines and the first one shown; the game's time
     /// stands while it is open.
     pub inspecting: Option<(Vec<String>, usize)>,
+    /// Development mode's reload (M 5.7): reads and checks the game's
+    /// files again, giving the new model or the load's errors. `f5`
+    /// asks for it, and it runs between actions.
+    pub reloader: Option<Reloader<'m>>,
+    reload_asked: bool,
     /// The window's size in pixels when the front end knows it; without
     /// it a cell counts as twice as high as wide (D 11.1).
     pub pixels: Option<(usize, usize)>,
@@ -324,6 +329,9 @@ pub struct Reading {
         Option<termplate_core::layout::Rect>,
     ),
 }
+
+/// Reads and checks the game's files again (M 5.7).
+pub type Reloader<'m> = Box<dyn FnMut() -> Result<&'m Model, Vec<String>> + 'm>;
 
 /// The verb coin's name as a menu layer.
 pub const COIN_MENU: &str = "<verbs>";
@@ -445,6 +453,8 @@ impl<'m> App<'m> {
             reading: None,
             dev: false,
             inspecting: None,
+            reloader: None,
+            reload_asked: false,
             pixels: None,
             releases: false,
             held: None,
@@ -1160,6 +1170,55 @@ impl<'m> App<'m> {
         });
     }
 
+    /// The reload asked for runs when the game is between actions and no
+    /// scene, dialogue or menu is open (M 5.7); until then it waits.
+    fn reload_when_free(&mut self) -> RtResult<()> {
+        if !self.reload_asked || !self.playing || self.r.w.save_blocked() || self.menus.is_open() {
+            return Ok(());
+        }
+        self.reload_asked = false;
+        let Some(read) = self.reloader.as_mut() else {
+            return Ok(());
+        };
+        let m = match read() {
+            Ok(m) => m,
+            Err(errors) => {
+                self.note = Some(format!(
+                    "reload: {} load errors, the old version stays: {}",
+                    errors.len(),
+                    errors.first().map(String::as_str).unwrap_or("")
+                ));
+                return Ok(());
+            }
+        };
+        let warnings = match self.r.reload(m) {
+            Ok(w) => w,
+            Err(e) => {
+                self.note = Some(format!("reload: {e}"));
+                return Ok(());
+            }
+        };
+        // the app's own reading of the data follows the new model
+        let mut fresh = App::new(m, self.seed, self.size)?;
+        fresh.saves = self.saves.take();
+        fresh.profile = self.profile.take();
+        fresh.pads = std::mem::take(&mut self.pads);
+        fresh.seat_devices = std::mem::take(&mut self.seat_devices);
+        fresh.dev = self.dev;
+        fresh.reloader = self.reloader.take();
+        fresh.keyboard = self.keyboard;
+        fresh.clock = self.clock;
+        fresh.games = self.games;
+        let r = std::mem::replace(&mut self.r, Runner::new(World::new(m, self.seed)));
+        *self = fresh;
+        self.play(r)?;
+        self.note = Some(match warnings.len() {
+            0 => "reloaded".to_string(),
+            n => format!("reloaded with {n} warnings: {}", warnings[0]),
+        });
+        Ok(())
+    }
+
     /// Opens the inspector on the state now, or closes it: the overview,
     /// `game`, the player, the waiting commands and the scenes.
     fn toggle_inspector(&mut self) {
@@ -1579,6 +1638,12 @@ impl<'m> App<'m> {
         if self.dev && b == Binding::key(KeyCode::F(12), Mods::default()) {
             self.toggle_inspector();
             return Ok(());
+        }
+        // `f5` reloads the game's files, at the next moment between
+        // actions (M 5.7)
+        if self.dev && b == Binding::key(KeyCode::F(5), Mods::default()) {
+            self.reload_asked = true;
+            return self.reload_when_free();
         }
         // a scene's field takes the keys as text (RS 9.7)
         if self.field_key(&b)? {
@@ -2585,6 +2650,7 @@ impl<'m> App<'m> {
     /// The clock at `now`: rounds without the player's turn and `idle`.
     pub fn tick(&mut self, now: Duration) -> RtResult<()> {
         self.clock = now;
+        self.reload_when_free()?;
         self.type_on(now);
         // a held button repeats at the keys' pace (M 7.7)
         if let Some((action, next)) = self.held.clone()

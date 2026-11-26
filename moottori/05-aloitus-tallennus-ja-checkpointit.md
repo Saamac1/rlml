@@ -36,6 +36,7 @@ Checkpoint 0 on tila `begin`-käsittelijöiden jälkeen. Jonoon laitetut etualan
 | ajoitus | `game.time`, herätysjono järjestysnumeroineen, seuraava järjestysnumero ja karttojen kellot (luku [6.1.8](06-ajo.md#618-aktiiviset-kartat-ja-jäädytys)) |
 | odottava komento (`wait N`, `wait scene`, `wait confirm` tai `open`) | nimi, rungon tiiviste, argumentit, paikalliset nimet, suorituskohta rakenteellisena polkuna ja `wait N` -odotuksessa jatkoherätys (luku [6.1.6](06-ajo.md#616-monivaiheinen-komento)) |
 | checkpoint | viimeisin checkpoint tilannekuvana (luku [5.3](#53-checkpointit)) |
+| muutetut ruudut | jokaisen pelin muuttaman ruudun alkuperäinen arvo kerroksittain; kartan lataus tai generointi ei ole muutos, ja ruutu, joka palaa alkuperäiseen arvoonsa, poistuu listasta (luku [5.7](#57-uudelleenlataus-kehitystilassa)) |
 | keskeneräinen tweeni pelin ajan taustakohtauksessa | jäljellä oleva reitti tai ruudut ([RS 9.1](../roguescript/09-kohtaukset-ja-aikajanat.md#91-rivi)) |
 | profiili | aloitushetken tilannekuva ja pelikerran omat kirjoitukset (luku [5.6](#56-profiili)) |
 | kuollut kahva | laji ja tuhohetken nimi (luku [9.5](09-moottorin-funktiot-ja-tapahtumat.md#95-ilmentymän-elinkaari-ja-komponentit)) |
@@ -97,6 +98,19 @@ Profiili on pelin pysyvä tila pelikertojen yli ([D 3.5](../dataformaatit/03-tie
 - **Kirjoitus.** Logiikan kirjoitus profiiliin näkyy pelikerran näkymässä heti, ja moottori kirjoittaa sen profiilitiedostoon toiminnon lopussa kuten `autosave()` (luku [6.1.7](06-ajo.md#617-toiminto)). Moottori kirjoittaa vain pelikerran muuttamat kentät tiedostoon sellaisena kuin se on kirjoitushetkellä, joten toisen pelikerran kentät säilyvät. Etualan kohtauksessa kirjoitus tehdään luonnoksen kirjauksessa. Tiedosto kirjoitetaan väliaikaisena ja nimetään lopuksi oikeaksi kuten tallennus (luku [5.4](#54-automaattinen-tallennus)).
 - **Pysyvyys.** `rollback`, `delete_save` ja pelikerran lataus eivät peru profiilin kirjoituksia tiedostosta. Vanhan tallennuksen lataus palauttaa pelikerran oman näkymän, mutta profiilitiedosto säilyy.
 - **Nollaus.** Profiilin voi nollata vain moottorin valikosta, ei logiikasta.
+
+## 5.7 Uudelleenlataus kehitystilassa
+
+Kehitystilassa (`rlml play --dev`) pelin tiedostot voi ladata uudelleen kesken pelin. Julkaistu peli ja selainversio eivät lataa uudelleen.
+
+- **Hetki.** Lataus tehdään toimintojen välissä, kun tallennuskin olisi sallittu: ei etualan kohtauksen, dialogin eikä `open`-valikon aikana (luku [5.2](#52-tallennus)). Pyyntö odottaa siihen asti.
+- **Tarkistus.** Moottori lataa ja tarkistaa kaikki tiedostot uudelleen. Jos tulee latausvirhe, vanha versio jää voimaan ja virheet näytetään.
+- **Tila säilyy.** Pelin tila siirtyy uuteen versioon kuten tallennuksen latauksessa. Komennot, käsittelijät, tekoälyt, kyselyt ja tekstit vaihtuvat seuraavasta toiminnosta alkaen. Määrittelyjen muutokset koskevat vain uusia ilmentymiä.
+- **Odottava komento**, jonka rungon tiiviste muuttui, hylätään varoituksella (luku [6.1.6](06-ajo.md#616-monivaiheinen-komento)).
+- **Taustakohtaus**, joka on käynnissä, jatkaa vanhalla aikajanallaan loppuun, ja uudet käynnistykset käyttävät uutta.
+- **Kartat** yhdistetään uuteen piirrokseen muutettujen ruutujen avulla (luku [5.2](#52-tallennus)). Ruutu, jota peli ei ole muuttanut, saa uuden piirroksen arvon. Pelin muuttama ruutu säilyy. Jos piirroksen arvo on muuttunut ruudussa, jonka peli on muuttanut, pelin arvo jää voimaan ja siitä tulee varoitus. Nimiöt tulevat uudesta piirroksesta, ja kadonneesta nimiöstä tulee varoitus. Lopuksi moottori varoittaa entiteetistä, jonka oma ruutu estää sen liikkeen. Piirroksen uudet `with`-entiteetit syntyvät vain kartan ensimmäisessä latauksessa.
+- **Tallennuksen lataus.** Samat yhdistämisen säännöt ja varoitukset pätevät, kun tallennettu peli ladataan ja kartan piirros on muuttunut tallennuksen jälkeen.
+- **Syöteloki** alkaa latauksesta uuden jakson (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)).
 
 ---
 

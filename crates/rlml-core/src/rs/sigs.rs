@@ -100,6 +100,7 @@ changes follow(c: camera, [e: entity]) -> none
 
 # Ruutujoukot
 query tiles() -> area
+query changed([layer: name]) -> area
 query at(h: name) -> area
 query near(a: area, d: number|range) -> area
 query from(a: area, x: number, y: number) -> area
@@ -138,6 +139,7 @@ query copy(d: deck) -> deck
 # Esto, maasto, linja ja lento
 query blocks(p: area, what: ?, [for: entity], [tiles: bool], [except: entity]) -> bool
 query tile_of(p: pos, [layer: name]) -> name
+query tile_original(p: pos, [layer: name]) -> name
 query adjacent(e: entity) -> area
 query ray(a: pos, b: pos, [for: entity], [range: number], [mode: name]) -> area
 present fly(tile: name, route: area, speed: time) -> none

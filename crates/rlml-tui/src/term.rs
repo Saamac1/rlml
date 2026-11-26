@@ -6,6 +6,7 @@ use std::io;
 use std::time::{Duration, Instant};
 
 use rlml_app::app::App;
+pub use rlml_app::app::Reloader;
 use rlml_app::events::{Event, Feed};
 use rlml_core::model::Model;
 use termplate_core::engine::InputEvent;
@@ -18,12 +19,12 @@ use termplate_term::{Screen, TtyGuard, map_event, no_color_from_env, terminal_si
 /// `log_out` gets the last game's input log (M 4.4), also when a runtime
 /// error ends it. The game's data folder `data` keeps its saves in
 /// `saves/` and its profile (D 3.2).
-pub fn play(
-    m: &Model,
+pub fn play<'m>(
+    m: &'m Model,
     seed: u64,
     log_out: Option<&std::path::Path>,
     data: Option<&std::path::Path>,
-    dev: bool,
+    dev: Option<Reloader<'m>>,
 ) -> Result<(), String> {
     // the mouse is on unless the player's settings turn it off (D 3.2)
     let mouse = m.settings().get("mouse").and_then(|i| i.word(1)) != Some("off");
@@ -32,8 +33,9 @@ pub fn play(
     let no_color = no_color_from_env(std::env::var("NO_COLOR").ok().as_deref());
     let mut screen = Screen::new(tty, StyleSheet::default(), no_color);
     let mut app = App::new(m, seed, terminal_size())?;
-    // development mode: `f12` opens the inspector
-    app.dev = dev;
+    // development mode: `f12` opens the inspector and `f5` reloads
+    app.dev = dev.is_some();
+    app.reloader = dev;
     if let Some(dir) = data {
         app.set_store(Box::new(crate::saves::DiskStore::new(&dir.join("saves"))));
         // the first game started before the profile was there

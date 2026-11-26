@@ -181,6 +181,55 @@ Alla on alkuperäinen tehtävälista.
 
 ### 4. Hot reload perustiedostoille
 
+Tehty 26.11.2026 haarassa `claude/hot-reload`.
+
+**Päätökset (käyttäjän valitsemat suositukset).**
+- Toisto latauksen yli: lataus aloittaa lokiin uuden jakson, jonka lähtötila on latauksen jälkeinen tilannekuva.
+- Ruudun alkuperäiset arvot: kysely `tile_original(p, layer:)` ja ruutujoukko `changed(layer:)`. Ruutu, joka palaa alkuperäiseen arvoonsa, poistuu muutettujen listasta.
+- Inspectorin muokkaus kirjataan lokiin ilman istuinta (vaihe 6).
+
+**Speksi.**
+- Uusi luku M 5.7 kertoo uudelleenlatauksesta.
+- M 4.4 saa latauksen jakson ja M 5.2 muutetut ruudut tallennukseen.
+- `tile_original` ja `changed` tulevat lukuihin M 9.1, M 9.3 ja RS 6.1.
+- Muutokset on kirjattu muutoslokeihin.
+
+**Muutetut ruudut.**
+- `MapState.changed` kirjaa jokaisen pelin muuttaman ruudun alkuperäisen arvon kerroksittain siitä hetkestä, kun kartta on ladattu.
+- Lista ja tieto seurannasta (`tracking`) tallentuvat. Vanhoista tallennuksista ei tiedetä, mitä peli on muuttanut, joten niiden karttoja ei yhdistetä.
+
+**Lataus (`rt::reload`).**
+- `Runner::reload(m)` siirtää tilan uuteen malliin tallennuksen kautta ja yhdistää kartat. Syöteloki alkaa jakson: `from TIIVISTE` ja tallennus rivien `| ` takana.
+- Käynnissä olevat taustakohtaukset pitävät vanhan aikajanansa, koska aikajanojen välimuisti siirtyy uuteen ajuriin.
+- Odottava komento, jonka runko muuttui, hylätään varoituksella kuten ennenkin.
+- Lataus ei onnistu kohtauksen, dialogin eikä valikon aikana.
+
+**Yhdistäminen.**
+- Uusi piirros saadaan lataamalla kartta väliaikaiseen maailmaan uudella mallilla.
+- Muuttamaton ruutu saa piirroksen arvon, ja muutettu säilyy. Ristiriidasta tulee varoitus, ja siitä lähtien piirroksen arvo on ruudun alkuperäinen.
+- Nimiöt ja johdot tulevat piirroksesta, ja kadonneesta nimiöstä tulee varoitus.
+- Lopuksi moottori varoittaa toimijasta, jonka ruutu estää sen liikkeen.
+- Sama yhdistäminen tehdään tallennuksen latauksessa myös checkpointille.
+
+**Tiiviste.** Lataaja laskee kaikista luetuista tiedostoista tiivisteen (`Model::source_hash`). Toisto hylkää jakson, jos tiivisteet eivät täsmää.
+
+**Kehitystila.** `rlml play --dev` ottaa käyttöön `f5`-näppäimen, joka lukee ja tarkistaa tiedostot uudelleen. Lataus tehdään heti, tai kun käynnissä oleva kohtaus tai avoin valikko sulkeutuu.
+- Latausvirheistä tulee ilmoitus, ja vanha versio jää voimaan.
+- Jokainen ladattu malli jää muistiin, koska peli lainaa sitä.
+- Sovellus rakentaa oman datan lukunsa uudelleen. Tallennukset, profiili, laitteet ja kehitystila siirtyvät uuteen versioon, ja valikot suljetaan.
+
+**Käytös ei muuttunut ilman latausta.** `rlml run` tuottaa Kapteeni Aaltolassa, minipelissä ja Oz-esimerkissä rivilleen saman tulosteen kuin ennen, ja nopeus on sama (0,30 ms painallusta kohden).
+
+**Testit:**
+- `crates/rlml-core/tests/reload.rs`: muutetut ruudut ja niiden palautus, lataus ja kartan yhdistäminen ristiriitoineen, muuttunut ja muuttumaton odottava komento, jakson toisto ja väärien tiedostojen hylkäys sekä tallennuksen lataus muuttuneella piirroksella.
+- Sovellustesti `f5_reloads_the_game_between_actions`.
+
+**Ei vielä.**
+- Tiedostomuutosten seuranta: lataus pyydetään toistaiseksi näppäimellä.
+- Komennolla pyydetty lataus.
+
+Alla on alkuperäinen tehtävälista.
+
 Ensin speksiin: syötelokin rivi `reload` (M 4.4), ruudun alkuperäiset arvot RogueScriptiin (RS 6 ja M 9.3) ja muutettujen ruutujen lista tallennukseen (M 5.2).
 
 - **Pyyntö.** Tiedostomuutos tai komento pyytää uudelleenlatausta, ja moottori odottaa toiminnon rajaa. Etualan kohtauksen, dialogin tai `open`-valikon aikana odotetaan niiden loppuun, eli samaa ehtoa kuin tallennuksessa (`World::save_blocked`).
@@ -243,9 +292,9 @@ Ensin speksiin: syötelokin inspector-rivi (M 4.4).
 
 ## Avoimet kysymykset
 
-- **Toisto latauksen yli.** `reload`-rivi kertoo tiivisteet, mutta toisto tarvitsee ladatut tiedostot. Vaihtoehdot: toisto hylkää rivin, jonka tiivisteet eivät täsmää nykyisiin tiedostoihin, tai syötelokin rinnalle tallennetaan kunkin latauksen tiedostot. Päätetään vaiheessa 4.
-- **Ruudun alkuperäisten arvojen syntaksi.** Funktiopari kuten `tile_original(p, layer)` ja `tile_changed(p)` vai jokin muu muoto (Erot dokumenttiin). Päätetään vaiheessa 4.
-- **Inspectorin muokkaus moninpelissä.** Kenen istuimen nimissä muokkaus kirjataan syötelokiin. Päätetään vaiheessa 6.
+- **Toisto latauksen yli.** Ratkaistu vaiheessa 4: lataus aloittaa lokiin uuden jakson tilannekuvasta.
+- **Ruudun alkuperäisten arvojen syntaksi.** Ratkaistu vaiheessa 4: `tile_original(p, layer:)` ja `changed(layer:)`.
+- **Inspectorin muokkaus moninpelissä.** Päätetty: rivi ilman istuinta, kuten `end` (vaihe 6).
 
 ## Ei tässä suunnitelmassa
 

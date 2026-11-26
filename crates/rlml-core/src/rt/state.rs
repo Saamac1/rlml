@@ -84,6 +84,10 @@ impl Game {
     }
 }
 
+/// A cell and a layer the game changed, with its value before the change
+/// (M 5.2).
+pub type ChangedCell = (((i32, i32), usize), Option<String>);
+
 /// A loaded map (M 3.1, D 8).
 #[derive(Debug, Clone, PartialEq)]
 pub struct MapState {
@@ -108,6 +112,11 @@ pub struct MapState {
     pub frozen_total: i64,
     /// `game.time` when the map was last frozen, while it is frozen.
     pub frozen_at: Option<i64>,
+    /// The cells the game has changed since the map was loaded or
+    /// generated, by cell and layer, with their values then (M 5.2).
+    pub changed: Vec<ChangedCell>,
+    /// Changes are kept from the end of the map's loading on.
+    pub tracking: bool,
 }
 
 impl MapState {
@@ -127,6 +136,8 @@ impl MapState {
             loaded_at: now,
             frozen_total: 0,
             frozen_at: None,
+            changed: vec![],
+            tracking: false,
         }
     }
 
@@ -148,7 +159,28 @@ impl MapState {
     pub fn set_tile(&mut self, layer: usize, x: i32, y: i32, tile: Option<String>) {
         if self.inside(x, y) {
             let i = self.index(x, y);
+            // the game's change keeps the cell's value from before it; a
+            // cell back at that value is unchanged again (M 5.2)
+            if self.tracking && self.tiles[layer][i] != tile {
+                match self.changed.iter().position(|(k, _)| *k == ((x, y), layer)) {
+                    Some(j) if self.changed[j].1 == tile => {
+                        self.changed.remove(j);
+                    }
+                    Some(_) => {}
+                    None => self
+                        .changed
+                        .push((((x, y), layer), self.tiles[layer][i].clone())),
+                }
+            }
             self.tiles[layer][i] = tile;
+        }
+    }
+
+    /// A cell's tile on `layer` as the map was loaded or generated.
+    pub fn original(&self, layer: usize, x: i32, y: i32) -> Option<&str> {
+        match self.changed.iter().find(|(k, _)| *k == ((x, y), layer)) {
+            Some((_, v)) => v.as_deref(),
+            None => self.tile(layer, x, y),
         }
     }
 

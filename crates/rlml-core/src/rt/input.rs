@@ -102,6 +102,9 @@ pub struct InputLog {
     /// does not depend on this computer's profile.
     pub profile: Vec<ComponentValue>,
     pub rows: Vec<Row>,
+    /// A segment from a reload (M 4.4): the game's files' hash and the
+    /// save the rows start from.
+    pub from: Option<(u64, String)>,
     /// An input the log cannot hold, such as an argument of a kind it has
     /// no text form for. Such a log is not written.
     pub broken: Option<String>,
@@ -415,6 +418,12 @@ impl InputLog {
                 super::save::write_value(&self.profile)
             ));
         }
+        if let Some((hash, save)) = &self.from {
+            out.push_str(&format!("from {hash:016x}\n"));
+            for l in save.lines() {
+                out.push_str(&format!("| {l}\n"));
+            }
+        }
         for r in &self.rows {
             out.push_str(&r.to_string());
             out.push('\n');
@@ -455,6 +464,23 @@ impl InputLog {
         {
             log.profile = super::save::read_value(p).map_err(|e| at(i, e))?;
             lines.next();
+        }
+        // a segment from a reload: its hash and its save, a line each
+        // behind `| `
+        if let Some((i, l)) = lines.peek().copied()
+            && let Some(h) = l.trim().strip_prefix("from ")
+        {
+            let hash = u64::from_str_radix(h.trim(), 16).map_err(|_| at(i, "a bad hash".into()))?;
+            lines.next();
+            let mut save = String::new();
+            while let Some((_, l)) = lines.peek().copied()
+                && let Some(line) = l.strip_prefix("| ").or(l.strip_prefix("|"))
+            {
+                save.push_str(line);
+                save.push('\n');
+                lines.next();
+            }
+            log.from = Some((hash, save));
         }
         for (i, l) in lines {
             log.rows.push(read_row(l.trim()).map_err(|e| at(i, e))?);
@@ -526,6 +552,26 @@ impl<'m> Replay<'m> {
     /// The log's start: a new game with its seed and seats, run to the
     /// first turn.
     pub fn start(m: &'m Model, log: &InputLog) -> RtResult<Replay<'m>> {
+        // a segment from a reload starts from its save, with the files it
+        // was played with (M 4.4)
+        if let Some((hash, save)) = &log.from {
+            if *hash != m.source_hash {
+                return Err(format!(
+                    "the input log's segment was played with other files (hash {hash:016x}, these are {:016x})",
+                    m.source_hash
+                ));
+            }
+            let save = super::save::Save::read(save)?;
+            let mut r = Runner::load(m, &save)?;
+            r.inputs.from = log.from.clone();
+            let status = r.run(0)?;
+            return Ok(Replay {
+                r,
+                status,
+                rows: log.rows.clone(),
+                next: 0,
+            });
+        }
         let mut w = World::new_game_with(m, log.seed, Some(log.seats), Some(&log.profile))?;
         w.begin()?;
         let mut r = Runner::new(w);

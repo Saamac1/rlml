@@ -15,6 +15,7 @@
 | Funktio | Ruudut |
 | --- | --- |
 | `tiles()` | koko kartta |
+| `changed()` | ruudut, joita peli on muuttanut kartan latauksen jälkeen; `changed(layer: GROUND)` rajaa kerrokseen. Alkuperäinen tile luetaan kyselyllä `tile_original(p)`, joten `for p in changed(): tile(p, tile_original(p))` palauttaa kartan piirretyksi |
 | `at(HAKU)` | ruudut, joiden jokin kerros on hakujoukon jäsen (tile, tilen väli tai tilejoukko) |
 | `near(ANKKURI, ETÄISYYS)` | ruudut ankkurin lähellä |
 | `from(ANKKURI, X, Y)` | ruutu siirtymän päässä ankkurista |

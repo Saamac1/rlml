@@ -1015,6 +1015,8 @@ impl<'m> World<'m> {
                 &mut spawns,
             )?;
         }
+        // the drawing is placed: the game's changes are kept from here on
+        self.s.maps[id].tracking = true;
         spawns.sort_by_key(|(p, _)| (p.y, p.x));
         for (p, with) in spawns {
             let card = self.card(&with.tokens, with.namespace.as_deref())?;

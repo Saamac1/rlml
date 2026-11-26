@@ -104,6 +104,9 @@ pub struct Loaded {
     pub languages: Vec<LanguageFile>,
     /// Every loaded file in load order.
     pub files: Vec<Place>,
+    /// FNV-1a over every file's name and text in load order: a game's
+    /// version, for the input log's segments (M 4.4).
+    pub source_hash: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -217,6 +220,16 @@ impl Loader<'_> {
         // drawings count code points of the NFC form (D 8.1)
         let src: String = src.nfc().collect();
         self.out.files.push(place.clone());
+        let mut h = if self.out.source_hash == 0 {
+            0xcbf2_9ce4_8422_2325
+        } else {
+            self.out.source_hash
+        };
+        for b in name.bytes().chain([0]).chain(src.bytes()).chain([0]) {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+        self.out.source_hash = h;
         let parsed = if place.path.ends_with(".rogue") {
             crate::syntax::parse_rogue(&name, &src)
         } else {

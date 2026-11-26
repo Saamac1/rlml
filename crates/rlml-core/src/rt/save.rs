@@ -699,6 +699,7 @@ impl Put for MapState {
             (self.loaded_at, (self.frozen_total, self.frozen_at)),
         )
             .put(w);
+        (self.tracking, &self.changed).put(w);
         w.close();
     }
 }
@@ -712,6 +713,13 @@ impl Get for MapState {
         let (labels, wires) = Get::get(r)?;
         let (vars, remembered) = Get::get(r)?;
         let (transient, (loaded_at, (frozen_total, frozen_at))) = Get::get(r)?;
+        // saves from before the changed cells do not know them, so their
+        // maps are not merged with a new drawing (M 5.7)
+        let (tracking, changed) = if r.at_close() {
+            (false, vec![])
+        } else {
+            Get::get(r)?
+        };
         r.close()?;
         Ok(MapState {
             name,
@@ -727,6 +735,8 @@ impl Get for MapState {
             loaded_at,
             frozen_total,
             frozen_at,
+            changed,
+            tracking,
         })
     }
 }
@@ -958,6 +968,10 @@ impl<'m> Runner<'m> {
                 save.game
             ));
         }
+        // maps merge with drawings changed since the save (M 5.7)
+        let mut save = save.clone();
+        let warnings = save.merge_maps(m);
+        let save = &save;
         let mut r = Runner::new(World::new(m, save.now.s.game.seed));
         r.restore(&save.now);
         // the session's own view of the profile comes back (M 5.6)
@@ -971,6 +985,9 @@ impl<'m> Runner<'m> {
             ..InputLog::default()
         };
         r.scene_saved = true;
+        r.w.warnings.extend(warnings);
+        let misplaced = r.misplaced();
+        r.w.warnings.extend(misplaced);
         Ok(r)
     }
 }

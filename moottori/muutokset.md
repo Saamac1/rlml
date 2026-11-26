@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 26.11.2026 (uudelleenlataus):** kehitystilan uudelleenlataus on uusi luku [5.7](05-aloitus-tallennus-ja-checkpointit.md#57-uudelleenlataus-kehitystilassa): lataus toiminnon rajalla, tila säilyy, ja kartat yhdistetään muutettujen ruutujen avulla, myös tallennusta ladattaessa. Tallennus kirjaa muutetut ruudut (luku [5.2](05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)), ja syöteloki alkaa latauksesta uuden jakson (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)). Uudet kyselyt `tile_original` ja `changed` (luku [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).
+
 **Muutokset 26.11.2026 (hihna moottoriin):** kysely `leashed(who, to)` laskee talutushihnan, jonka `game`-kenttä `leash` kytkee. Suorakulmio on sama kuin kameran ryhmäsuorakulmio, myös kiertävällä kartalla, ja moottori ei estä askelta itse (luvut [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä), [7.1](07-esitys.md#71-asettelu) ja [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)). Avoimiin kysymyksiin lisättiin generoinnin primitiivit, lokin tahdistus, viestin persoona, ryhmän vaihto ja pinot kartalla (luku [11](11-avoimet-kysymykset.md)).
 
 **Muutokset 25.11.2026 (taustakohtaukset):** taustakohtauksen kahva tallentuu, ja `realtime`-kohtauksen kello alkaa ladattaessa alusta (luku [5.2](05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)). Saman hetken tweenien askeleet ajetaan ennen toimijoiden herätyksiä (luku [6.1.4](06-ajo.md#614-mikroaskeleen-vaiheet)).

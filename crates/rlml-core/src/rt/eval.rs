@@ -2466,6 +2466,41 @@ impl World<'_> {
                     }
                 }))
             }
+            // the cell as the map was loaded or generated (M 9.3)
+            "tile_original" => {
+                let Value::Pos(p) = a0 else {
+                    return Err(self.rt_err(env, pos, "`tile_original` takes a pos"));
+                };
+                let layer = self.layer_arg(&args, p.map, env, pos)?;
+                self.s.maps[p.map]
+                    .original(layer, p.x, p.y)
+                    .map(|t| Value::Name(t.to_string()))
+                    .unwrap_or(Value::None)
+            }
+            // the cells the game has changed, in reading order (M 9.3)
+            "changed" => {
+                let Some(m) = env.map else {
+                    return Ok(Value::Area(Area::default()));
+                };
+                let layer = match self.arg(&args, usize::MAX, "layer") {
+                    Some(_) => Some(self.layer_arg(&args, m, env, pos)?),
+                    None => None,
+                };
+                let mut cells: Vec<(i32, i32)> = self.s.maps[m]
+                    .changed
+                    .iter()
+                    .filter(|((_, l), _)| layer.is_none_or(|w| *l == w))
+                    .map(|((c, _), _)| *c)
+                    .collect();
+                cells.sort_by_key(|&(x, y)| (y, x));
+                cells.dedup();
+                Value::Area(Area::new(
+                    cells
+                        .into_iter()
+                        .map(|(x, y)| Cell { map: m, x, y })
+                        .collect(),
+                ))
+            }
             "tile_of" => {
                 let Value::Pos(p) = a0 else {
                     return Err(self.rt_err(env, pos, "`tile_of` takes a pos"));
@@ -3135,6 +3170,24 @@ impl World<'_> {
             }
         }
         vec![]
+    }
+
+    /// A `layer:` argument's index on `map`, or the default layer.
+    fn layer_arg(
+        &self,
+        args: &[(Option<String>, Value)],
+        map: MapId,
+        env: &Env,
+        pos: Pos,
+    ) -> RtResult<usize> {
+        match self.arg(args, usize::MAX, "layer") {
+            Some(Value::Name(l)) => self.s.maps[map]
+                .layers
+                .iter()
+                .position(|n| n == l || l.rsplit('.').next() == Some(n.as_str()))
+                .ok_or_else(|| self.rt_err(env, pos, format!("no layer `{l}`"))),
+            _ => Ok(self.default_layer()),
+        }
     }
 
     /// `tile` and `carve` (M 9.3): `tile` changes one cell drawn from the

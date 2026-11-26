@@ -37,6 +37,7 @@ Muutoshistoria: [muutokset.md](muutokset.md).
   - [5.4 Automaattinen tallennus](05-aloitus-tallennus-ja-checkpointit.md#54-automaattinen-tallennus)
   - [5.5 Tallennuksen poisto](05-aloitus-tallennus-ja-checkpointit.md#55-tallennuksen-poisto)
   - [5.6 Profiili](05-aloitus-tallennus-ja-checkpointit.md#56-profiili)
+  - [5.7 Uudelleenlataus kehitystilassa](05-aloitus-tallennus-ja-checkpointit.md#57-uudelleenlataus-kehitystilassa)
 - [6. Ajo](06-ajo.md)
   - [6.1 Aika ja vuorot](06-ajo.md#61-aika-ja-vuorot)
   - [6.2 Tapahtumat](06-ajo.md#62-tapahtumat)

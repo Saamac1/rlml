@@ -10,6 +10,7 @@ pub mod inspect;
 pub mod path;
 pub mod play;
 pub mod profile;
+pub mod reload;
 pub mod rng;
 pub mod run;
 pub mod save;

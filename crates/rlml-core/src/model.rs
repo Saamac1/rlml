@@ -127,6 +127,8 @@ pub struct Model {
     pub languages: Vec<LanguageFile>,
     /// Every loaded file in load order.
     pub files: Vec<crate::load::Place>,
+    /// The loaded files' hash: the game's version (M 4.4).
+    pub source_hash: u64,
     /// Full names written with `override`, for the check that something
     /// was replaced.
     overrides: Vec<(String, Kind, String, usize)>,
@@ -538,6 +540,7 @@ pub fn build(loaded: Loaded, report: &mut Report) -> Model {
     let mut m = Model {
         languages: loaded.languages,
         files: loaded.files,
+        source_hash: loaded.source_hash,
         ..Default::default()
     };
     let mut patches = Vec::new();
