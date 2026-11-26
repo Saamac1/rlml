@@ -103,6 +103,24 @@ Alla on alkuperäinen tehtävälista.
 
 ### 2. Lowering ja slotit
 
+**Jakelutaulut tehty** 26.11.2026 haarassa `claude/jakelutaulut`. Vaiheen muut osat (slotit, rungon nimitaulu, jaetut kehykset ja isojen nimien resolvointi latauksessa) ovat yhä tekemättä.
+- **`rt::dispatch`.** Malli laskee kerran (`Model::dispatch`, `OnceLock` kuten muutkin mallin välimuistit) jokaisen tapahtuman ja vaiheen käsittelijät valmiiksi järjestettyinä: ensin prioriteetti ja sitten latausjärjestys, ja komponentin sisällä kirjoitusjärjestys (M 6.2).
+  - Tapahtuman nimi ratkaistaan käsittelijän nimiavaruudessa samalla kertaa.
+  - `override … as NIMI` -sääntö ratkaistaan samalla kertaa.
+  - Käsittelijän jäsennyspuu jaetaan (`Arc`) eikä sitä kloonata kutsulla.
+- **`World::handlers`** lukee tapahtuman listan taulusta ja tarkistaa ajon aikana vain, onko subjektilla komponentin käsittelijän komponentti.
+- **Käytös ei muuttunut.** `rlml run` tuottaa kaikissa kolmessa mittauspelissä rivilleen saman tulosteen kuin ennen. Kaikki testit ja Kapteeni Aaltolan läpipeluut menevät läpi.
+
+| Mittaus | Aika / painallus ennen | Jälkeen | Läpikäytyjä määrittelyjä / painallus ennen | Jälkeen | Käsittelijöiden haku ennen | Jälkeen |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Kapteeni Aaltola | 0,89 ms | 0,43 ms | 14 941 | 73 | 49 % | 2 % |
+| Minipeli | 1,16 ms | 1,04 ms | 3 568 | 7 | 12 % | 0 % |
+| Oz-esimerkki | 0,20 ms | 0,12 ms | 2 166 | 2 | 37 % | 1 % |
+
+Ajat on mitattu laskureiden kanssa. Ilman laskureita Kapteeni Aaltolan läpipeluu nopeutui 0,80 ms:sta 0,42 ms:iin painallusta kohden. Suurimmat kulut ovat nyt näkökenttä (Kapteeni Aaltolassa 43 %, Oz-esimerkissä 50 %) sekä minipelin kuuleminen (34 %) ja rottien tekoäly (33 %).
+
+Alla on alkuperäinen tehtävälista.
+
 - **Lowering-vaihe** tarkistuksen (`rs::check`) jälkeen tuottaa jokaisesta rungosta version, jossa lokaalit ovat slotteja ja isot nimet on resolvoitu latausajan tauluihin.
 - **Lokaalit.** `Env.locals` muuttuu muotoon `Vec<Value>`, ja jokainen slotti alustetaan arvoon `none`. Slotit jaetaan deterministisesti esittelyjärjestyksessä, eikä niitä käytetä uudelleen sisemmissä lohkoissa.
 - **Rungon nimitaulu.** Jokaisesta slotista kirjataan nimi, tyyppi, näkyvyysalue rakenteellisena polkuna (alku ja loppu) ja esittelypaikka. Sitä käyttävät tallennus, inspector ja virheilmoitukset.

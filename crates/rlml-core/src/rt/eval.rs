@@ -2134,78 +2134,20 @@ impl World<'_> {
     /// then load order (RS 4).
     fn handlers(&self, event: &str, phase: Phase, subject: Option<EntityId>) -> Vec<HandlerRef> {
         let _t = stats::span(stats::Span::Handlers);
-        let mut out: Vec<(i64, usize, usize, HandlerRef)> = Vec::new();
-        for (order, d) in self.m.code.iter().enumerate() {
+        // the model's table has them in order; a component's handler runs
+        // for a subject that has the component
+        let mut out = Vec::new();
+        for e in self.m.dispatch().entries(event, phase) {
             stats::bump(Count::HandlerScan);
-            match &d.item.kind {
-                ItemKind::Handler(h)
-                    if h.phase == phase
-                        && self.event_name(&h.event, d.namespace.as_deref()) == event =>
-                {
-                    // a named handler runs only as the definition that won:
-                    // `override on … as NAME` replaces it (RS 4, D 4.5)
-                    if !d.name.is_empty()
-                        && let Some(def) = self
-                            .m
-                            .defs
-                            .get(&names::qualify(d.namespace.as_deref(), &d.name))
-                        && (def.file != d.file || def.line != d.line)
-                    {
-                        continue;
-                    }
-                    out.push((
-                        h.priority,
-                        order,
-                        0,
-                        HandlerRef {
-                            handler: Arc::new(h.clone()),
-                            component: None,
-                            name: d.name.clone(),
-                            ns: d.namespace.clone(),
-                            file: d.file.clone(),
-                        },
-                    ));
+            if let Some(c) = &e.component {
+                match subject {
+                    Some(s) if self.s.get(s).has(c) => {}
+                    _ => continue,
                 }
-                ItemKind::Component { handlers, .. } => {
-                    let Some(s) = subject else { continue };
-                    let full = names::qualify(d.namespace.as_deref(), &d.name);
-                    if !self.s.get(s).has(&full) {
-                        continue;
-                    }
-                    for (k, h) in handlers.iter().enumerate() {
-                        if h.phase == phase
-                            && self.event_name(&h.event, d.namespace.as_deref()) == event
-                        {
-                            out.push((
-                                h.priority,
-                                order,
-                                k,
-                                HandlerRef {
-                                    handler: Arc::new(h.clone()),
-                                    component: Some(full.clone()),
-                                    name: full.clone(),
-                                    ns: d.namespace.clone(),
-                                    file: d.file.clone(),
-                                },
-                            ));
-                        }
-                    }
-                }
-                _ => {}
             }
+            out.push(e.handler.clone());
         }
-        out.sort_by_key(|(p, o, k, _)| (-p, *o, *k));
-        out.into_iter().map(|(_, _, _, h)| h).collect()
-    }
-
-    fn event_name(&self, written: &str, ns: Option<&str>) -> String {
-        if names::is_vocabulary(written) {
-            return written.to_string();
-        }
-        self.m
-            .resolve(ns, written)
-            .map(|d| d.full.clone())
-            .unwrap_or_else(|_| written.to_string())
+        out
     }
 
     /// Sends `created` for instances that wait for it, in order (M 3.2).
@@ -3693,13 +3635,13 @@ impl Scope {
 
 /// A handler in an event's list.
 #[derive(Debug, Clone)]
-struct HandlerRef {
-    handler: Arc<Handler>,
+pub(crate) struct HandlerRef {
+    pub(crate) handler: Arc<Handler>,
     /// The component whose handler this is, for component handlers.
-    component: Option<String>,
-    name: String,
-    ns: Option<String>,
-    file: String,
+    pub(crate) component: Option<String>,
+    pub(crate) name: String,
+    pub(crate) ns: Option<String>,
+    pub(crate) file: String,
 }
 
 /// A tile name matches a search name: the same or one of its variants and

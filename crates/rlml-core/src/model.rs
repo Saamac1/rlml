@@ -136,6 +136,8 @@ pub struct Model {
     settings: OnceLock<BTreeMap<String, RawItem>>,
     text_index: OnceLock<TextIndex>,
     tile_rows: OnceLock<BTreeMap<String, Vec<Vec<String>>>>,
+    /// Every event's handlers in the order they run (M 6.2).
+    dispatch: OnceLock<crate::rt::dispatch::Dispatch>,
 }
 
 /// One part of a `layout` row's `when` (D 11.1).
@@ -273,6 +275,13 @@ impl Model {
     }
 
     /// Merged `settings` rows: the last row of each key wins (D 4.8).
+    /// Every event's handlers by phase, in the order they run, laid out
+    /// once (M 6.2).
+    pub fn dispatch(&self) -> &crate::rt::dispatch::Dispatch {
+        self.dispatch
+            .get_or_init(|| crate::rt::dispatch::Dispatch::build(self))
+    }
+
     pub fn settings(&self) -> &BTreeMap<String, RawItem> {
         self.settings.get_or_init(|| {
             let mut out = BTreeMap::new();
