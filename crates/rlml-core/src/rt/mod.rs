@@ -6,6 +6,7 @@ pub mod checkpoint;
 pub mod dispatch;
 pub mod eval;
 pub mod input;
+pub mod inspect;
 pub mod path;
 pub mod play;
 pub mod profile;

@@ -226,6 +226,12 @@ pub struct App<'m> {
     pub asking: Option<Asking>,
     /// The log being read (`read LOG`, M 7.4): presentation, not state.
     pub reading: Option<Reading>,
+    /// Development mode (`rlml play --dev`): `f12` opens the inspector
+    /// (RLML-kehitystyokalut.md step 3).
+    pub dev: bool,
+    /// The inspector's lines and the first one shown; the game's time
+    /// stands while it is open.
+    pub inspecting: Option<(Vec<String>, usize)>,
     /// The window's size in pixels when the front end knows it; without
     /// it a cell counts as twice as high as wide (D 11.1).
     pub pixels: Option<(usize, usize)>,
@@ -437,6 +443,8 @@ impl<'m> App<'m> {
             menu_drawn: Default::default(),
             asking: None,
             reading: None,
+            dev: false,
+            inspecting: None,
             pixels: None,
             releases: false,
             held: None,
@@ -939,6 +947,9 @@ impl<'m> App<'m> {
         self.view.enabled = self.players_turn() && !self.menus.is_open();
         self.view.typing = self.baud.map(|_| (self.typed, self.type_chars as usize));
         self.view.keyboard = self.keyboard;
+        if let Some((lines, top)) = &self.inspecting {
+            return draw_inspector(lines, *top, w, h);
+        }
         if self.reading.as_ref().is_some_and(|r| !r.panel) {
             // over a `read` log area the view keeps the log's place (D 11.4)
             let over = self
@@ -1147,6 +1158,51 @@ impl<'m> App<'m> {
             panel: false,
             arrows: (None, None),
         });
+    }
+
+    /// Opens the inspector on the state now, or closes it: the overview,
+    /// `game`, the player, the waiting commands and the scenes.
+    fn toggle_inspector(&mut self) {
+        if self.inspecting.take().is_some() {
+            return;
+        }
+        let player = self.r.w.s.player.map(|p| format!("entity#{p}"));
+        let mut lines = Vec::new();
+        for path in ["", "game"]
+            .into_iter()
+            .map(String::from)
+            .chain(player)
+            .chain(["wait".to_string(), "scenes".to_string()])
+        {
+            match self.r.inspect(&path) {
+                Ok(node) => lines.extend(node.lines(&path)),
+                Err(e) => lines.push(e),
+            }
+            lines.push(String::new());
+        }
+        self.inspecting = Some((lines, 0));
+    }
+
+    /// A `MENU` action in the inspector: scrolling, and `back` closes it.
+    fn inspector_action(&mut self, a: &str) {
+        let page = self.size.1.saturating_sub(2).max(1);
+        let Some((lines, top)) = &mut self.inspecting else {
+            return;
+        };
+        let last = lines.len().saturating_sub(1);
+        *top = match a {
+            "cursor.north" => top.saturating_sub(1),
+            "cursor.south" => (*top + 1).min(last),
+            "page.up" => top.saturating_sub(page),
+            "page.down" => (*top + page).min(last),
+            "first" => 0,
+            "last" => last,
+            "back" | "confirm" | "close" => {
+                self.inspecting = None;
+                return;
+            }
+            _ => *top,
+        };
     }
 
     /// A `MENU` action in the reading view.
@@ -1519,6 +1575,11 @@ impl<'m> App<'m> {
             self.quit = true;
             return Ok(());
         }
+        // `f12` opens and closes the inspector in development mode
+        if self.dev && b == Binding::key(KeyCode::F(12), Mods::default()) {
+            self.toggle_inspector();
+            return Ok(());
+        }
         // a scene's field takes the keys as text (RS 9.7)
         if self.field_key(&b)? {
             return self.sync_scene();
@@ -1704,6 +1765,21 @@ impl<'m> App<'m> {
         let always = self.input.keys.is_always(device, &press);
         // a key closes a held panel (D 11.5)
         if self.overlay.take().is_some() {
+            return Ok(());
+        }
+        // the inspector scrolls and closes by `MENU`'s bindings, as the
+        // reading view does
+        if self.inspecting.is_some() {
+            match self
+                .input
+                .keys
+                .lookup_on(&["MENU".to_string()], device, &press)
+                .cloned()
+            {
+                Some(Action::Engine(a)) => self.inspector_action(&a),
+                _ if !always => {}
+                _ => self.inspecting = None,
+            }
             return Ok(());
         }
         // the reading view takes its keys by `MENU`'s bindings, which win
@@ -2531,7 +2607,11 @@ impl<'m> App<'m> {
         self.effects(now);
         // the game's time stops while a menu is open or the log is read
         // (M 7.4, M 8)
-        if !self.playing || self.menus.is_open() || self.reading.is_some() {
+        if !self.playing
+            || self.menus.is_open()
+            || self.reading.is_some()
+            || self.inspecting.is_some()
+        {
             self.last_round = now;
             self.last_key = now;
             self.last_scene = now;
@@ -2617,7 +2697,11 @@ impl<'m> App<'m> {
                 .saturating_sub(self.clock)
                 .clamp(Duration::from_millis(10), HOLD_REPEAT);
         }
-        if !self.playing || self.menus.is_open() || self.reading.is_some() {
+        if !self.playing
+            || self.menus.is_open()
+            || self.reading.is_some()
+            || self.inspecting.is_some()
+        {
             return Duration::from_millis(500);
         }
         // a timeline's clock, a shake and a pan move at about 30 frames a
@@ -3586,4 +3670,23 @@ impl<'m> App<'m> {
     pub fn frame_time(&self) -> Duration {
         self.frame
     }
+}
+
+/// The inspector over the whole window: a title, its lines from `top`,
+/// and the keys at the bottom.
+fn draw_inspector(lines: &[String], top: usize, w: usize, h: usize) -> Frame {
+    use termplate_core::frame::Role;
+    let mut f = Frame::new(w, h);
+    if h == 0 {
+        return f;
+    }
+    f.text(0, 0, w, "inspector", Role::Title);
+    let rows = h.saturating_sub(2);
+    for (i, line) in lines.iter().skip(top).take(rows).enumerate() {
+        f.text(0, 1 + i, w, line, Role::Normal);
+    }
+    if h > 1 {
+        f.text(0, h - 1, w, "↑↓ scroll  esc/f12 close", Role::Dim);
+    }
+    f
 }

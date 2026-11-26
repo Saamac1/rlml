@@ -149,6 +149,25 @@ Ilman laskureita Kapteeni Aaltolan läpipeluu vie nyt 0,30 ms painallusta kohden
 
 ### 3. Inspector, luku
 
+Tehty 26.11.2026 haarassa `claude/inspector-luku`:
+- **`rt::inspect`.** `Runner::inspect(polku)` palauttaa tilan puuna (`Node`), ja `Node::lines` antaa sen sisennettyinä riveinä.
+  - **Juuret:** `game`, `maps`, `map.NIMI`, `entities`, `entity#N`, `seats`, `wait`, `wait#N` ja `scenes`. Tyhjä polku antaa yhteenvedon.
+  - **Polut:** polut jatkuvat nimillä kuten RogueScriptissä, esimerkiksi `game.turn`, `game.STORY.stage`, `entity#12.HP.now` ja `wait#12.locals.steps`.
+  - **Komponentit:** komponentin voi nimetä koko nimellä (`STD.HP`) tai viimeisellä osalla (`HP`), kun se on yksiselitteinen.
+  - **Arvot:** listat ja sanakirjat näytetään sisältöineen.
+  - **Entiteetti:** näyttää määrittelynsä tiedoston ja rivin, istuimen ja herätyksen.
+  - **Kohtaukset:** näyttävät etualan kohtauksen, jonon, taustakohtaukset kahvoineen ja satunnaisvirran tilan.
+- **Lukeminen ei muuta tilaa.** Testi vertaa tilaa ennen ja jälkeen kaikkien juurten luvun.
+- **`rlml inspect PELI [--keys "…"] [POLKU …]`** pelaa näppäimet ja tulostaa polut. Väärä polku kerrotaan sen kohdalla, ja muut tulostuvat.
+- **Kehitystila `rlml play --dev`.** `f12` avaa inspectorin pelin päälle: yhteenvedon, `game`-tilan, pelaajan, odottavat komennot ja kohtaukset. Paneeli selataan `MENU`-kontekstin näppäimillä, ja `esc` tai `f12` sulkee sen. Pelin aika seisoo, ja pelin näppäimet eivät toimi paneelin ollessa auki.
+- **Ei vielä:**
+  - Odottavan komennon lokaaleista näytetään kaikki, jotka runko on asettanut. Vain odotuskohdassa näkyvät tulevat rungon nimitaulun mukana (vaihe 2).
+  - Määrittelystä tulevan arvon alkuperä kenttäkohtaisesti tulee modien mukana (vaihe 5).
+  - MCP-työkalut tehdään moninpelin vaiheen 8 palvelimen kanssa samalle rajapinnalle.
+- **Testit:** `crates/rlml-core/tests/inspect.rs` (polut, virheet, odottavan komennon lokaalit ja lukeminen ilman muutoksia) ja sovellustesti `f12_opens_the_inspector_in_development_mode`.
+
+Alla on alkuperäinen tehtävälista.
+
 - **Ytimen rajapinta** `rt::inspect`. Se lukee tilaa milloin tahansa ja palauttaa rakenteen, jota TUI, web ja MCP voivat näyttää.
 - **Mitä näkyy:**
   - `game`, kartat, entiteetit ja niiden komponentit kenttineen nimillä,

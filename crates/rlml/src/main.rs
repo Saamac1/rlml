@@ -48,8 +48,9 @@ impl Files for DiskFiles {
 
 const USAGE: &str = "usage: rlml check GAME [--lib DIR]
        rlml run GAME [--seed N] [--keys \"KEY KEY …\"] [--log-out FILE] [--lib DIR]
-       rlml play GAME [--seed N] [--log-out FILE] [--data DIR] [--lib DIR]
+       rlml play GAME [--seed N] [--log-out FILE] [--data DIR] [--dev] [--lib DIR]
        rlml replay GAME LOG [--lib DIR]
+       rlml inspect GAME [--seed N] [--keys \"KEY …\"] [PATH …] [--lib DIR]
        rlml bench GAME [--seed N] [--keys \"KEY …\" | --keys-file FILE] [--repeat N] [--lib DIR]
 
 check loads the game and reports load errors and warnings (M 2).
@@ -63,9 +64,14 @@ ends the game and is printed after the terminal is restored.
 is the last game's log, written also when a runtime error ends it.
 play keeps the game's saves (DIR/saves) and profile (DIR/profile) in
 DIR, by default the user data folder's rlml/GAME (~/.local/share on
-Linux).
+Linux). --dev is development mode: f12 opens the inspector over the
+game, which stands while it is open.
 replay plays an input log and prints a transcript as run does: the
 frame after each row of the log.
+inspect plays the keys as run does and prints the game's state at each
+PATH (RLML-kehitystyokalut.md step 3): game, maps, map.NAME, entities,
+entity#N, seats, wait, wait#N or scenes, and below them by name, as
+game.turn or entity#12.HP.now. Without a PATH it lists the roots.
 bench plays the keys as run does, --repeat times, without drawing, and
 prints how long loading and playing took. Built with `--features
 stats`, it also prints the interpreter's counters: statements, body
@@ -88,7 +94,9 @@ fn main() -> ExitCode {
     let mut i = 0;
     let command = args.first().cloned().unwrap_or_default();
     let mut repeat: u32 = 1;
-    if !["check", "run", "play", "replay", "bench"].contains(&command.as_str()) {
+    let mut paths: Vec<String> = vec![];
+    let mut dev = false;
+    if !["check", "run", "play", "replay", "bench", "inspect"].contains(&command.as_str()) {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     }
@@ -113,11 +121,15 @@ fn main() -> ExitCode {
                 log_out = Some(PathBuf::from(&args[i + 1]));
                 i += 1;
             }
+            "--dev" if command == "play" => dev = true,
             "--data" if command == "play" && i + 1 < args.len() => {
                 data = Some(PathBuf::from(&args[i + 1]));
                 i += 1;
             }
-            "--keys" if (command == "run" || command == "bench") && i + 1 < args.len() => {
+            "--keys"
+                if ["run", "bench", "inspect"].contains(&command.as_str())
+                    && i + 1 < args.len() =>
+            {
                 keys = args[i + 1].clone();
                 i += 1;
             }
@@ -146,6 +158,7 @@ fn main() -> ExitCode {
                 return ExitCode::SUCCESS;
             }
             a if game.is_none() && !a.starts_with('-') => game = Some(PathBuf::from(a)),
+            a if command == "inspect" && !a.starts_with('-') => paths.push(a.to_string()),
             a if command == "replay" && log_in.is_none() && !a.starts_with('-') => {
                 log_in = Some(PathBuf::from(a))
             }
@@ -199,7 +212,7 @@ fn main() -> ExitCode {
             .map(|g| g.name.clone())
             .unwrap_or_default();
         let data = data.or_else(|| rlml_tui::saves::user_data(&game_name));
-        return match rlml_tui::term::play(&model, seed, log_out.as_deref(), data.as_deref()) {
+        return match rlml_tui::term::play(&model, seed, log_out.as_deref(), data.as_deref(), dev) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("{e}");
@@ -225,6 +238,58 @@ fn main() -> ExitCode {
                     return ExitCode::FAILURE;
                 }
                 ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    if command == "inspect" {
+        if report.has_errors() {
+            for d in report.errors() {
+                eprintln!("{d}");
+            }
+            return ExitCode::FAILURE;
+        }
+        let keys: Vec<&str> = keys.split_whitespace().collect();
+        let run = || -> Result<(String, bool), String> {
+            let mut s = rlml_core::rt::play::Session::start(&model, seed)?;
+            for k in &keys {
+                s.press(k)?;
+            }
+            let mut out = String::new();
+            let mut failed = false;
+            let paths = if paths.is_empty() {
+                vec![String::new()]
+            } else {
+                paths.clone()
+            };
+            for p in paths {
+                match s.r.inspect(&p) {
+                    Ok(node) => {
+                        for line in node.lines(&p) {
+                            out.push_str(&line);
+                            out.push('\n');
+                        }
+                    }
+                    // a wrong path is told in its place, and the rest go on
+                    Err(e) => {
+                        failed = true;
+                        out.push_str(&format!("{e}\n"));
+                    }
+                }
+            }
+            Ok((out, failed))
+        };
+        return match run() {
+            Ok((text, failed)) => {
+                print!("{text}");
+                if failed {
+                    ExitCode::FAILURE
+                } else {
+                    ExitCode::SUCCESS
+                }
             }
             Err(e) => {
                 eprintln!("{e}");

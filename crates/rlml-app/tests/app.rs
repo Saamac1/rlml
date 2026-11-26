@@ -2845,3 +2845,34 @@ fn the_oz_example_plays_its_dialogues() {
     press(&mut app, "esc");
     replays_the_same(&m, &app);
 }
+
+#[test]
+fn f12_opens_the_inspector_in_development_mode() {
+    let m = model(&mini_with(|_| {}));
+    let f12 = || Binding::key(KeyCode::F(12), Mods::default());
+    // without development mode f12 does nothing
+    let mut app = App::new(&m, 7, (60, 30)).unwrap();
+    app.key(f12(), ms(0)).unwrap();
+    assert!(app.inspecting.is_none());
+    // `rlml play --dev`
+    app.dev = true;
+    app.key(f12(), ms(10)).unwrap();
+    assert!(app.inspecting.is_some());
+    let s = screen(&mut app);
+    assert!(s.contains("inspector") && s.contains("game: turn 0"), "{s}");
+    assert!(s.contains("STD.HP"), "the player's components:\n{s}");
+    // the game stands while it is open, and its keys do nothing
+    let at = player_at(&app);
+    press(&mut app, "l");
+    app.tick(ms(5000)).unwrap();
+    assert_eq!(player_at(&app), at);
+    assert!(app.inspecting.is_some());
+    // it scrolls, and esc closes it without pausing
+    press(&mut app, "down");
+    assert_eq!(app.inspecting.as_ref().map(|i| i.1), Some(1));
+    press(&mut app, "esc");
+    assert!(app.inspecting.is_none() && !app.menus.is_open());
+    press(&mut app, "l");
+    assert_ne!(player_at(&app), at, "the game goes on");
+    replays_the_same(&m, &app);
+}
