@@ -15,6 +15,7 @@ use std::sync::Arc;
 use super::path::{PathLoop, body_hash, frames_at, path_of, wait_stmt};
 use super::rng::Rng;
 use super::state::{Place, SeatId};
+use super::stats::{self, Count};
 use super::value::{
     Area, Card, CommandValue, ComponentValue, Dir, EntityId, MapId, Pos as Cell, Side, Value,
 };
@@ -164,6 +165,7 @@ impl World<'_> {
     }
 
     pub(crate) fn decl_of(&self, full: &str) -> Option<(Arc<Item>, Option<String>, String)> {
+        stats::bump(Count::DeclLookup);
         match &self.m.defs.get(full)?.source {
             DefSource::Decl(d) => Some((d.item.clone(), d.namespace.clone(), d.file.clone())),
             _ => None,
@@ -171,6 +173,7 @@ impl World<'_> {
     }
 
     fn resolve(&self, env: &Env, name: &str) -> Option<&Def> {
+        stats::bump(Count::NameResolve);
         self.m.resolve(env.ns.as_deref(), name).ok()
     }
 
@@ -198,6 +201,7 @@ impl World<'_> {
                     }
                     let stmt = stmts[*i].clone();
                     *i += 1;
+                    stats::bump(Count::Stmt);
                     if let Some(flow) = self.exec(&stmt, frames, env)? {
                         return Ok(flow);
                     }
@@ -220,6 +224,7 @@ impl World<'_> {
                     *k += 1;
                     let (var, body) = (var.clone(), body.clone());
                     env.locals.insert(var, v);
+                    stats::bump(Count::BodyCopy);
                     frames.push(Frame::Block { stmts: body, i: 0 });
                 }
                 Frame::While { cond, body } => {
@@ -236,6 +241,7 @@ impl World<'_> {
                         ));
                     }
                     if self.truth(&cond, env)? {
+                        stats::bump(Count::BodyCopy);
                         frames.push(Frame::Block { stmts: body, i: 0 });
                     } else {
                         frames.pop();
@@ -248,6 +254,7 @@ impl World<'_> {
                     }
                     *left -= 1;
                     let body = body.clone();
+                    stats::bump(Count::BodyCopy);
                     frames.push(Frame::Block { stmts: body, i: 0 });
                 }
             }
@@ -256,6 +263,7 @@ impl World<'_> {
 
     /// Runs a body that cannot wait to its end.
     fn run_to_end(&mut self, body: &[Stmt], env: &mut Env) -> RtResult<Flow> {
+        stats::bump(Count::BodyCopy);
         let mut frames = vec![Frame::Block {
             stmts: body.to_vec(),
             i: 0,
@@ -299,6 +307,7 @@ impl World<'_> {
             StmtKind::If { arms, otherwise } => {
                 for (c, b) in arms {
                     if self.truth(c, env)? {
+                        stats::bump(Count::BodyCopy);
                         frames.push(Frame::Block {
                             stmts: b.clone(),
                             i: 0,
@@ -307,6 +316,7 @@ impl World<'_> {
                     }
                 }
                 if let Some(b) = otherwise {
+                    stats::bump(Count::BodyCopy);
                     frames.push(Frame::Block {
                         stmts: b.clone(),
                         i: 0,
@@ -322,6 +332,7 @@ impl World<'_> {
                         format!("`for` goes over a set, not a {}", v.type_name()),
                     )
                 })?;
+                stats::bump(Count::BodyCopy);
                 frames.push(Frame::For {
                     var: var.clone(),
                     items,
@@ -332,16 +343,20 @@ impl World<'_> {
             StmtKind::Repeat { count, body } => {
                 let n = self.eval(count, env)?;
                 let n = self.number(n, env, count.pos)?;
+                stats::bump(Count::BodyCopy);
                 frames.push(Frame::Repeat {
                     left: n,
                     count: n,
                     body: body.clone(),
                 });
             }
-            StmtKind::While { cond, body } => frames.push(Frame::While {
-                cond: cond.clone(),
-                body: body.clone(),
-            }),
+            StmtKind::While { cond, body } => {
+                stats::bump(Count::BodyCopy);
+                frames.push(Frame::While {
+                    cond: cond.clone(),
+                    body: body.clone(),
+                })
+            }
             StmtKind::Break => {
                 while let Some(f) = frames.pop() {
                     if f.is_loop() {
@@ -365,6 +380,7 @@ impl World<'_> {
                         }
                     };
                     if hit {
+                        stats::bump(Count::BodyCopy);
                         frames.push(Frame::Block {
                             stmts: body.clone(),
                             i: 0,
@@ -715,6 +731,7 @@ impl World<'_> {
                 .cloned()
                 .ok_or_else(|| self.rt_err(env, pos, "`it` outside `where`"));
         }
+        stats::bump(Count::LocalRead);
         if let Some(v) = env.locals.get(w) {
             return Ok(v.clone());
         }
@@ -1675,6 +1692,7 @@ impl World<'_> {
         args: Vec<(Option<String>, Value)>,
         caller: &mut Env,
     ) -> RtResult<Value> {
+        stats::bump(Count::Call);
         let (item, ns, file) = self
             .decl_of(full)
             .ok_or_else(|| format!("no function `{full}`"))?;
@@ -1722,6 +1740,7 @@ impl World<'_> {
     /// Runs an ai for `me` and gives the command it chose, or `none`
     /// (RS 7.2).
     pub fn run_ai(&mut self, full: &str, me: EntityId) -> RtResult<Value> {
+        let _t = stats::span(stats::Span::Ai);
         self.run_ai_with(full, me, vec![])
     }
 
@@ -1826,6 +1845,7 @@ impl World<'_> {
     /// Starts a command for an actor. A continuation (`return ATTACK(x)`)
     /// runs in its place with its own cost and failure (M 6.1.5).
     pub fn start_command(&mut self, actor: EntityId, cmd: &CommandValue) -> RtResult<Outcome> {
+        let _t = stats::span(stats::Span::Command);
         let (item, ns, file) = self
             .decl_of(&cmd.name)
             .ok_or_else(|| format!("no command `{}`", cmd.name))?;
@@ -2034,6 +2054,7 @@ impl World<'_> {
         caller: &Env,
         scope: Scope,
     ) -> RtResult<()> {
+        stats::bump(Count::Emit);
         let engine = names::is_vocabulary(event);
         let subject = args.first().and_then(Value::as_entity);
         if let Some(s) = subject
@@ -2087,6 +2108,7 @@ impl World<'_> {
                 {
                     continue;
                 }
+                stats::bump(Count::HandlerRun);
                 let flow = self.run_to_end(&handler.body, &mut env)?;
                 if phase == Phase::Before {
                     // `before` may change the parameters it names (RS 4)
@@ -2111,8 +2133,10 @@ impl World<'_> {
     /// The handlers of an event's phase in order: priority, largest first,
     /// then load order (RS 4).
     fn handlers(&self, event: &str, phase: Phase, subject: Option<EntityId>) -> Vec<HandlerRef> {
+        let _t = stats::span(stats::Span::Handlers);
         let mut out: Vec<(i64, usize, usize, HandlerRef)> = Vec::new();
         for (order, d) in self.m.code.iter().enumerate() {
+            stats::bump(Count::HandlerScan);
             match &d.item.kind {
                 ItemKind::Handler(h)
                     if h.phase == phase

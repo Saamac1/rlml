@@ -59,6 +59,44 @@ Jokainen vaihe on oma haaransa ja commitinsa, ja jokainen on käyttökelpoinen y
 
 ### 1. Mittaus
 
+Tehty 26.11.2026 haarassa `claude/kehitystyokalut-1`:
+- **`rlml bench PELI [--seed N] [--keys "…" | --keys-file TIEDOSTO] [--repeat N]`** ajaa näppäimet kuten `rlml run`, mutta ilman piirtoa, ja tulostaa latauksen, uuden pelin ja pelaamisen ajat.
+- **Laskurit (`rt::stats`)** ovat ominaisuuden `stats` takana (`cargo build -p rlml --features stats`). Ilman ominaisuutta ne kääntyvät tyhjiksi. Ominaisuuden kanssa ajo hidastuu noin 10 %.
+  - Laskettavat asiat ovat ajetut lauseet, kopioidut rungot, lokaalien luvut, isojen nimien resolvoinnit, määrittelyhaut, funktiokutsut, `emit`-kutsut, käsittelijöitä etsittäessä läpikäydyt määrittelyt ja ajetut käsittelijät.
+  - Laskurit toistuvat samoina samalla siemenellä.
+- **Ajanotto.** Koneella ei ole profilointityökalua, ja järjestelmä estää suorituskykylaskurit (`perf_event_paranoid` 4). `stats` ottaa siksi aikaa myös käsittelijöiden haulle, näkökentälle, reitinhaulle, kuulemiselle, tekoälyn valinnalle ja komennoille. Jaksot ovat osin päällekkäisiä: esimerkiksi komennon aika sisältää sen lähettämät tapahtumat ja kuulemisen.
+- **Generointikarttaa ei voi vielä mitata**, koska moottori ei aja generaattoreita ("generators are not supported yet"). Sen tilalla mitataan Oz-esimerkki, jossa taustakohtaus kulkee joka kierros. Generointikartan mittaus tehdään, kun generaattorit toimivat.
+
+**Perustaso** (commit `2283b51` + vaihe 1, julkaisukäännös laskureineen, siemen 1):
+
+| Mittaus | Painalluksia | Aika / painallus | Lauseita / painallus | Tapahtumia / painallus | Läpikäytyjä määrittelyjä / painallus | Käsittelijöitä ajettu / painallus |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Kapteeni Aaltola, `testit/lapipeluu.keys` | 565 | 0,89 ms | 32 | 41 | 14 941 | 2,5 |
+| Minipeli, `s` × 500 | 500 | 1,16 ms | 170 | 16 | 3 568 | 3,0 |
+| Oz-esimerkki, nimi ja 300 odotusta | 323 | 0,20 ms | 7 | 8 | 2 166 | 0,7 |
+
+| Mittaus | Käsittelijöiden haku | Näkökenttä | Kuuleminen | Tekoäly | Reitit |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Kapteeni Aaltola | 49 % | 20 % | 4 % | 0 % | 0 % |
+| Minipeli | 12 % | 0 % | 30 % | 29 % | 0 % |
+| Oz-esimerkki | 37 % | 31 % | 0 % | 0 % | 2 % |
+
+Mitä tästä seuraa vaiheelle 2:
+- **Käsittelijöiden haku on suurin yksittäinen kulu.** Jokainen `emit` käy läpi koko koodilistan: Aaltolassa 41 tapahtumaa painallusta kohden käy läpi noin 15 000 määrittelyä, vaikka käsittelijöitä ajetaan 2,5. Valmiit jakelutaulut poistavat tämän lähes kokonaan.
+- **Näkökenttä** on toiseksi suurin Aaltolassa ja Oz-esimerkissä. Se ei kuulu tämän suunnitelman vaiheisiin, mutta se on seuraava kohde, kun jakelutaulut on tehty.
+- **Nimihaut ja runkojen kopiot** ovat lukumäärinä suuria (minipelissä 110 resolvointia, 66 määrittelyhakua ja 95 runkokopiota painallusta kohden), mutta niiden osuutta ajasta ei voi mitata erikseen ilman profilointityökalua. Ero näkyy vaiheen 2 jälkeen samalla mittauksella.
+
+Komennot perustasoon:
+
+```
+cargo build --release -p rlml --features stats
+target/release/rlml bench ~/repos/kapteeni-aaltola/roguelike --keys-file ~/repos/kapteeni-aaltola/roguelike/testit/lapipeluu.keys
+target/release/rlml bench esimerkit/mini --keys s --repeat 500
+target/release/rlml bench esimerkit/kohtaus --keys "enter enter enter $(for i in $(seq 1 20); do printf 's %.0s' $(seq 1 15); printf 'enter '; done)"
+```
+
+Alla on alkuperäinen tehtävälista.
+
 - **Työkalu** `rlml bench PELI [--keys …] [--rounds N]`, joka ajaa näppäinsarjan tai kierroksia ilman piirtoa ja tulostaa ajan sekä laskurit: lauseet, nimihaut, `emit`-kutsut, käsittelijäkutsut ja kloonatut kehykset. Laskurit ovat kehityskäännöksen ominaisuus (`cfg(feature = "stats")`), joten julkaistu ajo ei maksa niistä.
 - **Perustaso** Kapteeni Aaltolasta, minipelistä ja yhdestä raskaasta generointikartasta. Tulokset kirjataan tähän ohjeeseen, jotta vaiheen 2 hyöty näkyy.
 - **Valmis, kun** mittaus toistuu samoina laskureina samalla siemenellä ja näyttää, kuinka suuri osa ajasta kuluu nimihakuun, kehysten kopiointiin ja käsittelijöiden etsintään.

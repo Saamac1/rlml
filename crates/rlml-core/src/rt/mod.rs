@@ -14,6 +14,7 @@ pub mod save;
 pub mod scene;
 pub mod senses;
 pub mod state;
+pub mod stats;
 pub mod store;
 pub mod timeline;
 pub mod travel;

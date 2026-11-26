@@ -50,6 +50,7 @@ const USAGE: &str = "usage: rlml check GAME [--lib DIR]
        rlml run GAME [--seed N] [--keys \"KEY KEY …\"] [--log-out FILE] [--lib DIR]
        rlml play GAME [--seed N] [--log-out FILE] [--data DIR] [--lib DIR]
        rlml replay GAME LOG [--lib DIR]
+       rlml bench GAME [--seed N] [--keys \"KEY …\" | --keys-file FILE] [--repeat N] [--lib DIR]
 
 check loads the game and reports load errors and warnings (M 2).
 run plays a new game without a screen: each key is one player's turn,
@@ -65,6 +66,11 @@ DIR, by default the user data folder's rlml/GAME (~/.local/share on
 Linux).
 replay plays an input log and prints a transcript as run does: the
 frame after each row of the log.
+bench plays the keys as run does, --repeat times, without drawing, and
+prints how long loading and playing took. Built with `--features
+stats`, it also prints the interpreter's counters: statements, body
+copies, name lookups, calls, events and handlers. --keys-file reads the
+keys from FILE, as the playthrough tests keep them.
 
 GAME is the game's main file or its folder (then game.rlml, game.md or
 game.rlml.md). The engine library holds lib/std.rlml; it is found with
@@ -81,7 +87,8 @@ fn main() -> ExitCode {
     let mut data: Option<PathBuf> = None;
     let mut i = 0;
     let command = args.first().cloned().unwrap_or_default();
-    if !["check", "run", "play", "replay"].contains(&command.as_str()) {
+    let mut repeat: u32 = 1;
+    if !["check", "run", "play", "replay", "bench"].contains(&command.as_str()) {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     }
@@ -110,8 +117,28 @@ fn main() -> ExitCode {
                 data = Some(PathBuf::from(&args[i + 1]));
                 i += 1;
             }
-            "--keys" if command == "run" && i + 1 < args.len() => {
+            "--keys" if (command == "run" || command == "bench") && i + 1 < args.len() => {
                 keys = args[i + 1].clone();
+                i += 1;
+            }
+            "--keys-file" if command == "bench" && i + 1 < args.len() => {
+                match std::fs::read_to_string(&args[i + 1]) {
+                    Ok(k) => keys = k,
+                    Err(e) => {
+                        eprintln!("{}: {e}", args[i + 1]);
+                        return ExitCode::FAILURE;
+                    }
+                }
+                i += 1;
+            }
+            "--repeat" if command == "bench" && i + 1 < args.len() => {
+                match args[i + 1].parse() {
+                    Ok(n) if n >= 1 => repeat = n,
+                    _ => {
+                        eprintln!("--repeat takes a number from 1");
+                        return ExitCode::from(2);
+                    }
+                }
                 i += 1;
             }
             "-h" | "--help" => {
@@ -157,7 +184,9 @@ fn main() -> ExitCode {
             .filter(|p| p.join("lib/std.rlml").is_file())
     });
     let files = DiskFiles { game: root, engine };
+    let loading = std::time::Instant::now();
     let (model, report) = rlml_core::check_game(&files, &main);
+    let loaded = loading.elapsed();
     if command == "play" {
         if report.has_errors() {
             for d in report.errors() {
@@ -195,6 +224,25 @@ fn main() -> ExitCode {
                     eprintln!("{e}");
                     return ExitCode::FAILURE;
                 }
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    if command == "bench" {
+        if report.has_errors() {
+            for d in report.errors() {
+                eprintln!("{d}");
+            }
+            return ExitCode::FAILURE;
+        }
+        let keys: Vec<&str> = keys.split_whitespace().collect();
+        return match bench(&model, seed, &keys, repeat, loaded) {
+            Ok(text) => {
+                print!("{text}");
                 ExitCode::SUCCESS
             }
             Err(e) => {
@@ -273,4 +321,67 @@ fn main() -> ExitCode {
 fn write_log(path: &Path, log: &rlml_core::rt::input::InputLog) -> Result<(), String> {
     let text = log.write()?;
     std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// `rlml bench`: the keys `repeat` times from a new game, timed, and the
+/// interpreter's counters when built with them (RLML-kehitystyokalut.md
+/// step 1).
+fn bench(
+    m: &rlml_core::model::Model,
+    seed: u64,
+    keys: &[&str],
+    repeat: u32,
+    loaded: std::time::Duration,
+) -> Result<String, String> {
+    use rlml_core::rt::stats;
+    let starting = std::time::Instant::now();
+    let mut s = rlml_core::rt::play::Session::start(m, seed)?;
+    let started = starting.elapsed();
+    stats::reset();
+    let playing = std::time::Instant::now();
+    for _ in 0..repeat {
+        for k in keys {
+            s.press(k)?;
+        }
+    }
+    let played = playing.elapsed();
+    let counts = stats::read();
+    let presses = keys.len() as u64 * u64::from(repeat);
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    let mut out = format!(
+        "seed {seed}: {} keys × {repeat} = {presses} presses\n",
+        keys.len()
+    );
+    out.push_str(&format!("load and check  {:10.2} ms\n", ms(loaded)));
+    out.push_str(&format!("new game        {:10.2} ms\n", ms(started)));
+    out.push_str(&format!(
+        "play            {:10.2} ms  ({:.3} ms a press)\n",
+        ms(played),
+        ms(played) / presses.max(1) as f64
+    ));
+    let g = &s.r.w.s.game;
+    out.push_str(&format!("game time {}, turn {}\n", g.time, g.turn()));
+    match counts {
+        Some(counts) => {
+            for (c, n) in counts {
+                out.push_str(&format!(
+                    "{:<15} {n:>12}  ({:.1} a press)\n",
+                    c.name(),
+                    n as f64 / presses.max(1) as f64
+                ));
+            }
+        }
+        None => out.push_str("counters: build with `--features stats`\n"),
+    }
+    if let Some(times) = stats::times() {
+        for (sp, ns) in times {
+            let t = ns as f64 / 1e6;
+            out.push_str(&format!(
+                "{:<15} {t:10.2} ms  ({:.0} % of play)\n",
+                sp.name(),
+                100.0 * t / ms(played).max(1e-9)
+            ));
+        }
+    }
+    Ok(out)
 }

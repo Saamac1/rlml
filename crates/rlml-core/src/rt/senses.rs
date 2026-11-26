@@ -197,6 +197,7 @@ impl World<'_> {
 
     /// The cells an entity sees (M 7.2); `None` when it has no `sight`.
     pub fn field_of_view(&self, e: EntityId) -> Option<BTreeSet<(i32, i32)>> {
+        let _t = super::stats::span(super::stats::Span::Sight);
         let sight = self.s.get(e).get("sight")?;
         let at = self.s.at(e)?;
         let num = |f: &str, d: i64| sight.get(f).and_then(Value::as_number).unwrap_or(d);
@@ -364,6 +365,7 @@ impl World<'_> {
     /// The sounds `e` hears since its last wake, loudest first, with the
     /// masked ones left out (M 6.8). Moves `e`'s mark past them.
     pub fn listen(&mut self, e: EntityId) -> Vec<Sound> {
+        let _t = super::stats::span(super::stats::Span::Hearing);
         let from = self.heard_mark.get(&e).copied().unwrap_or(0);
         self.heard_mark.insert(e, self.sounds_made);
         let Some(acuity) = self
@@ -446,6 +448,7 @@ impl World<'_> {
         who: Option<EntityId>,
         known: Option<&BTreeSet<(i32, i32)>>,
     ) -> Vec<Pos> {
+        let _t = super::stats::span(super::stats::Span::Route);
         let goals: BTreeSet<(i32, i32)> = to
             .iter()
             .filter(|p| p.map == from.map)

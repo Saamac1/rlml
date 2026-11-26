@@ -10,3 +10,7 @@ path = "src/main.rs"
 [dependencies]
 rlml-core = { path = "../rlml-core" }
 rlml-tui = { path = "../rlml-tui" }
+
+[features]
+# the interpreter's counters in `rlml bench` (rlml-core's `stats`)
+stats = ["rlml-core/stats"]

@@ -6,3 +6,7 @@ edition = "2024"
 [dependencies]
 unicode-normalization = "0.1"
 unicode-width = "0.2"
+
+[features]
+# interpreter counters for `rlml bench` (rt::stats)
+stats = []
