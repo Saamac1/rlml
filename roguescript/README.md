@@ -70,3 +70,4 @@ Muutoshistoria: [muutokset.md](muutokset.md).
   - [12.3 Lausekkeet](12-kielioppi.md#123-lausekkeet)
   - [12.4 Aikajana](12-kielioppi.md#124-aikajana)
 - [13. Avoimet kysymykset](13-avoimet-kysymykset.md)
+- [Kohtausopas](kohtausopas.md): kohtausten kirjoittaminen lyhyesti esimerkein

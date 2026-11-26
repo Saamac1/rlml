@@ -44,6 +44,7 @@ RLML on roguelike-pelien kuvauskieli: pelin data kirjoitetaan tekstitiedostoina 
 - [11. Tallennus ja korvaaminen](roguescript/11-tallennus-ja-korvaaminen.md)
 - [12. Kielioppi](roguescript/12-kielioppi.md)
 - [13. Avoimet kysymykset](roguescript/13-avoimet-kysymykset.md)
+- [Kohtausopas](roguescript/kohtausopas.md)
 - [Muutokset](roguescript/muutokset.md)
 
 ### [RLML-moottorin vastuut](moottori/README.md) (M)
