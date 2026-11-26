@@ -22,7 +22,7 @@
 | Ydin | Laji | Tekee |
 | --- | --- | --- |
 | `CAN_STEP(who: entity, to: pos) -> bool` | `query` | `to` on askeleen päässä (`adjacent`, suunnat ja kulmasääntö), eikä talutushihna estä sitä |
-| `LEASHED(who: entity, to: pos) -> bool` | `query` | hihna estää ohjattavan askeleen, jos saman kartan jäsenten rajaava suorakulmio kasvaisi kartta-aluetta kahta ruutua pienempää suuremmaksi |
+| `LEASHED(who: entity, to: pos) -> bool` | `query` | moottorin talutushihna `leashed` estää ohjattavan askeleen (moottoridokumentti, luku [6.1.10](../moottori/06-ajo.md#6110-istuimet-ja-ryhmä)); nimetty kohta, jonka peli voi korvata |
 | `BLOCKER(who: entity, to: pos) -> entity` | `query` | ensimmäinen entiteetti, jonka oma `blocks` estää liikkeen ruudussa `to`, tai `none` |
 | `DO_STEP(who: entity, to: pos)` | `fn` | siirtää `who`:n ja pitää askeleen äänen; ei tarkista estoa |
 | `STRIKE(attacker: entity, target: entity) -> bool` | `fn` | lyö viereistä kohdetta ja pitää taistelun äänen; `false`, jos lyönti ei ole mahdollinen |
@@ -43,30 +43,7 @@ query CAN_STEP(who: entity, to: pos) -> bool:
     return to in adjacent(who) and not LEASHED(who, to)
 
 query LEASHED(who: entity, to: pos) -> bool:
-    if not game.leash:
-        return false
-    n = seat_of(who)
-    if n == none or active(n) != who:
-        return false
-    group = players where it != who and it.map == who.map
-    if group.count == 0:
-        return false
-    left = group.first.at.x
-    right = left
-    top = group.first.at.y
-    bottom = top
-    for e in group:
-        left = min(left, e.at.x)
-        right = max(right, e.at.x)
-        top = min(top, e.at.y)
-        bottom = max(bottom, e.at.y)
-    // the box with the step and without it: only a step that widens a box
-    // past the limit is refused, so a spread group can close up
-    wide = max(right, to.x) - min(left, to.x) + 1
-    high = max(bottom, to.y) - min(top, to.y) + 1
-    was_wide = max(right, who.at.x) - min(left, who.at.x) + 1
-    was_high = max(bottom, who.at.y) - min(top, who.at.y) + 1
-    return (wide > view_width() - 2 and wide > was_wide) or (high > view_height() - 2 and high > was_high)
+    return leashed(who, to)
 
 query BLOCKER(who: entity, to: pos) -> entity:
     return (entities(in: to) where it != who and blocks(it, move, tiles: false)).first
@@ -233,7 +210,7 @@ command DROP(item: entity from actor.PACK.items) cost 120:
 - **Ääni.** Askel pitää ääntä `SOUND.STEP` ja lyönti `SOUND.FIGHT`, joten paikallaan oleva ei kuulu (luku [9](09-aanet-viestit-ja-tekstit.md)). Äänet ovat ytimissä, joten pelin oma juoksu kuuluu samoin kuin askel.
 - **Suunnat.** `CAN_STEP` hyväksyy vain ruudut, jotka moottorin `adjacent(who)` antaa. Oletus on kahdeksan suuntaa ilman seinän kulman ohitusta: vinoaskel on kielletty, jos jompikumpi sen sivuruuduista estää liikkeen, jotta vinot seinät eivät vuoda. Neljä suuntaa saa rivillä `- movement dirs 4` ja kulman ohituksen rivillä `- movement corners true` (moottoridokumentti, luku [3.4](../moottori/03-pelin-tila.md#34-moottorin-komponentit)). Reitinhaku noudattaa samoja kenttiä, joten tekoäly ei suunnittele askelta, jota `STEP` ei hyväksy.
 - **Hiipiminen** maksaa lisäodotuksen `STEP`-komennossa eikä ytimessä. Pelin oma silmukka, joka kutsuu `DO_STEP`-funktiota, päättää hiipijän tahdin itse.
-- **Talutushihna.** Kun `game`-lohkon `leash` on päällä (oletus, kun istuimia voi olla useampi, dataformaatit luku [3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)), `CAN_STEP` epää ohjattavan askeleen, joka hajottaisi ryhmän kartta-alueen ulkopuolelle. Kartta-alueen koko on asettelussa kirjoitettu solukoko (`- m map size 40x15`, moottoridokumentti luku [7.1](../moottori/07-esitys.md#71-asettelu)), joten peli, joka haluaa hihnan, antaa kartta-alueelle koon. Hihna epää vain askeleen, joka levittää suorakulmion rajan yli, joten jo hajonnut ryhmä voi aina palata yhteen. Epäonnistunut askel ei vie aikaa. Hihna koskee vain istuimen ohjattavaa: tekoälyn ohjaamat jäsenet, seuraajat ja hirviöt kulkevat vapaasti, joten tekoäly ei suunnittele askelta, jota `STEP` ei hyväksy. Kiertävää karttaa hihna ei vielä huomioi.
+- **Talutushihna.** Kun `game`-lohkon `leash` on päällä (oletus, kun istuimia voi olla useampi, dataformaatit luku [3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)), `CAN_STEP` epää ohjattavan askeleen, joka hajottaisi ryhmän kartta-alueen ulkopuolelle. Rajan laskee moottorin kysely `leashed` samasta suorakulmiosta, jota kamera seuraa, myös kiertävällä kartalla (moottoridokumentti, luku [6.1.10](../moottori/06-ajo.md#6110-istuimet-ja-ryhmä)), ja `LEASHED` on vain korvattava kohta sen ympärillä. Kartta-alueen koko on asettelussa kirjoitettu solukoko (`- m map size 40x15`, moottoridokumentti luku [7.1](../moottori/07-esitys.md#71-asettelu)), joten peli, joka haluaa hihnan, antaa kartta-alueelle koon. Hihna epää vain askeleen, joka levittää suorakulmion rajan yli, joten jo hajonnut ryhmä voi aina palata yhteen. Epäonnistunut askel ei vie aikaa. Hihna koskee vain istuimen ohjattavaa: tekoälyn ohjaamat jäsenet, seuraajat ja hirviöt kulkevat vapaasti, joten tekoäly ei suunnittele askelta, jota `STEP` ei hyväksy.
 - **Paikanvaihdon esto.** `blocks(actor.at, move, for: other, except: actor)` kysyy, voiko ystävä astua törmääjän ruutuun. `except` jättää törmääjän itsensä pois, koska se on lähdössä ruudusta. Ilman sitä törmääjän oma `blocks move` estäisi jokaisen vaihdon.
 - **Paikanvaihto jäsenen kanssa.** `STEP` vaihtaa paikkaa ystävän kanssa, jolla on tekoäly tai joka on istuimen jäsen (`seat_of(other) != none`), eikä vain `player`-hahmon kanssa.
 - **Ei paikanvaihtoa kahden ihmisen välillä.** Kun sekä törmääjää että törmättyä ohjaa ihminen (`controlled`: istuimen ohjattava, säännöllä `party each` jokainen jäsen), paikkaa ei vaihdeta, ja törmäys epäonnistuu ilman ajan kulumista. Muuten kaksi samaan suuntaan kulkevaa pelaajaa vaihtaisivat paikkaa vuorotellen eivätkä pääsisi eteenpäin. Takana kulkeva odottaa tai kiertää. Seuraaja ja tekoälyn ohjaama jäsen vaihtavat paikkaa ihmisen ohjaaman kanssa kumpaankin suuntaan kuten ennen, joten lemmikki pääsee käytävässä pelaajan ohi.

@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 26.11.2026 (hihna moottoriin):** kysely `leashed(who, to)` laskee talutushihnan, jonka `game`-kenttä `leash` kytkee. Suorakulmio on sama kuin kameran ryhmäsuorakulmio, myös kiertävällä kartalla, ja moottori ei estä askelta itse (luvut [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä), [7.1](07-esitys.md#71-asettelu) ja [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)). Avoimiin kysymyksiin lisättiin generoinnin primitiivit, lokin tahdistus, viestin persoona, ryhmän vaihto ja pinot kartalla (luku [11](11-avoimet-kysymykset.md)).
+
 **Muutokset 25.11.2026 (taustakohtaukset):** taustakohtauksen kahva tallentuu, ja `realtime`-kohtauksen kello alkaa ladattaessa alusta (luku [5.2](05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)). Saman hetken tweenien askeleet ajetaan ennen toimijoiden herätyksiä (luku [6.1.4](06-ajo.md#614-mikroaskeleen-vaiheet)).
 
 **Muutokset 25.11.2026 (aikajanat):** ohituksen hetkeä ei kirjata syötelokiin, koska ohitus kirjaa jäljellä olevat repliikit lokiin, ja toisto ajaa aikajanan kellon seuraavaan pysähdykseen (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)). Muisti ei päivity etualan kohtauksen aikana, ja päätteen `shake` ja `pan` (luku [7.2](07-esitys.md#72-kartan-piirtäminen)).

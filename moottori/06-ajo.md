@@ -294,6 +294,12 @@ Paikallisessa moninpelissä samalla koneella pelaa 1–8 ihmistä yhteistyössä
 
 **Säilytetty vuoro.** Kun pelaajan komento epäonnistuu tai on maksuton, vuoro jatkuu samalla hetkellä alkuperäisellä järjestysnumerolla (luku [6.1.5](#615-vuoron-kulku)), eikä saman hetken muu toimija pääse väliin. Jos jäsen on yhä ohjattava, moottori kysyy samalta istuimelta uudelleen. Jos maksuton komento vaihtoi ohjauksen (`SWITCH`), vuoro jatkuu muun jäsenen säännöllä eli tekoälylle tai levolle, ja uusi ohjattava toimii omalla herätyksellään.
 
+**Talutushihna.** Kun `game`-lohkon `leash` on päällä ([D 3.3](../dataformaatit/03-tiedostot-ja-include.md#33-aloitus)), kysely `leashed(who, to)` kertoo, levittäisikö istuimen ohjattavan `who` askel ruutuun `to` ryhmän liian laajalle (luku [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)). Moottori ei estä askelta itse, koska kulkukelpoisuus on pelin sääntö (luku [10](10-mita-moottori-ei-tee.md)); liikekomento kysyy hihnaa (`STD.CAN_STEP`).
+
+- **Suorakulmio** on saman kartan muiden elävien jäsenten rajaava suorakulmio, sama kuin kameran ryhmäsuorakulmio (luku [7.1](07-esitys.md#71-asettelu)), ja kiertävällä kartalla se lasketaan samoin lyhimmän välin mukaan.
+- **Raja.** Askel on hihnassa, jos suorakulmio ruudun `to` kanssa on leveämpi kuin `view_width() - 2` tai korkeampi kuin `view_height() - 2` ja samalla akselilla laajempi kuin suorakulmio `who`:n nykyisen ruudun kanssa. Jo hajonnut ryhmä voi siis aina palata yhteen.
+- **Rajaus.** Kysely on `false`, kun `leash` on pois, `who` ei ole istuimensa ohjattava (tekoälyn ohjaama jäsen, seuraaja, hirviö) tai kartalla ei ole muita jäseniä.
+
 **Kierrokset ilman pelaajan vuoroa** (luku [6.1.2](#612-toimijat-ja-ajoitin)) pätevät, kun yhdelläkään istuimella ei ole jäsentä, jolla on herätys. `pass` toimii miltä tahansa istuimelta.
 
 **`idle`** koskee jokaista istuimen vuoroa erikseen. Ajastin alkaa, kun moottori alkaa odottaa istuimen syötettä, ja vain vuorossa olevan istuimen painallus nollaa sen.

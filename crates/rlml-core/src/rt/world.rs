@@ -1331,6 +1331,50 @@ impl World<'_> {
         let (w, h) = self.map_area.cells();
         (w.unwrap_or(map.0), h.unwrap_or(map.1))
     }
+
+    /// `leashed(who, to)` (M 6.1.10): with `leash on`, a seat's
+    /// controlled member's step to `to` is refused when it would widen
+    /// the bounding box of the other members on its map past the map
+    /// area less two cells, on an axis where the box with the step is
+    /// wider than with `who` where it is. A spread group can so always
+    /// close up.
+    pub fn leashed(&self, who: EntityId, to: Pos) -> bool {
+        if !self.s.leash {
+            return false;
+        }
+        let Some(n) = self.s.seat_of(who) else {
+            return false;
+        };
+        if self.s.active(n) != Some(who) {
+            return false;
+        }
+        let Some(here) = self.s.at(who) else {
+            return false;
+        };
+        let group: Vec<Pos> = self
+            .s
+            .players()
+            .into_iter()
+            .filter(|&e| e != who)
+            .filter_map(|e| self.s.at(e))
+            .filter(|p| p.map == here.map)
+            .collect();
+        let Some(first) = group.first() else {
+            return false;
+        };
+        let (mut left, mut right, mut top, mut bottom) = (first.x, first.x, first.y, first.y);
+        for p in &group {
+            left = left.min(p.x);
+            right = right.max(p.x);
+            top = top.min(p.y);
+            bottom = bottom.max(p.y);
+        }
+        let span = |lo: i32, hi: i32, v: i32| hi.max(v) - lo.min(v) + 1;
+        let (vw, vh) = self.view_dims();
+        let (wide, was_wide) = (span(left, right, to.x), span(left, right, here.x));
+        let (high, was_high) = (span(top, bottom, to.y), span(top, bottom, here.y));
+        (wide > vw - 2 && wide > was_wide) || (high > vh - 2 && high > was_high)
+    }
 }
 
 /// `seats a..b` (D 3.3), or a single number for `a..a`.

@@ -4,6 +4,14 @@
 
 - **Paikanvaihto oletussuhteella.** Oletussuhde on tasan `FRIENDLY`, joten kaikki entiteetit ilman suhteita ovat ystäviä, ja paikanvaihdon rajaa vain tekoälyehto (luku [5](05-komennot.md)). Vaatiiko paikanvaihto yksilö- tai ryhmäsuhteen eikä pelkkää alignmentin oletusta? Muutos koskisi seuraajia, joiden suhde on nyt oletus (luku [6.1](06-tekoaly.md#61-seuraaja)).
 
+**Raja moottoriin 26.11.2026.** Kävin STD:n läpi moottorin rajasäännöllä (moottoridokumentti, luku [9.7](../moottori/09-moottorin-funktiot-ja-tapahtumat.md#97-raja-vakiokirjastoon)). Hihna siirtyi moottoriin (luku [5](05-komennot.md)). Nämä jäivät auki, ja ne on kuvattu moottoridokumentin luvussa [11](../moottori/11-avoimet-kysymykset.md):
+
+- **`LISTENER`** on tallentuvaa tilaa esitystä varten. Korvaisiko viestin tai lokin määre (`once`) sen?
+- **`SOLO`-haara** toistuu neljässä viestikäsittelijässä. Valitsisiko moottori sinä-muodon avaimen itse?
+- **`SWITCH`** pysyy STD:ssä, koska verbivalikko, hinta ja korvattavuus kuuluvat komennolle.
+- **`AMMO`** korvaa pinot, joita moottorilla ei ole kartalla. Tarvitaanko kartan pinoja?
+- **Generointi:** `SMOOTH` ja `CONNECT` saisivat moottorilta kyselyt `count_near` ja `regions`.
+
 **Ajon ensimmäinen versio 31.10.2026.**
 
 - **Viestien järjestys kuolemassa.** `APPLY_DAMAGE` (`on HIT`) lähettää `DIED`-tapahtuman, jonka `DEATH_MESSAGE` kirjaa heti, ja vasta sen jälkeen `HIT`-tapahtuman `after`-vaihe ajaa `HIT_MESSAGE`-käsittelijän (luku [8](08-kasittelijat.md)). Pelaajan loki näyttää siksi ensin ”Kuolet.” ja sitten ”Otat 2 vahinkoa.”. Pitäisikö `APPLY_DAMAGE` lähettää `DIED` vasta `HIT`-tapahtuman jälkeen (esimerkiksi `after HIT` -käsittelijässä prioriteetilla −20), jotta vahinko kirjataan ennen kuolemaa?
@@ -14,7 +22,7 @@
 - **Viimeinen kuolema.** `SOLO` on tosi myös moninpelissä, kun viimeinen istuin on yksin, joten viimeisen jäsenen kuolema näkyy muodossa “Kuolet.” (luku [8](08-kasittelijat.md)).
 - **Vahvistettu ryhmäsiirto** dialogin `EXIT.LEAVE_OTHERS` kautta ei maksa komennon hintaa (luku [5](05-komennot.md)). Pitäisikö dialogin `YES`-haaran viedä ohjattavalta aikaa?
 - **Muut kuin jäsenet portailla.** `EXIT_STEP` koskee vain istuimen jäseniä, eikä tekoäly käytä uloskäyntejä, koska kartalla, jolla ei ole jäsentä, aika on jäädytetty (moottoridokumentti, luku [6.1.8](../moottori/06-ajo.md#618-aktiiviset-kartat-ja-jäädytys)). Kun moottori ajaa useaa aktiivista karttaa, myös muiden kuin jäsenten (hirviöt, kauppiaat, seuraajat) on voitava käyttää portaita: astumalla `step`-uloskäyntiin ja komennolla `TAKE_EXIT`, ja tekoäly tarvitsee tavan valita uloskäynti (esimerkiksi `HUNTER` seuraa pelaajaa toiselle kartalle). Lisätty 25.11.2026.
-- **Hihna kiertävällä kartalla.** `LEASHED` ei laske suorakulmiota lyhimmän välin mukaan (luku [5](05-komennot.md)).
+- **Hihna kiertävällä kartalla.** Ratkaistu 26.11.2026: hihnan laskee moottorin `leashed` samasta suorakulmiosta kuin kamera, joten kiertävä kartta lasketaan lyhimmän välin mukaan (luku [5](05-komennot.md)).
 
 **Lataajan ensimmäinen versio 31.10.2026.** STD on nyt tiedostoina kansiossa `lib/std/`, ja lataaja tarkistaa sen. Seuraavat kohdat jouduttiin arvaamaan:
 

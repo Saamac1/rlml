@@ -18,6 +18,12 @@ Moninpeli 6.11.2026 ([RLML-moninpeli](../RLML-moninpeli.md)):
 - **Moottoridokumentti 7.2:** `WITNESSED` käyttää kyselyä `in_view`, joka korvaa kuolleen pelaajan viimeisen näkökentän säännön.
 - **Dataformaatit 3.3:** `game`-kentän `leash` toteuttaa STD:n `LEASHED`, ja logiikka lukee sen totuusarvona `game.leash`.
 
+Hihna moottoriin 26.11.2026:
+
+- **Moottoridokumentti 6.1.10 ja 9.3:** hihnan laskee moottorin kysely `leashed(who, to)` kameran ryhmäsuorakulmiosta, ja STD:n `LEASHED` kutsuu sitä. Moottori ei estä askelta itse.
+- **Moottoridokumentti 7.1:** kamera ja hihna käyttävät samaa suorakulmiota.
+- **Dataformaatit 3.3:** `leash` on moottorin hihna, jota vakiokirjaston liikekomento noudattaa.
+
 ---
 
 ← [12. Minipeli STD:llä](12-minipeli-std-lla.md) · [Sisällys](README.md) · [14. Avoimet kysymykset](14-avoimet-kysymykset.md) →

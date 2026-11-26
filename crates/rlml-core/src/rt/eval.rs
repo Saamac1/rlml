@@ -2743,6 +2743,11 @@ impl World<'_> {
                 }
             }
             "controlled" => Value::Bool(a0.as_entity().is_some_and(|e| self.s.controlled(e))),
+            "leashed" => {
+                let who = self.entity_arg(Some(&a0), f, env, pos)?;
+                let to = self.area(self.arg(&args, 1, "to").unwrap_or(&Value::None), env, pos)?;
+                Value::Bool(to.cells().first().is_some_and(|&p| self.leashed(who, p)))
+            }
             "view_width" | "view_height" => {
                 let size = self.view_dims();
                 Value::Number(if f == "view_width" { size.0 } else { size.1 } as i64)

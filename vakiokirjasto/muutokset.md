@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 26.11.2026 (hihna moottoriin):** `LEASHED` kutsuu moottorin kyselyä `leashed`, joten hihna noudattaa kameran suorakulmiota myös kiertävällä kartalla (luvut [5](05-komennot.md) ja [13](13-muutokset-muihin-dokumentteihin.md)). Avoimiin kysymyksiin lisättiin `LISTENER`, `SOLO`-haarat, `SWITCH` ja `AMMO` moottorin rajan kannalta (luku [14](14-avoimet-kysymykset.md)).
+
 **Muutokset 25.11.2026 (dialogi uloskäynnillä):** kohtaukset toimivat, joten `USE_EXIT` käynnistää taas dialogin `EXIT.LEAVE_OTHERS`, kun muut jäsenet ovat kaukana. Väliaikainen viesti `MESSAGE.EXIT.OTHERS_AWAY` poistuu (luvut [5](05-komennot.md), [9](09-aanet-viestit-ja-tekstit.md) ja [14](14-avoimet-kysymykset.md)).
 
 **Muutokset 25.11.2026 (ryhmä uloskäynnillä):** kunnes kohtaukset toimivat, `USE_EXIT` kirjoittaa viestin `MESSAGE.EXIT.OTHERS_AWAY` ja epäonnistuu, kun muut jäsenet ovat kaukana, sen sijaan että käynnistäisi dialogin `EXIT.LEAVE_OTHERS`. Aiemmin peli kaatui siihen (luvut [5](05-komennot.md), [9](09-aanet-viestit-ja-tekstit.md) ja [14](14-avoimet-kysymykset.md)).

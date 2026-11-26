@@ -26,7 +26,7 @@ Kaikki moottorin nimet ovat pieniä.
 | listat | `insert`, `remove_at`, `index_of` ([RS 2.6](../roguescript/02-yleinen-syntaksi.md#26-tyypit)) |
 | satunnaisuus | `choose`, `shuffled`, `pick`, `chance` |
 | pakat ja taulut | `draw`, `peek`, `put`, `add`, `reset`, `copy`, `shuffle`; taululle vain `draw` ja `spawn` |
-| kyselyt | `min`, `max`, `distance`, `nearest`, `sees`, `blocks`, `tile_of`, `hears`, `heard`, `adjacent`, `ray`, `text_of`, `seats`, `seat_of`, `members`, `active`, `controlled`, `in_view`, `view_width`, `view_height` |
+| kyselyt | `min`, `max`, `distance`, `nearest`, `sees`, `blocks`, `tile_of`, `hears`, `heard`, `adjacent`, `ray`, `text_of`, `seats`, `seat_of`, `members`, `active`, `controlled`, `leashed`, `in_view`, `view_width`, `view_height` |
 | generointi | `carve`, `footprint`, `stamp`, `external`, `scatter` |
 | kohtaukset | `start`, `stop`, `say`, `log` |
 | esitys | `play`, `pan`, `shake`, `fade`, `light`, `fly`, `reveal`, `today` |
@@ -155,6 +155,7 @@ Pakan `.count` on kenttä, ei kutsu. Esto ja maasto (kyselyjä): blocks(p: alue,
 | `members(n: number)` | `collection` | istuimen elävät jäsenet jäseneksi tulon järjestyksessä |
 | `active(n: number)` | `entity` tai `none` | istuimen ohjattava |
 | `controlled(e: entity)` | `bool` | `e` odottaa vuorollaan istuimensa syötettä: istuimen ohjattava, säännöllä `party each` jokainen elävä jäsen, ja säännöllä `party switch` jokainen jäsen, kun ohjattava ei voi toimia (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)) |
+| `leashed(who: entity, to: pos)` | `bool` | talutushihna epää istuimen ohjattavan askeleen ruutuun `to`, koska se levittäisi saman kartan jäsenten rajaavan suorakulmion kartta-aluetta kahta ruutua pienempää suuremmaksi; `false` ilman `leash`-kenttää, muulle kuin ohjattavalle ja yksin kartalla (luku [6.1.10](06-ajo.md#6110-istuimet-ja-ryhmä)) |
 | `view_width()`, `view_height()` | `number` | kartta-alueen kirjoitettu koko soluina, ilman sitä kartan koko; ei riipu ruudun koosta (luku [7.1](07-esitys.md#71-asettelu)) |
 | `text_of(key: name, …)` | `text` | kielen mukainen teksti paikkamerkit täytettyinä; vain kyselyssä, esityksessä, paneelissa, listavalikossa ja `naming`-kyselyssä (luku [7.3](07-esitys.md#73-tekstit)) |
 

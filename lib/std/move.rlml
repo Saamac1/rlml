@@ -27,30 +27,7 @@ query CAN_STEP(who: entity, to: pos) -> bool:
     return to in adjacent(who) and not LEASHED(who, to)
 
 query LEASHED(who: entity, to: pos) -> bool:
-    if not game.leash:
-        return false
-    n = seat_of(who)
-    if n == none or active(n) != who:
-        return false
-    group = players where it != who and it.map == who.map
-    if group.count == 0:
-        return false
-    left = group.first.at.x
-    right = left
-    top = group.first.at.y
-    bottom = top
-    for e in group:
-        left = min(left, e.at.x)
-        right = max(right, e.at.x)
-        top = min(top, e.at.y)
-        bottom = max(bottom, e.at.y)
-    // the box with the step and without it: only a step that widens a box
-    // past the limit is refused, so a spread group can close up
-    wide = max(right, to.x) - min(left, to.x) + 1
-    high = max(bottom, to.y) - min(top, to.y) + 1
-    was_wide = max(right, who.at.x) - min(left, who.at.x) + 1
-    was_high = max(bottom, who.at.y) - min(top, who.at.y) + 1
-    return (wide > view_width() - 2 and wide > was_wide) or (high > view_height() - 2 and high > was_high)
+    return leashed(who, to)
 
 query BLOCKER(who: entity, to: pos) -> entity:
     return (entities(in: to) where it != who and blocks(it, move, tiles: false)).first
