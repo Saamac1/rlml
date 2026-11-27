@@ -50,6 +50,8 @@ pub struct Save {
     pub log: Vec<LogEntry>,
     /// The active mods with their files' hashes (M 5.7, D 3.6).
     pub mods: Vec<(String, u64)>,
+    /// The inspector wrote values in the game (M 5.7).
+    pub edited: bool,
 }
 
 // ---- writing ----
@@ -908,6 +910,10 @@ impl Save {
             self.mods.put(&mut w);
             w.line();
         }
+        if self.edited {
+            w.word("edited");
+            w.line();
+        }
         w.text
     }
 
@@ -932,13 +938,17 @@ impl Save {
         let checkpoint = Get::get(&mut r)?;
         r.keyword("log")?;
         let log = Get::get(&mut r)?;
-        // saves without mods have no `mods` line
-        let mods = if r.peek().is_some() {
+        // saves without mods have no `mods` line, unedited ones no `edited`
+        let mods = if matches!(r.peek(), Some(Tok::Word(w)) if w == "mods") {
             r.keyword("mods")?;
             Get::get(&mut r)?
         } else {
             vec![]
         };
+        let edited = matches!(r.peek(), Some(Tok::Word(w)) if w == "edited");
+        if edited {
+            r.keyword("edited")?;
+        }
         if r.peek().is_some() {
             return Err(r.err("text after the save".into()));
         }
@@ -951,6 +961,7 @@ impl Save {
             checkpoint,
             log,
             mods,
+            edited,
         })
     }
 }
@@ -971,6 +982,7 @@ impl<'m> Runner<'m> {
             checkpoint: self.checkpoint.as_deref().cloned(),
             log: self.w.log.clone(),
             mods: self.w.m.mods.clone(),
+            edited: self.edited,
         }
     }
 
@@ -1018,6 +1030,7 @@ impl<'m> Runner<'m> {
             ..InputLog::default()
         };
         r.scene_saved = true;
+        r.edited = save.edited;
         r.w.warnings.extend(warnings);
         let misplaced = r.misplaced();
         r.w.warnings.extend(misplaced);

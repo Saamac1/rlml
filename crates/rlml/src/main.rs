@@ -74,6 +74,34 @@ impl<'m> rlml_tui::term::DevFiles<'m> for Dev {
         out.sort();
         out
     }
+
+    fn write_mod(&mut self, folder: &str, rows: &str) -> Result<String, String> {
+        let ok = !folder.is_empty()
+            && folder
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+        if !ok {
+            return Err(format!("`{folder}` is no mod's folder name"));
+        }
+        let dir = self.files.game.join("dev").join(folder);
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let header = dir.join("mod.rlml");
+        if !header.exists() {
+            let text = format!(
+                "mod {}\n- about \"Inspectorin muutokset.\"\n",
+                folder.to_uppercase().replace('-', "_")
+            );
+            std::fs::write(&header, text).map_err(|e| e.to_string())?;
+        }
+        let file = dir.join("inspector.rlml");
+        let mut text = std::fs::read_to_string(&file).unwrap_or_default();
+        if !text.is_empty() && !text.ends_with("\n\n") {
+            text.push('\n');
+        }
+        text.push_str(rows);
+        std::fs::write(&file, text).map_err(|e| e.to_string())?;
+        Ok(format!("dev/{folder}/inspector.rlml"))
+    }
 }
 
 impl Files for DiskFiles {
@@ -105,7 +133,7 @@ const USAGE: &str = "usage: rlml check GAME [--lib DIR]
        rlml play GAME [--seed N] [--log-out FILE] [--data DIR] [--dev] [--lib DIR]
        (every command also takes --mod NAME, again for more mods)
        rlml replay GAME LOG [--lib DIR]
-       rlml inspect GAME [--seed N] [--keys \"KEY …\"] [PATH …] [--lib DIR]
+       rlml inspect GAME [--seed N] [--keys \"KEY …\"] [--set PATH=VALUE …] [PATH …] [--lib DIR]
        rlml bench GAME [--seed N] [--keys \"KEY …\" | --keys-file FILE] [--repeat N] [--lib DIR]
 
 check loads the game and reports load errors and warnings (M 2).
@@ -132,6 +160,10 @@ inspect plays the keys as run does and prints the game's state at each
 PATH (RLML-kehitystyokalut.md step 3): game, maps, map.NAME, entities,
 entity#N, seats, wait, wait#N or scenes, and below them by name, as
 game.turn or entity#12.HP.now. Without a PATH it lists the roots.
+--set writes VALUE at PATH after the keys, as the inspector's `:`
+line does (M 5.7): a field of game's or an entity's component, or
+wait#N.locals.NAME. In the inspector, `PATH = VALUE > MOD` also adds
+the entity's definition's patch row to dev/MOD/inspector.rlml.
 bench plays the keys as run does, --repeat times, without drawing, and
 prints how long loading and playing took. Built with `--features
 stats`, it also prints the interpreter's counters: statements, body
@@ -157,6 +189,7 @@ fn main() -> ExitCode {
     let mut paths: Vec<String> = vec![];
     let mut mods: Vec<String> = vec![];
     let mut dev = false;
+    let mut sets: Vec<(String, String)> = vec![];
     if !["check", "run", "play", "replay", "bench", "inspect"].contains(&command.as_str()) {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
@@ -216,6 +249,14 @@ fn main() -> ExitCode {
                         return ExitCode::from(2);
                     }
                 }
+                i += 1;
+            }
+            "--set" if command == "inspect" && i + 1 < args.len() => {
+                let Some((p, v)) = args[i + 1].split_once('=') else {
+                    eprintln!("--set takes PATH=VALUE");
+                    return ExitCode::from(2);
+                };
+                sets.push((p.trim().to_string(), v.trim().to_string()));
                 i += 1;
             }
             "-h" | "--help" => {
@@ -364,6 +405,9 @@ fn main() -> ExitCode {
             let mut s = rlml_core::rt::play::Session::start(&model, seed)?;
             for k in &keys {
                 s.press(k)?;
+            }
+            for (p, v) in &sets {
+                s.r.inspect_set(p, v)?;
             }
             let mut out = String::new();
             let mut failed = false;

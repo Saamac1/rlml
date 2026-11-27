@@ -522,4 +522,149 @@ impl Runner<'_> {
             ),
         ])
     }
+
+    /// The inspector writes `text` at `path` (M 5.7): a field of `game`'s
+    /// or an entity's component, or a waiting command's name. The text is
+    /// read as the field's type; it is written between actions only, and
+    /// it is a row of the input log without a seat (M 4.4).
+    pub fn inspect_set(&mut self, path: &str, text: &str) -> RtResult<()> {
+        if self.in_scene() || self.w.save_blocked() {
+            return Err(
+                "inspect: a value is written between actions, not in a scene, dialogue or menu"
+                    .into(),
+            );
+        }
+        self.write_path(path, text.trim())?;
+        self.record(
+            None,
+            super::input::Act::Inspect {
+                path: path.to_string(),
+                value: text.trim().to_string(),
+            },
+        );
+        self.edited = true;
+        Ok(())
+    }
+
+    fn write_path(&mut self, path: &str, text: &str) -> RtResult<()> {
+        let segs: Vec<&str> = path.split('.').filter(|s| !s.is_empty()).collect();
+        let Some((&root, rest)) = segs.split_first() else {
+            return Err(
+                "inspect: which value? A path such as game.turn or entity#12.HP.now".into(),
+            );
+        };
+        let (root, id) = match root.split_once('#') {
+            Some((r, n)) => (r, Some(n)),
+            None => (root, None),
+        };
+        match (root, id) {
+            ("game", None) => {
+                let comps = self.w.s.game.components.clone();
+                let (ci, field) = field_in(&comps, rest, path)?;
+                let v = self.read_field(&comps[ci].name, field, text)?;
+                self.w.s.game.components[ci].set(field, v);
+                Ok(())
+            }
+            ("entity", Some(n)) => {
+                let e = handle(n)
+                    .filter(|&e| e < self.w.s.entities.len())
+                    .ok_or_else(|| format!("inspect: no entity #{n}"))?;
+                let comps = self.w.s.get(e).components.clone();
+                let (ci, field) = field_in(&comps, rest, path)?;
+                let v = self.read_field(&comps[ci].name, field, text)?;
+                self.w.s.get_mut(e).components[ci].set(field, v);
+                Ok(())
+            }
+            ("wait", Some(n)) => {
+                let e = handle(n).ok_or_else(|| format!("inspect: `{n}` is no handle"))?;
+                let ["locals", name] = rest else {
+                    return Err(format!(
+                        "inspect: a waiting command takes `wait#{n}.locals.NAME`"
+                    ));
+                };
+                let ty = super::world::literal_ty(text);
+                let v = self.w.data_value(&ty, text, None)?;
+                let st = self
+                    .waiting
+                    .get_mut(&e)
+                    .ok_or_else(|| format!("inspect: #{e} has no waiting command"))?;
+                st.env.locals.insert(name.to_string(), v);
+                Ok(())
+            }
+            _ => Err(format!(
+                "inspect: `{path}` takes no value: game, entity#N and wait#N.locals do (M 5.7)"
+            )),
+        }
+    }
+
+    /// `text` as a value of `component`'s `field`.
+    fn read_field(
+        &self,
+        component: &str,
+        field: &str,
+        text: &str,
+    ) -> RtResult<super::value::Value> {
+        let ty = match self.w.field_ty(component, field) {
+            crate::rs::types::Ty::Unknown => super::world::literal_ty(text),
+            ty => ty,
+        };
+        let ns = self.w.component_ns(component);
+        self.w
+            .data_value(&ty, text, ns.as_deref())
+            .map_err(|e| format!("inspect: `{text}` for {component}.{field}: {e}"))
+    }
+
+    /// The `patch` rows that write `text` at an entity field `path` into a
+    /// mod (M 5.7, D 3.6): its kind's definition takes the value, so new
+    /// instances get it.
+    pub fn inspect_patch(&self, path: &str, text: &str) -> RtResult<String> {
+        let segs: Vec<&str> = path.split('.').filter(|s| !s.is_empty()).collect();
+        let (Some(first), rest) = (segs.first(), segs.get(1..).unwrap_or_default()) else {
+            return Err("inspect: which value?".into());
+        };
+        let Some(n) = first.strip_prefix("entity#") else {
+            return Err(
+                "inspect: only an entity's field goes into a mod: its definition's value (M 5.7)"
+                    .into(),
+            );
+        };
+        let e = handle(n)
+            .filter(|&e| e < self.w.s.entities.len())
+            .ok_or_else(|| format!("inspect: no entity #{n}"))?;
+        let i = self.w.s.get(e);
+        let (ci, field) = field_in(&i.components, rest, path)?;
+        let comp = &i.components[ci].name;
+        if self.w.m.defs.get(&i.kind).and_then(|d| d.block()).is_none() {
+            return Err(format!("inspect: `{}` has no definition to patch", i.kind));
+        }
+        // the value must read as the field's type
+        self.read_field(comp, field, text)?;
+        Ok(format!(
+            "patch entity {}\n- {comp} {field} {}\n",
+            i.kind,
+            text.trim()
+        ))
+    }
+}
+
+/// The component and field `rest` names among `cs`: the component by its
+/// full name or unique last part, then one field it has.
+fn field_in<'a>(
+    cs: &[ComponentValue],
+    rest: &'a [&'a str],
+    path: &str,
+) -> RtResult<(usize, &'a str)> {
+    let (c, took) =
+        component(cs, rest).ok_or_else(|| format!("inspect: no component in `{path}`"))?;
+    let ci = cs.iter().position(|x| x.name == c.name).unwrap_or(0);
+    let [field] = &rest[took..] else {
+        return Err(format!(
+            "inspect: `{path}` names no single field of {}",
+            c.name
+        ));
+    };
+    if c.get(field).is_none() {
+        return Err(format!("inspect: {} has no field `{field}`", c.name));
+    }
+    Ok((ci, field))
 }

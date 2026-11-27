@@ -232,6 +232,10 @@ pub struct App<'m> {
     /// The inspector's lines and the first one shown; the game's time
     /// stands while it is open.
     pub inspecting: Option<(Vec<String>, usize)>,
+    /// The inspector's command line after `:`, `PATH = VALUE [> MOD]`
+    /// (M 5.7), and the last command's answer.
+    pub inspector_line: Option<String>,
+    inspector_note: Option<String>,
     /// Development mode's reload (M 5.7): reads and checks the game's
     /// files again, giving the new model or the load's errors. `f5`
     /// asks for it, and it runs between actions.
@@ -339,6 +343,12 @@ pub trait DevFiles<'m> {
     fn reload(&mut self, mods: &[String]) -> Result<&'m Model, Vec<String>>;
     /// The mods in the game's `dev/` folder: folder and `about`.
     fn mods(&mut self) -> Vec<(String, String)>;
+    /// Adds `rows` to the mod `folder`'s `inspector.rlml`, making the mod
+    /// and its header if there are none (M 5.7): the file written.
+    fn write_mod(&mut self, folder: &str, rows: &str) -> Result<String, String> {
+        let _ = (folder, rows);
+        Err("these files take no mod".into())
+    }
 }
 
 /// The front end's `DevFiles` for development mode.
@@ -468,6 +478,8 @@ impl<'m> App<'m> {
             reading: None,
             dev: false,
             inspecting: None,
+            inspector_line: None,
+            inspector_note: None,
             reloader: None,
             reload_asked: false,
             mods: m.mods.iter().map(|(n, _)| n.clone()).collect(),
@@ -974,7 +986,12 @@ impl<'m> App<'m> {
         self.view.typing = self.baud.map(|_| (self.typed, self.type_chars as usize));
         self.view.keyboard = self.keyboard;
         if let Some((lines, top)) = &self.inspecting {
-            return draw_inspector(lines, *top, w, h);
+            let bottom = match (&self.inspector_line, &self.inspector_note) {
+                (Some(l), _) => format!(":{l}█"),
+                (None, Some(n)) => n.clone(),
+                (None, None) => "↑↓ scroll  : write  esc/f12 close".into(),
+            };
+            return draw_inspector(lines, *top, w, h, &bottom);
         }
         if self.reading.as_ref().is_some_and(|r| !r.panel) {
             // over a `read` log area the view keeps the log's place (D 11.4)
@@ -1283,6 +1300,8 @@ impl<'m> App<'m> {
     /// Opens the inspector on the state now, or closes it: the overview,
     /// `game`, the player, the waiting commands and the scenes.
     fn toggle_inspector(&mut self) {
+        self.inspector_line = None;
+        self.inspector_note = None;
         if self.inspecting.take().is_some() {
             return;
         }
@@ -1301,6 +1320,83 @@ impl<'m> App<'m> {
             lines.push(String::new());
         }
         self.inspecting = Some((lines, 0));
+    }
+
+    /// A key for the inspector's command line: `:` opens it, characters
+    /// and `backspace` edit it, `enter` runs it and `esc` drops it.
+    /// `false` for the keys it leaves to scrolling.
+    fn inspector_key(&mut self, b: &Binding) -> bool {
+        let Binding::Key(code, mods) = b else {
+            return false;
+        };
+        let Some(line) = &mut self.inspector_line else {
+            if *code == KeyCode::Char(':') && !mods.ctrl && !mods.alt {
+                self.inspector_line = Some(String::new());
+                self.inspector_note = None;
+                return true;
+            }
+            return false;
+        };
+        match code {
+            KeyCode::Char(c) if !mods.ctrl && !mods.alt => line.push(*c),
+            KeyCode::Backspace => {
+                line.pop();
+            }
+            KeyCode::Enter => {
+                let cmd = self.inspector_line.take().unwrap_or_default();
+                let note = self.inspector_write(&cmd);
+                // the lines show the value written
+                let top = self.inspecting.as_ref().map_or(0, |(_, t)| *t);
+                self.inspecting = None;
+                self.toggle_inspector();
+                if let Some((lines, t)) = &mut self.inspecting {
+                    *t = top.min(lines.len().saturating_sub(1));
+                }
+                self.inspector_note = Some(note);
+            }
+            KeyCode::Esc => self.inspector_line = None,
+            _ => {}
+        }
+        true
+    }
+
+    /// Runs `PATH = VALUE [> MOD]` (M 5.7): writes the value, and with a
+    /// mod also its definition's patch row there. The answer to show.
+    fn inspector_write(&mut self, cmd: &str) -> String {
+        let (cmd, folder) = match cmd.rsplit_once(" > ") {
+            Some((c, m)) => (c, Some(m.trim())),
+            None => (cmd, None),
+        };
+        let Some((path, value)) = cmd.split_once('=') else {
+            return "write PATH = VALUE, or PATH = VALUE > MOD".into();
+        };
+        let (path, value) = (path.trim(), value.trim());
+        // the mod's row first: it checks the path is a definition's field
+        let patch = match folder {
+            Some(_) => match self.r.inspect_patch(path, value) {
+                Ok(p) => Some(p),
+                Err(e) => return e,
+            },
+            None => None,
+        };
+        if let Err(e) = self.r.inspect_set(path, value) {
+            return e;
+        }
+        let (Some(folder), Some(patch)) = (folder, patch) else {
+            return format!("{path} = {value}");
+        };
+        let Some(files) = self.reloader.as_mut() else {
+            return format!("{path} = {value}; no files for the mod");
+        };
+        match files.write_mod(folder, &patch) {
+            Ok(file) => {
+                if !self.mods.iter().any(|m| m == folder) {
+                    self.mods.push(folder.to_string());
+                }
+                format!("{path} = {value}; the row went to {file}")
+            }
+            Err(e) => format!("{path} = {value}; the mod: {e}"),
+        }
     }
 
     /// A `MENU` action in the inspector: scrolling, and `back` closes it.
@@ -1727,7 +1823,7 @@ impl<'m> App<'m> {
         let Some(Pause::Ask { kind, .. }) = self.r.scene_pause().cloned() else {
             return Ok(false);
         };
-        if self.menus.is_open() {
+        if self.menus.is_open() || self.inspecting.is_some() {
             return Ok(false);
         }
         let Binding::Key(code, mods) = b else {
@@ -1901,6 +1997,11 @@ impl<'m> App<'m> {
         // the inspector scrolls and closes by `MENU`'s bindings, as the
         // reading view does
         if self.inspecting.is_some() {
+            if let Press::Key(b) = &press
+                && self.inspector_key(b)
+            {
+                return Ok(());
+            }
             match self
                 .input
                 .keys
@@ -3826,7 +3927,7 @@ impl<'m> App<'m> {
 
 /// The inspector over the whole window: a title, its lines from `top`,
 /// and the keys at the bottom.
-fn draw_inspector(lines: &[String], top: usize, w: usize, h: usize) -> Frame {
+fn draw_inspector(lines: &[String], top: usize, w: usize, h: usize, bottom: &str) -> Frame {
     use termplate_core::frame::Role;
     let mut f = Frame::new(w, h);
     if h == 0 {
@@ -3838,7 +3939,7 @@ fn draw_inspector(lines: &[String], top: usize, w: usize, h: usize) -> Frame {
         f.text(0, 1 + i, w, line, Role::Normal);
     }
     if h > 1 {
-        f.text(0, h - 1, w, "↑↓ scroll  esc/f12 close", Role::Dim);
+        f.text(0, h - 1, w, bottom, Role::Dim);
     }
     f
 }

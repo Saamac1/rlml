@@ -288,3 +288,29 @@ fn update_existing_changes_the_fields_the_game_has_not() {
         "{notes:?}"
     );
 }
+
+#[test]
+fn the_inspectors_mod_row_gives_a_new_game_the_value() {
+    let mut f = files();
+    let base = model(&f, &[]);
+    let mut r = start(&base);
+    let rat = (0..r.w.s.entities.len())
+        .find(|&e| r.w.s.get(e).kind == "RAT")
+        .unwrap();
+    let path = format!("entity#{rat}.HP.now");
+    let row = r.inspect_patch(&path, "7").unwrap();
+    r.inspect_set(&path, "7").unwrap();
+    f.game.insert(
+        "dev/omat/mod.rlml".into(),
+        "mod OMAT\n- about \"Inspectorin muutokset.\"\n".into(),
+    );
+    f.game.insert("dev/omat/inspector.rlml".into(), row);
+    let omat = model(&f, &["omat"]);
+    let n = rats(&start(&omat)).len();
+    assert_eq!(rats(&start(&omat)), vec![7; n], "every new rat");
+    // an instance's own state is no definition's
+    assert!(
+        r.inspect_patch(&format!("wait#{rat}.locals.x"), "1")
+            .is_err()
+    );
+}

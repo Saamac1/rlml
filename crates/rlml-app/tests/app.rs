@@ -2977,3 +2977,71 @@ fn f5_reloads_the_game_between_actions() {
         "the log's segment starts at the reload"
     );
 }
+
+/// Development mode's files that keep the mod rows written.
+struct Written(std::rc::Rc<std::cell::RefCell<Vec<(String, String)>>>);
+
+impl<'m> rlml_app::app::DevFiles<'m> for Written {
+    fn reload(&mut self, _: &[String]) -> Result<&'m Model, Vec<String>> {
+        Err(vec!["no reload here".into()])
+    }
+
+    fn mods(&mut self) -> Vec<(String, String)> {
+        vec![]
+    }
+
+    fn write_mod(&mut self, folder: &str, rows: &str) -> Result<String, String> {
+        self.0.borrow_mut().push((folder.into(), rows.into()));
+        Ok(format!("dev/{folder}/inspector.rlml"))
+    }
+}
+
+#[test]
+fn the_inspectors_line_writes_a_value_and_a_mod_row() {
+    let m = model(&mini_with(|_| {}));
+    let mut app = App::new(&m, 7, (80, 30)).unwrap();
+    app.dev = true;
+    let rows = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
+    app.reloader = Some(Box::new(Written(rows.clone())));
+    let p = app.r.w.s.player.unwrap();
+    let typed = |app: &mut App, text: &str| {
+        for c in text.chars() {
+            app.key(Binding::key(KeyCode::Char(c), Mods::default()), ms(0))
+                .unwrap();
+        }
+    };
+    app.key(Binding::key(KeyCode::F(12), Mods::default()), ms(0))
+        .unwrap();
+    typed(&mut app, ":");
+    typed(&mut app, &format!("entity#{p}.HP.now = 2 > omat"));
+    assert!(screen(&mut app).contains(":entity#"), "the line is shown");
+    press(&mut app, "enter");
+    let s = screen(&mut app);
+    assert!(s.contains("the row went to dev/omat/inspector.rlml"), "{s}");
+    assert_eq!(
+        app.r
+            .w
+            .s
+            .get(p)
+            .get("STD.HP")
+            .and_then(|c| c.get("now"))
+            .and_then(|v| v.as_number()),
+        Some(2)
+    );
+    let written = rows.borrow().clone();
+    assert_eq!(written.len(), 1);
+    assert_eq!(written[0].0, "omat");
+    assert!(written[0].1.ends_with("- STD.HP now 2\n"), "{written:?}");
+    assert_eq!(app.mods, ["omat"], "the next reload loads it");
+    // a wrong value is told, and esc drops a line without closing
+    typed(&mut app, ":");
+    typed(&mut app, &format!("entity#{p}.HP.now = x"));
+    press(&mut app, "enter");
+    assert!(screen(&mut app).contains("is not a number"));
+    typed(&mut app, ":abc");
+    press(&mut app, "esc");
+    assert!(app.inspecting.is_some() && app.inspector_line.is_none());
+    press(&mut app, "esc");
+    assert!(app.inspecting.is_none());
+    replays_the_same(&m, &app);
+}

@@ -70,6 +70,9 @@ pub enum Act {
     SceneSkip,
     /// A scene from its start again (`restart`).
     SceneRestart,
+    /// The inspector wrote `value` at `path` in development mode
+    /// (M 5.7); a row without a seat.
+    Inspect { path: String, value: String },
     /// `rewind` (RS 9.8).
     SceneRewind,
     /// A choice's item (`scene.choose NAME`).
@@ -224,6 +227,7 @@ impl fmt::Display for Row {
             Act::SceneSkip => f.write_str(" skip"),
             Act::SceneRestart => f.write_str(" restart"),
             Act::SceneRewind => f.write_str(" rewind"),
+            Act::Inspect { path, value } => write!(f, " inspect {path} {value}"),
             Act::SceneChoose(n) => write!(f, " scene.choose {n}"),
             Act::SceneAdjust(n, s) => write!(f, " scene.adjust {n} {s:+}"),
             Act::SceneAnswer(a) => write!(f, " scene.answer {a}"),
@@ -329,6 +333,18 @@ fn read_arg(w: &str) -> Result<Arg, String> {
 }
 
 fn read_row(line: &str) -> Result<Row, String> {
+    // an inspector's write: the value is the rest of the line as written
+    let parts: Vec<&str> = line.splitn(4, ' ').collect();
+    if let [time, "inspect", path, value] = parts.as_slice() {
+        return Ok(Row {
+            time: time.parse().map_err(|_| "a row starts with its moment")?,
+            seat: None,
+            act: Act::Inspect {
+                path: path.to_string(),
+                value: value.to_string(),
+            },
+        });
+    }
     let ws = words(line)?;
     let time: i64 = ws
         .first()
@@ -729,6 +745,9 @@ impl<'m> Replay<'m> {
                     return Err(err("the seat does not leave".into()));
                 }
                 self.status = self.r.run(0)?;
+            }
+            Act::Inspect { path, value } => {
+                self.r.inspect_set(path, value).map_err(err)?;
             }
             Act::End => {}
         }

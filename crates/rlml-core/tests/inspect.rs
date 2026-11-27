@@ -177,3 +177,58 @@ fn a_waiting_command_shows_its_names_and_reading_changes_nothing() {
         "the command went on"
     );
 }
+
+#[test]
+fn the_inspector_writes_typed_values_into_the_log() {
+    use rlml_core::rt::input::{InputLog, Replay};
+    use rlml_core::rt::save::Save;
+    let m = model();
+    let mut w = World::new_game(&m, 7).unwrap();
+    w.begin().unwrap();
+    let mut r = Runner::new(w);
+    r.run(0).unwrap();
+    let p = r.w.s.player.unwrap();
+    assert!(!r.edited);
+    r.inspect_set("game.TALLY.count", "5").unwrap();
+    r.inspect_set(&format!("entity#{p}.HP.now"), "1").unwrap();
+    assert_eq!(leaf(r.inspect("game.TALLY.count").unwrap()), "5");
+    assert_eq!(leaf(r.inspect(&format!("entity#{p}.HP.now")).unwrap()), "1");
+    for (path, text, says) in [
+        ("game.TALLY.count", "kolme", "for TALLY.count"),
+        ("game.TALLY.nope", "1", "no field `nope`"),
+        ("game.turn", "3", "no component"),
+        ("game.TALLY", "3", "names no single field"),
+        ("map.HALL", "1", "takes no value"),
+        ("entity#99.HP.now", "1", "no entity #99"),
+    ] {
+        let e = r.inspect_set(path, text).unwrap_err();
+        assert!(e.contains(says), "{path} {text}: {e}");
+    }
+    // the edits are rows without a seat, and a replay comes to the same
+    let text = r.input_log().write().unwrap();
+    assert!(text.contains(" inspect game.TALLY.count 5\n"), "{text}");
+    let again = Replay::run(&m, &InputLog::read(&text).unwrap()).unwrap();
+    assert!(again.w.s == r.w.s, "the replay has the edits");
+    // the save knows it was edited
+    let save = Save::read(&r.save().write()).unwrap();
+    assert!(save.edited);
+    assert!(Runner::load(&m, &save).unwrap().edited);
+    // a waiting command's names, and the patch row for a mod
+    let n = r.awaiting().unwrap();
+    r.input(
+        n,
+        &CommandValue {
+            name: "SLOW".into(),
+            args: vec![],
+        },
+    )
+    .unwrap();
+    r.inspect_set(&format!("wait#{p}.locals.steps"), "10")
+        .unwrap();
+    r.run(0).unwrap();
+    assert_eq!(leaf(r.inspect("game.TALLY.count").unwrap()), "9");
+    let patch = r.inspect_patch(&format!("entity#{p}.HP.now"), "4").unwrap();
+    assert!(patch.starts_with("patch entity "), "{patch}");
+    assert!(patch.ends_with("\n- STD.HP now 4\n"), "{patch}");
+    assert!(r.inspect_patch("game.TALLY.count", "4").is_err());
+}

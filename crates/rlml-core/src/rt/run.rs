@@ -93,6 +93,9 @@ pub struct Runner<'m> {
     /// round's background scenes left to run after it.
     pub(crate) bg_pause: Option<u64>,
     pub(crate) bg_pending: Vec<u64>,
+    /// The inspector has written a value this session or in the save it
+    /// came from (M 5.7).
+    pub edited: bool,
 }
 
 fn engine_env(name: &str) -> Env {
@@ -135,6 +138,7 @@ impl<'m> Runner<'m> {
             realtime: Default::default(),
             bg_pause: None,
             bg_pending: vec![],
+            edited: false,
         };
         // calls in `begin` are its own: checkpoint 0 is taken here anyway
         r.w.saves = Default::default();

@@ -305,6 +305,33 @@ Alla on alkuperäinen tehtävälista.
 
 ### 6. Inspector, muokkaus
 
+Tehty 27.11.2026 haarassa `claude/inspector-muokkaus`.
+
+**Speksi.**
+- M 5.7 kertoo inspectorin kirjoituksen: polut, tarkistuksen, tallennuksen merkinnän ja modiin tallentamisen.
+- M 4.4 saa syöterivin `AIKA inspect POLKU ARVO` ilman istuinta.
+- Muutos on kirjattu muutoslokiin.
+
+**Ydin.**
+- `Runner::inspect_set(polku, arvo)` kirjoittaa `game.KOMPONENTTI.kenttä`-, `entity#N.KOMPONENTTI.kenttä`- ja `wait#N.locals.NIMI`-polkuihin.
+- Kenttiä kirjoitetaan vain olemassa oleviin. Arvo luetaan kentän tyypin mukaan, ja väärä tyyppi on virhe.
+- Kirjoitus on sallittu vain toimintojen välissä, ei kohtauksen, dialogin tai valikon aikana.
+- Kirjoitus on syötelokin rivi, ja `Replay` ajaa sen.
+- `Runner::edited` ja tallennuksen rivi `edited` kertovat, että peliä on muokattu.
+- `Runner::inspect_patch` antaa entiteetin kentälle määrittelyn `patch`-rivin. `game`-lohkon ja odottavan komennon arvoille sitä ei saa.
+
+**Kehitystila.**
+- Inspectorissa `:` avaa komentorivin `POLKU = ARVO [> MODI]`. Vastaus näkyy alarivillä, ja rivit päivittyvät.
+- Modin kanssa rivi lisätään tiedostoon `dev/MODI/inspector.rlml` (`DevFiles::write_mod`). Puuttuva otsake luodaan, ja modi kytketään seuraavaan uudelleenlataukseen.
+- `rlml inspect --set POLKU=ARVO` kirjoittaa arvon näppäinten jälkeen.
+
+**Testit.**
+- `crates/rlml-core/tests/inspect.rs`: kirjoitukset, virheet, toisto, tallennuksen merkintä, odottavan komennon nimi ja `patch`-rivi.
+- `crates/rlml-core/tests/mods.rs`: modiin kirjoitettu rivi antaa uudessa pelissä saman arvon.
+- Sovellustesti `the_inspectors_line_writes_a_value_and_a_mod_row`.
+
+Alla on alkuperäinen tehtävälista.
+
 Ensin speksiin: syötelokin inspector-rivi (M 4.4).
 
 - **Kirjoitus** on sallittu vain toiminnon rajalla, ei etualan kohtauksen aikana.

@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 27.11.2026 (inspectorin muokkaus):** kehitystilan inspector kirjoittaa arvon polulla toimintojen välissä, tallennus merkitään muokatuksi, ja määrittelystä tulevan kentän voi kirjoittaa kehitysmodiin (luku [5.7](05-aloitus-tallennus-ja-checkpointit.md#57-uudelleenlataus-kehitystilassa)). Syötelokin rivi `inspect` ilman istuinta (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)).
+
 **Muutokset 27.11.2026 (kehitysmodit):** modien vaihto on uudelleenlataus, tallennus kirjaa aktiiviset modit, ja `update existing` päivittää jo luodut ilmentymät kentissä, joita peli ei ole muuttanut (luku [5.7](05-aloitus-tallennus-ja-checkpointit.md#57-uudelleenlataus-kehitystilassa)). Syöteloki kirjaa modit, ja toisto vaatii samat (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)).
 
 **Muutokset 26.11.2026 (uudelleenlataus):** kehitystilan uudelleenlataus on uusi luku [5.7](05-aloitus-tallennus-ja-checkpointit.md#57-uudelleenlataus-kehitystilassa): lataus toiminnon rajalla, tila säilyy, ja kartat yhdistetään muutettujen ruutujen avulla, myös tallennusta ladattaessa. Tallennus kirjaa muutetut ruudut (luku [5.2](05-aloitus-tallennus-ja-checkpointit.md#52-tallennus)), ja syöteloki alkaa latauksesta uuden jakson (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)). Uudet kyselyt `tile_original` ja `changed` (luku [9.3](09-moottorin-funktiot-ja-tapahtumat.md#93-funktiot)).

@@ -265,7 +265,7 @@ impl<'m> World<'m> {
         }
     }
 
-    fn component_ns(&self, full: &str) -> Option<String> {
+    pub(crate) fn component_ns(&self, full: &str) -> Option<String> {
         self.m
             .defs
             .get(full)
@@ -273,7 +273,7 @@ impl<'m> World<'m> {
     }
 
     /// A field's type, from the component's definition or the engine's.
-    fn field_ty(&self, component: &str, field: &str) -> Ty {
+    pub(crate) fn field_ty(&self, component: &str, field: &str) -> Ty {
         if names::is_vocabulary(component) {
             return crate::rs::sigs::engine_component_field(component, field)
                 .unwrap_or(Ty::Unknown);
@@ -1443,7 +1443,7 @@ pub fn number_value(s: &str) -> Option<Value> {
     None
 }
 
-fn literal_ty(v: &str) -> Ty {
+pub(crate) fn literal_ty(v: &str) -> Ty {
     if number_value(v).is_some() {
         Ty::Number
     } else if v == "true" || v == "false" {
