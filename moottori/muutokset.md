@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 27.11.2026 (breakpointit):** kehitystilan breakpointit `TIEDOSTO:RIVI`, pysähdyksen sisältö ja askellus kutsusyvyyden mukaan. Pysähdys ei muuta tilaa eikä syötelokia (luku [5.7](05-aloitus-tallennus-ja-checkpointit.md#57-uudelleenlataus-kehitystilassa)).
+
 **Muutokset 27.11.2026 (inspectorin muokkaus):** kehitystilan inspector kirjoittaa arvon polulla toimintojen välissä, tallennus merkitään muokatuksi, ja määrittelystä tulevan kentän voi kirjoittaa kehitysmodiin (luku [5.7](05-aloitus-tallennus-ja-checkpointit.md#57-uudelleenlataus-kehitystilassa)). Syötelokin rivi `inspect` ilman istuinta (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)).
 
 **Muutokset 27.11.2026 (kehitysmodit):** modien vaihto on uudelleenlataus, tallennus kirjaa aktiiviset modit, ja `update existing` päivittää jo luodut ilmentymät kentissä, joita peli ei ole muuttanut (luku [5.7](05-aloitus-tallennus-ja-checkpointit.md#57-uudelleenlataus-kehitystilassa)). Syöteloki kirjaa modit, ja toisto vaatii samat (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)).

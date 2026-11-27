@@ -422,6 +422,48 @@ Alla on alkuperäinen tehtävälista.
 
 ### 9. Breakpointit ja askellus (kevyt)
 
+Tehty 27.11.2026 haarassa `claude/breakpointit`.
+
+**Käyttäjän päätökset.**
+- Breakpointit asetetaan valitsimella `--break TIEDOSTO:RIVI` (`play --dev` ja `run`) ja kehitystilassa inspectorin `:`-rivillä (`break`, `unbreak`, `breaks`).
+- MCP: peli ajetaan omassa säikeessään, pysähdys lähettää tilan kuvan kanavaan ja odottaa vastausta.
+
+**Speksi.** M 5.7 saa kohdan "Breakpointit ja askellus", ja muutos on kirjattu muutoslokiin.
+
+**Ydin** (`crates/rlml-core/src/rt/debug.rs`).
+- `World::debug` on jaettu `Debugger`, ja `run_frames` kysyy sitä ennen jokaista lausetta. Ilman debuggeria kulu on yksi haara: Kapteeni Aaltolan läpipeluu kestää 0,33 ms painallukselta sekä mainissa että haarassa.
+- `Debugger::add` tarkistaa breakpointin mallista (`statement_at`). Tiedosto haetaan polun lopulla, ja rivi siirtyy saman määrittelyn seuraavaan lauseeseen.
+- **Pysähdys** (`Stop`) on omistettu tilan kuva: paikka, rungon nimi, syvyys, kutsuketju sekä nimet ja `self`, `actor` ja `holder`.
+- **Askellus** käyttää syvyyttä, jonka `enter` jo laskee: `Into`, `Over` ja `Out`.
+- **Koukku** (`Hook`) saa maailman luettavaksi ja vastaa `Step`-arvolla.
+- `debug::channel` on MCP:n pohja: koukku lähettää pysähdyksen kanavaan ja odottaa askelta. `debug::printer` kirjoittaa pysähdykset riveiksi.
+- Uudelleenlataus pitää debuggerin.
+
+**Sovellus ja pääte.**
+- `rlml_app::debug::DebugView` näyttää pysähdyksen:
+  - lähteen rivit, merkintä `→` pysähdysrivillä
+  - kutsuketjun ja nimet
+  - näppäimet `c`/`f8`/`esc` (jatka), `s`/`f11` (into), `n`/`f10` (over) ja `o` (out)
+  - `:`-polun luvun, joko `locals.NIMI` tai inspectorin polun.
+- Pääteliittymän koukku piirtää näkymän omalle ruudulleen ja lukee näppäimet, ja pelin ruutu piirretään sen jälkeen kokonaan.
+- `App::debugger` siirtyy jokaisen pelin maailmaan, myös uuden ja ladatun.
+- Inspectorin `:`-rivi ottaa komennot `break`, `unbreak` ja `breaks`.
+
+**Komentorivi.**
+- `rlml play --dev --break …`
+- `rlml run --break …`: pysähdykset tulostuvat rivinä näppäimen ja ruudun väliin.
+
+**Ero suunnitelmaan.**
+- Breakpoint sidotaan riviin eikä rakenteelliseen polkuun. Rivi tarkistetaan mallista asetettaessa.
+- Uudelleenlatauksen jälkeen breakpoint jää samalle riville.
+- `begin` ajetaan ennen kuin `rlml run` kiinnittää debuggerin.
+
+**Testit.**
+- `crates/rlml-core/tests/debug.rs`: pysähdys nimineen ja kutsuketjuineen, rivin siirto, virheet, sama peli ilman debuggeria, into/over/out sekä kanava toisesta säikeestä.
+- Sovellustesti `the_inspector_sets_breakpoints_and_a_stop_shows_its_place`.
+
+Alla on alkuperäinen tehtävälista.
+
 - **Koukku.** `run_frames` kutsuu koukkua jokaisen lauseen kohdalla. Ilman breakpointeja kustannus on yksi haara lausetta kohden.
 - **Breakpoint** sidotaan lähderiviin ja muunnetaan latauksessa rakenteelliseksi poluksi.
 - **Pysähdys.** Kun breakpoint osuu, frontend ajaa oman debug-silmukkansa koukun sisällä. Tilaa voi tarkastella inspectorilla mutta ei muokata, koska toiminto on kesken.

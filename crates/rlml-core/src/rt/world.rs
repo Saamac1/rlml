@@ -65,6 +65,9 @@ pub struct World<'m> {
     pub saves: SaveCalls,
     /// Nested calls and events now (M 6.2, `game.call_depth`).
     pub depth: u32,
+    /// Development mode's breakpoints and stepping (M 5.7): asked before
+    /// every statement. Not state.
+    pub debug: Option<super::debug::Shared>,
     /// The active map's change at the microstep's end: from and to.
     pub switch: Option<(MapId, MapId)>,
     /// Sounds ever made; `sounds` holds the newest of them.
@@ -250,6 +253,7 @@ impl<'m> World<'m> {
             effects: vec![],
             saves: SaveCalls::default(),
             depth: 0,
+            debug: None,
             switch: None,
             sounds_made: 0,
             heard_mark: Default::default(),

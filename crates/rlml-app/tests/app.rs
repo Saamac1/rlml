@@ -3045,3 +3045,79 @@ fn the_inspectors_line_writes_a_value_and_a_mod_row() {
     assert!(app.inspecting.is_none());
     replays_the_same(&m, &app);
 }
+
+#[test]
+fn the_inspector_sets_breakpoints_and_a_stop_shows_its_place() {
+    use rlml_app::debug::DebugView;
+    use rlml_core::rt::debug::{Debugger, Step};
+    let m = model(&mini_with(|_| {}));
+    let mut app = App::new(&m, 7, (80, 30)).unwrap();
+    app.dev = true;
+    let stops = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let kept = stops.clone();
+    let view = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let shown = view.clone();
+    app.debugger = Some(
+        Debugger::new(Box::new(move |w, stop| {
+            kept.lock().unwrap().push(stop.clone());
+            // the stop's view, its keys and a path read from the state
+            let mut v = DebugView::new(stop.clone(), Some("a\nb\nc\n".repeat(30)));
+            let key = |c| Binding::key(KeyCode::Char(c), Mods::default());
+            assert_eq!(v.key(&key(':'), w), None);
+            for c in "locals.dir".chars() {
+                v.key(&key(c), w);
+            }
+            v.key(&Binding::key(KeyCode::Enter, Mods::default()), w);
+            assert_eq!(v.key(&key(':'), w), None);
+            for c in "game.turn".chars() {
+                v.key(&key(c), w);
+            }
+            v.key(&Binding::key(KeyCode::Enter, Mods::default()), w);
+            *shown.lock().unwrap() = Some(v.draw(80, 30));
+            assert_eq!(v.key(&key('s'), w), Some(Step::Into));
+            Step::Continue
+        }))
+        .shared(),
+    );
+    let typed = |app: &mut App, text: &str| {
+        for c in text.chars() {
+            app.key(Binding::key(KeyCode::Char(c), Mods::default()), ms(0))
+                .unwrap();
+        }
+    };
+    app.key(Binding::key(KeyCode::F(12), Mods::default()), ms(0))
+        .unwrap();
+    typed(&mut app, ":break move.rlml:59");
+    press(&mut app, "enter");
+    assert!(
+        screen(&mut app).contains("breakpoint at <engine>/lib/std/move.rlml:59"),
+        "{}",
+        screen(&mut app)
+    );
+    typed(&mut app, ":break nothing:1");
+    press(&mut app, "enter");
+    assert!(screen(&mut app).contains("has no RogueScript"));
+    press(&mut app, "esc");
+    press(&mut app, "l");
+    let seen = stops.lock().unwrap().clone();
+    assert_eq!(seen.len(), 1, "{seen:?}");
+    assert_eq!((seen[0].line, seen[0].name.as_str()), (59, "STD.MOVE"));
+    let frame = view.lock().unwrap().take().unwrap();
+    let text = frame.rows().join("\n");
+    assert!(
+        text.contains("breakpoint <engine>/lib/std/move.rlml:59 in STD.MOVE"),
+        "{text}"
+    );
+    assert!(text.contains("→   59 │"), "{text}");
+    assert!(text.contains("dir: east"), "{text}");
+    assert!(text.contains("calls: STD.MOVE"), "{text}");
+    // the breakpoint goes, and the game plays as without it
+    app.key(Binding::key(KeyCode::F(12), Mods::default()), ms(0))
+        .unwrap();
+    typed(&mut app, ":unbreak move.rlml:59");
+    press(&mut app, "enter");
+    press(&mut app, "esc");
+    press(&mut app, "l");
+    assert_eq!(stops.lock().unwrap().len(), 1);
+    replays_the_same(&m, &app);
+}

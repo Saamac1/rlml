@@ -85,7 +85,7 @@ fn fields(c: &ComponentValue) -> Node {
 
 /// A value in full: lists, collections and dictionaries with their
 /// members, where a value's own text only counts them.
-fn show(v: &Value) -> String {
+pub(crate) fn show(v: &Value) -> String {
     match v {
         Value::List(items) | Value::Collection(items) => {
             format!(

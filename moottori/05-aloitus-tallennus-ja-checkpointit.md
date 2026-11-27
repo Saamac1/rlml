@@ -113,6 +113,11 @@ Kehitystilassa (`rlml play --dev`) pelin tiedostot voi ladata uudelleen kesken p
 - **Syöteloki** alkaa latauksesta uuden jakson (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)).
 - **Kehitysmodit** ([D 3.6](../dataformaatit/03-tiedostot-ja-include.md#36-kehitysmodit-dev)). Aktiivisten modien vaihto on uudelleenlataus. Tallennus kirjaa aktiiviset modit tiivisteineen. Jos tallennuksen lataa ilman samoja modeja, lataus varoittaa ja peli jatkuu nykyisillä määrittelyillä.
 - **Inspectorin muokkaus.** Kehitystilassa inspector voi kirjoittaa arvon polulla: `game`-lohkon tai entiteetin komponentin kenttään (`entity#12.HP.now`) tai odottavan komennon paikalliseen nimeen (`wait#12.locals.target`). Kirjoitus tehdään toimintojen välissä kuten tallennus, ja arvo tarkistetaan kentän tyypin mukaan. Muokkaus on syötelokin rivi (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)), ja tallennus merkitään inspectorilla muokatuksi. Määrittelystä tuleva entiteetin kentän arvo voidaan kirjoittaa myös `patch`-riviksi kehitysmodiin ([D 3.6](../dataformaatit/03-tiedostot-ja-include.md#36-kehitysmodit-dev)), jolloin uudet ilmentymät saavat sen. Ilmentymän oma, pelin aikana muuttunut tila ei ole määrittelyä.
+- **Breakpointit ja askellus.** Kehitystilassa breakpoint pysäyttää pelin ennen RogueScript-rivin lausetta. Se asetetaan muodossa `TIEDOSTO:RIVI`, ja tiedoston voi nimetä polun lopulla. Rivi, jolla ei ole lausetta, siirtyy saman määrittelyn seuraavaan lauseeseen.
+  - Pysähdys näyttää paikan, kutsuketjun ja rungon nimet arvoineen.
+  - Tilaa voi lukea mutta ei kirjoittaa, koska toiminto on kesken.
+  - Askellus perustuu kutsusyvyyteen (`game.call_depth`): *into* pysähtyy seuraavaan lauseeseen, *over* seuraavaan saman tai kutsujan rungon lauseeseen ja *out* seuraavaan kutsujan lauseeseen.
+  - Pysähdys ei muuta tilaa eikä syötelokia, joten peli ja sen toisto ovat samat kuin ilman breakpointteja.
 - **Olemassa olevien päivitys.** Kun modi on merkitty `update existing`, lataus päivittää myös jo luotujen ilmentymien kentät, jotka modi muuttaa. Päivitys koskee vain kenttiä, joiden arvo on yhä vanhan määrittelyn mukainen, joten peli ei ole muuttanut niitä: haavoittuneen rotan `HP` ei palaudu. Muuten määrittelyjen muutokset koskevat vain uusia ilmentymiä.
 
 ---

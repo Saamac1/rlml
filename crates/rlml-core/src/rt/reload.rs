@@ -193,6 +193,7 @@ impl<'m> Runner<'m> {
         r.due = std::mem::take(&mut self.due);
         r.bg_plans = std::mem::take(&mut self.bg_plans);
         r.realtime = std::mem::take(&mut self.realtime);
+        r.w.debug = self.w.debug.clone();
         r.inputs.from = Some((m.source_hash, r.save().write()));
         *self = r;
         Ok(warnings)

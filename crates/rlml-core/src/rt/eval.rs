@@ -202,6 +202,9 @@ impl World<'_> {
                     let stmt = stmts[*i].clone();
                     *i += 1;
                     stats::bump(Count::Stmt);
+                    if self.debug.is_some() {
+                        self.debug_stmt(&stmt, env);
+                    }
                     if let Some(flow) = self.exec(&stmt, frames, env)? {
                         return Ok(flow);
                     }
@@ -1670,6 +1673,9 @@ impl World<'_> {
 
     fn enter(&mut self, env: &Env) -> RtResult<()> {
         self.depth += 1;
+        if self.debug.is_some() {
+            self.debug_enter(&env.name);
+        }
         if self.depth > self.s.game.call_depth {
             self.depth = 0;
             return Err(format!(

@@ -80,6 +80,11 @@ fn numbered(body: &[Stmt], pick: fn(&Stmt) -> bool, out: &mut Vec<Pos>) {
     }
 }
 
+/// Every statement's position in `body`, nested ones too.
+pub(crate) fn all_positions(body: &[Stmt], out: &mut Vec<Pos>) {
+    numbered(body, |_| true, out);
+}
+
 fn number_of(body: &[Stmt], pick: fn(&Stmt) -> bool, at: Pos) -> Option<usize> {
     let mut all = Vec::new();
     numbered(body, pick, &mut all);

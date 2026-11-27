@@ -236,12 +236,41 @@ pub fn transcript(m: &Model, seed: u64, keys: &[&str]) -> RtResult<String> {
 
 /// `transcript` and the session's input log (M 4.4).
 pub fn transcript_and_log(m: &Model, seed: u64, keys: &[&str]) -> RtResult<(String, InputLog)> {
+    transcript_with(m, seed, keys, &[])
+}
+
+/// `transcript_and_log` with breakpoints (M 5.7): each stop from the first
+/// key on is a line before the key's frame, and the game goes on.
+pub fn transcript_with(
+    m: &Model,
+    seed: u64,
+    keys: &[&str],
+    breaks: &[String],
+) -> RtResult<(String, InputLog)> {
     let mut s = Session::start(m, seed)?;
+    let mut stops = None;
+    if !breaks.is_empty() {
+        let (hook, lines) = super::debug::printer();
+        let mut d = super::debug::Debugger::new(hook);
+        for b in breaks {
+            d.add(m, b)?;
+        }
+        s.r.w.debug = Some(d.shared());
+        stops = Some(lines);
+    }
     let mut out = format!("seed {seed}\n");
     out.push_str(&s.frame());
     for k in keys {
         let note = s.press(k)?;
         out.push_str(&format!("\n> {k}  {note}\n"));
+        if let Some(lines) = &stops
+            && let Ok(mut l) = lines.lock()
+        {
+            for line in l.drain(..) {
+                out.push_str(&line);
+                out.push('\n');
+            }
+        }
         out.push_str(&s.frame());
     }
     Ok((out, s.r.input_log()))

@@ -5,6 +5,7 @@
 
 pub mod app;
 pub mod cursor;
+pub mod debug;
 pub mod draw;
 pub mod events;
 pub mod input;

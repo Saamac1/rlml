@@ -134,8 +134,8 @@ impl Files for DiskFiles {
 }
 
 const USAGE: &str = "usage: rlml check GAME [--lib DIR]
-       rlml run GAME [--seed N] [--keys \"KEY KEY …\"] [--log-out FILE] [--lib DIR]
-       rlml play GAME [--seed N] [--log-out FILE] [--data DIR] [--dev] [--lib DIR]
+       rlml run GAME [--seed N] [--keys \"KEY KEY …\"] [--log-out FILE] [--break FILE:LINE …] [--lib DIR]
+       rlml play GAME [--seed N] [--log-out FILE] [--data DIR] [--dev [--break FILE:LINE …]] [--lib DIR]
        (every command also takes --mod NAME, again for more mods)
        rlml replay GAME LOG [--lib DIR]
        rlml inspect GAME [--seed N] [--keys \"KEY …\"] [--set PATH=VALUE …] [PATH …] [--lib DIR]
@@ -158,6 +158,12 @@ Linux). --dev is development mode: f12 opens the inspector over the
 game, which stands while it is open, f5 reads and checks the files
 again and goes on with them between actions (M 5.7), and f6 lists the
 mods in dev/ to switch on and off.
+--break FILE:LINE stops before the statement on that line of the
+game's RogueScript (M 5.7); a line without one moves to the next. In
+play --dev the stop shows the source, the calls and the body's names:
+c continues, s steps into, n over and o out, and : reads a path of the
+state. The inspector's : line takes break FILE:LINE, unbreak FILE:LINE
+and breaks too. In run each stop is a line before the key's frame.
 --mod NAME loads the mod in dev/NAME/ after the game's own files, in
 the order given (D 3.6). play also reads the player's overrides/ in
 its data folder (D 3.2); the other commands do not.
@@ -209,6 +215,7 @@ fn main() -> ExitCode {
     let mut mods: Vec<String> = vec![];
     let mut dev = false;
     let mut sets: Vec<(String, String)> = vec![];
+    let mut breaks: Vec<String> = vec![];
     let mut sub: Option<String> = None;
     let mut mod_name: Option<String> = None;
     let mut dry_run = false;
@@ -280,6 +287,10 @@ fn main() -> ExitCode {
                     return ExitCode::from(2);
                 };
                 sets.push((p.trim().to_string(), v.trim().to_string()));
+                i += 1;
+            }
+            "--break" if (command == "run" || command == "play") && i + 1 < args.len() => {
+                breaks.push(args[i + 1].clone());
                 i += 1;
             }
             "--dry-run" if command == "mod" => dry_run = true,
@@ -396,6 +407,26 @@ fn main() -> ExitCode {
         let data = data.or_else(|| rlml_tui::saves::user_data(&game_name));
         // development mode: f5 reads and checks the files again and f6
         // switches mods (M 5.7, D 3.6)
+        if !breaks.is_empty() && !dev {
+            eprintln!("--break with play needs --dev");
+            return ExitCode::from(2);
+        }
+        // breakpoints and `:break` in development mode (M 5.7): the stop
+        // shows the source from the game's files
+        let debug = dev.then(|| {
+            let root = files.game.clone();
+            let engine = files.engine.clone();
+            rlml_tui::term::DebugSetup {
+                breaks: breaks.clone(),
+                source: Box::new(move |name: &str| {
+                    let path = match name.strip_prefix("<engine>/") {
+                        Some(p) => engine.as_ref()?.join(p),
+                        None => root.join(name),
+                    };
+                    std::fs::read_to_string(path).ok()
+                }),
+            }
+        });
         let reloader: Option<rlml_tui::term::Reloader<'_>> = dev.then(|| {
             Box::new(Dev {
                 files,
@@ -409,6 +440,7 @@ fn main() -> ExitCode {
             log_out.as_deref(),
             data.as_deref(),
             reloader,
+            debug,
         ) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
@@ -425,7 +457,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
         let keys: Vec<&str> = keys.split_whitespace().collect();
-        return match rlml_core::rt::play::transcript_and_log(&model, seed, &keys) {
+        return match rlml_core::rt::play::transcript_with(&model, seed, &keys, &breaks) {
             Ok((t, log)) => {
                 print!("{t}");
                 if let Some(path) = &log_out

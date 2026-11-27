@@ -235,6 +235,9 @@ pub struct App<'m> {
     /// The inspector's command line after `:`, `PATH = VALUE [> MOD]`
     /// (M 5.7), and the last command's answer.
     pub inspector_line: Option<String>,
+    /// Development mode's breakpoints and stepping (M 5.7): the world of
+    /// every game this app plays gets it.
+    pub debugger: Option<rlml_core::rt::debug::Shared>,
     inspector_note: Option<String>,
     /// Development mode's reload (M 5.7): reads and checks the game's
     /// files again, giving the new model or the load's errors. `f5`
@@ -479,6 +482,7 @@ impl<'m> App<'m> {
             dev: false,
             inspecting: None,
             inspector_line: None,
+            debugger: None,
             inspector_note: None,
             reloader: None,
             reload_asked: false,
@@ -989,7 +993,7 @@ impl<'m> App<'m> {
             let bottom = match (&self.inspector_line, &self.inspector_note) {
                 (Some(l), _) => format!(":{l}█"),
                 (None, Some(n)) => n.clone(),
-                (None, None) => "↑↓ scroll  : write  esc/f12 close".into(),
+                (None, None) => "↑↓ scroll  : write or break  esc/f12 close".into(),
             };
             return draw_inspector(lines, *top, w, h, &bottom);
         }
@@ -1363,6 +1367,38 @@ impl<'m> App<'m> {
     /// Runs `PATH = VALUE [> MOD]` (M 5.7): writes the value, and with a
     /// mod also its definition's patch row there. The answer to show.
     fn inspector_write(&mut self, cmd: &str) -> String {
+        // `break FILE:LINE` and `unbreak FILE:LINE` (M 5.7)
+        let words: Vec<&str> = cmd.split_whitespace().collect();
+        if let ["break" | "unbreak", spec] = words.as_slice() {
+            let Some(d) = self.debugger.clone() else {
+                return "no debugger in this front end".into();
+            };
+            let Ok(mut d) = d.lock() else {
+                return "the debugger is busy".into();
+            };
+            let m = self.r.w.m;
+            return if words[0] == "break" {
+                match d.add(m, spec) {
+                    Ok((f, l)) => format!("breakpoint at {f}:{l}"),
+                    Err(e) => e,
+                }
+            } else if d.remove(m, spec) {
+                format!("no breakpoint at {spec} now")
+            } else {
+                format!("no breakpoint at {spec}")
+            };
+        }
+        if cmd.trim() == "breaks" {
+            return match self.debugger.as_ref().and_then(|d| d.lock().ok()) {
+                Some(d) if !d.breaks.is_empty() => d
+                    .breaks
+                    .iter()
+                    .map(|(f, l)| format!("{f}:{l}"))
+                    .collect::<Vec<_>>()
+                    .join("  "),
+                _ => "no breakpoints".into(),
+            };
+        }
         let (cmd, folder) = match cmd.rsplit_once(" > ") {
             Some((c, m)) => (c, Some(m.trim())),
             None => (cmd, None),
@@ -1736,7 +1772,16 @@ impl<'m> App<'m> {
 
     /// Runs the world to the player's turn or `rounds` rounds, keeping
     /// in-between frames when `presentation frame` is set (M 7.2).
+    /// The debugger goes into the game now: a new or loaded game has a
+    /// world of its own.
+    fn sync_debug(&mut self) {
+        if self.r.w.debug.is_none() && self.debugger.is_some() {
+            self.r.w.debug = self.debugger.clone();
+        }
+    }
+
     fn advance(&mut self, rounds: i64) -> RtResult<()> {
+        self.sync_debug();
         let keep = !self.frame.is_zero();
         let (w, h) = self.size;
         let lang = self.lang.clone();
@@ -1773,6 +1818,7 @@ impl<'m> App<'m> {
 
     /// A key at time `now` (M 8).
     pub fn key(&mut self, b: Binding, now: Duration) -> RtResult<()> {
+        self.sync_debug();
         self.typed_out(now);
         self.keyboard = true;
         if self.resets_idle(Device::Keyboard(self.input.keys.part_of(&b))) {
@@ -1956,6 +2002,7 @@ impl<'m> App<'m> {
 
     /// A pad press at time `now` (M 8.2).
     pub fn pad(&mut self, id: usize, p: PadPress, now: Duration) -> RtResult<()> {
+        self.sync_debug();
         self.typed_out(now);
         if self.resets_idle(Device::Pad(id)) {
             self.last_key = now;
@@ -2836,6 +2883,7 @@ impl<'m> App<'m> {
 
     /// The clock at `now`: rounds without the player's turn and `idle`.
     pub fn tick(&mut self, now: Duration) -> RtResult<()> {
+        self.sync_debug();
         self.clock = now;
         self.reload_when_free()?;
         self.type_on(now);
@@ -3716,6 +3764,7 @@ impl<'m> App<'m> {
     /// awaited seat's, read from keyboard part 1's rows, since the mouse
     /// has no part of its own. Menus take the mouse later.
     pub fn mouse_press(&mut self, b: Binding, x: usize, y: usize, now: Duration) -> RtResult<()> {
+        self.sync_debug();
         self.mouse_press_on(b, x, y, now)?;
         self.sync_scene()
     }

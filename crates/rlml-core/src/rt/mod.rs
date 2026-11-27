@@ -3,6 +3,7 @@
 
 pub mod background;
 pub mod checkpoint;
+pub mod debug;
 pub mod dispatch;
 pub mod eval;
 pub mod input;
