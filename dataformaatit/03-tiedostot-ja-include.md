@@ -272,6 +272,13 @@ patch entity RAT
 - **Ristiriita.** Jos kaksi modia muuttaa saman lohkon saman rivin, viimeisenä ladattu voittaa ja lataus varoittaa.
 - **Aktivointi.** Modit kytketään päälle komentorivin valitsimella `--mod NIMI`, jonka voi toistaa, tai kehitystilassa (`rlml play --dev`) näppäimellä `f6` avautuvasta listasta. Valinta lataa pelin uudelleen eikä jää voimaan seuraavalle käynnistykselle.
 - **Ei julkaisuun.** Modit ovat kehitystyökalu. Ilman `--mod`-valitsinta mikään modi ei ole päällä, joten `dev/`-hakemisto ei vaikuta julkaistuun peliin.
+- **Vienti peliin.** `rlml mod export PELI NIMI` tekee modista osan peliä:
+  - Modin tiedostot kopioidaan kansioon `mods/NIMI/` sellaisinaan ilman `mod`-otsaketta.
+  - Pelin päätiedoston loppuun lisätään kommentti `> Modi NIMI: KUVAUS` ja rivi `include mods/NIMI/**`. Tiedostot latautuvat siis viimeisinä, kuten modi.
+  - Ennen kirjoitusta vienti lataa pelin muistissa kahdesti, modin kanssa ja viedyn pelin ilman modia, ja vertaa ratkaistuja määrittelyjä ilman tiedostopaikkoja. Jos ne eroavat, mitään ei kirjoiteta ja erot luetellaan.
+  - Onnistuneen viennin jälkeen modin kansio siirretään arkistoon `dev/.arkisto/NIMI/`, jota lataus ja `f6`-lista eivät lue, koska piste nimen alussa jättää sen pois.
+  - `--dry-run` näyttää muutokset kirjoittamatta mitään.
+  - Otsakkeen täytyy olla omassa tiedostossaan, eikä samaa modia voi viedä kahdesti.
 
 ---
 

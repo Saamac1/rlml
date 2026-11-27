@@ -4,6 +4,8 @@
 
 Uusin ensin. Lisää uusi merkintä listan alkuun.
 
+**Muutokset 27.11.2026 (modin vienti):** luku [3.6](03-tiedostot-ja-include.md#36-kehitysmodit-dev) kertoo, miten `rlml mod export` vie modin peliin: kansioon `mods/NIMI/`, include-rivi päätiedoston loppuun, ratkaistujen määrittelyjen vertailu ennen kirjoitusta, arkisto `dev/.arkisto/` ja `--dry-run`.
+
 **Muutokset 27.11.2026 (kehitysmodit):** uusi luku [3.6](03-tiedostot-ja-include.md#36-kehitysmodit-dev): kehitysmodit hakemistossa `dev/`, otsake `mod NIMI` riveineen `about`, `base` ja `update existing`, latausjärjestys ennen `overrides/`-hakemistoa, ristiriitojen varoitus ja aktivointi `--mod`-valitsimella tai kehitystilan `f6`-listasta. Vain `rlml play` lukee pelaajan `overrides/`-hakemiston (luku [3.2](03-tiedostot-ja-include.md#32-pelaajan-oma-data)).
 
 **Muutokset 26.11.2026 (hihna moottoriin):** `leash` on moottorin talutushihna, jonka moottori laskee kyselyllä `leashed` ja jota vakiokirjaston liikekomento noudattaa (luku [3.3](03-tiedostot-ja-include.md#33-aloitus)).

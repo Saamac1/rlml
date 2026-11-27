@@ -55,6 +55,11 @@ impl<'m> rlml_tui::term::DevFiles<'m> for Dev {
         let mut out: Vec<(String, String)> = entries
             .flatten()
             .filter(|e| e.path().is_dir())
+            // the archive and other hidden folders are no mods
+            .filter(|e| {
+                let n = e.file_name().to_string_lossy().to_string();
+                !n.starts_with('.') && !n.starts_with('_')
+            })
             .map(|e| {
                 let folder = e.file_name().to_string_lossy().to_string();
                 // the header's `about`, read as the line it is
@@ -135,6 +140,7 @@ const USAGE: &str = "usage: rlml check GAME [--lib DIR]
        rlml replay GAME LOG [--lib DIR]
        rlml inspect GAME [--seed N] [--keys \"KEY …\"] [--set PATH=VALUE …] [PATH …] [--lib DIR]
        rlml bench GAME [--seed N] [--keys \"KEY …\" | --keys-file FILE] [--repeat N] [--lib DIR]
+       rlml mod export GAME NAME [--dry-run] [--lib DIR]
 
 check loads the game and reports load errors and warnings (M 2).
 run plays a new game without a screen: each key is one player's turn,
@@ -164,6 +170,12 @@ game.turn or entity#12.HP.now. Without a PATH it lists the roots.
 line does (M 5.7): a field of game's or an entity's component, or
 wait#N.locals.NAME. In the inspector, `PATH = VALUE > MOD` also adds
 the entity's definition's patch row to dev/MOD/inspector.rlml.
+mod export takes the mod in dev/NAME/ into the game (D 3.6): its files
+go to mods/NAME/ without the `mod` header, the main file gets
+`include mods/NAME/**` at its end, and the mod's folder moves to
+dev/.arkisto/. The game is loaded first with the mod and as exported,
+and nothing is written if their definitions differ. --dry-run shows
+what would be written.
 bench plays the keys as run does, --repeat times, without drawing, and
 prints how long loading and playing took. Built with `--features
 stats`, it also prints the interpreter's counters: statements, body
@@ -190,7 +202,10 @@ fn main() -> ExitCode {
     let mut mods: Vec<String> = vec![];
     let mut dev = false;
     let mut sets: Vec<(String, String)> = vec![];
-    if !["check", "run", "play", "replay", "bench", "inspect"].contains(&command.as_str()) {
+    let mut sub: Option<String> = None;
+    let mut mod_name: Option<String> = None;
+    let mut dry_run = false;
+    if !["check", "run", "play", "replay", "bench", "inspect", "mod"].contains(&command.as_str()) {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     }
@@ -259,6 +274,21 @@ fn main() -> ExitCode {
                 sets.push((p.trim().to_string(), v.trim().to_string()));
                 i += 1;
             }
+            "--dry-run" if command == "mod" => dry_run = true,
+            a if command == "mod" && sub.is_none() && !a.starts_with('-') => {
+                if a != "export" {
+                    eprintln!("rlml mod takes export\n\n{USAGE}");
+                    return ExitCode::from(2);
+                }
+                sub = Some(a.to_string())
+            }
+            a if command == "mod"
+                && game.is_some()
+                && mod_name.is_none()
+                && !a.starts_with('-') =>
+            {
+                mod_name = Some(a.to_string())
+            }
             "-h" | "--help" => {
                 println!("{USAGE}");
                 return ExitCode::SUCCESS;
@@ -307,6 +337,13 @@ fn main() -> ExitCode {
         engine,
         user: None,
     };
+    if command == "mod" {
+        let Some(name) = mod_name else {
+            eprintln!("{USAGE}");
+            return ExitCode::from(2);
+        };
+        return mod_export(&files, &main, &name, dry_run);
+    }
     let mut layers = rlml_core::load::Layers {
         mods: mods.clone(),
         overrides: false,
@@ -600,4 +637,62 @@ fn bench(
         }
     }
     Ok(out)
+}
+
+/// `rlml mod export` (D 3.6): plans the export in memory, then writes the
+/// files, the main file's include line and moves the mod to the archive.
+fn mod_export(files: &DiskFiles, main: &str, name: &str, dry_run: bool) -> ExitCode {
+    let e = match rlml_core::devmod::export(files, main, name) {
+        Ok(e) => e,
+        Err(errors) => {
+            for line in errors {
+                eprintln!("{line}");
+            }
+            eprintln!("nothing was written");
+            return ExitCode::FAILURE;
+        }
+    };
+    let verb = if dry_run { "would write" } else { "wrote" };
+    let root = &files.game;
+    let write = |path: &str, text: &str| -> std::io::Result<()> {
+        let p = root.join(path);
+        if let Some(dir) = p.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::write(p, text)
+    };
+    let done = || -> std::io::Result<()> {
+        for (path, text) in &e.files {
+            if !dry_run {
+                write(path, text)?;
+            }
+            println!("{verb} {path}");
+        }
+        if !dry_run {
+            write(&e.main.0, &e.main.1)?;
+        }
+        println!("{verb} {}: {}", e.main.0, e.include);
+        let (from, to) = &e.archive;
+        if !dry_run {
+            if let Some(dir) = root.join(to).parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            std::fs::rename(root.join(from), root.join(to))?;
+        }
+        let moved = if dry_run { "would move" } else { "moved" };
+        println!("{moved} {from}/ to {to}/");
+        Ok(())
+    };
+    match done() {
+        Ok(()) => {
+            if !dry_run {
+                println!("the game loads the mod as its own; the definitions are the same");
+            }
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("{err}");
+            ExitCode::FAILURE
+        }
+    }
 }

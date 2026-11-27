@@ -342,6 +342,37 @@ Ensin speksiin: syötelokin inspector-rivi (M 4.4).
 
 ### 7. Vienti include-tiedostona
 
+Tehty 27.11.2026 haarassa `claude/mod-export`.
+
+**Käyttäjän päätökset.**
+- Vienti ja yhdistäminen tehdään molemmat, vienti ensin. Kummankin tulos on uusi peliversio: vienti pitää muutokset omana tiedostonaan `patch`-riveinä, ja yhdistäminen (vaihe 8) kirjoittaa ne alkuperäisiin määrittelyihin.
+- Onnistuneen viennin jälkeen modi arkistoidaan kansioon `dev/.arkisto/NIMI/`.
+- Vienti kirjoittaa heti, kun tarkistus menee läpi, ja `--dry-run` näyttää muutokset kirjoittamatta.
+
+**Speksi.** D 3.6 saa kohdan "Vienti peliin", ja muutos on kirjattu muutoslokiin.
+
+**Ydin** (`crates/rlml-core/src/devmod.rs`).
+- `export(files, main, nimi)` suunnittelee viennin muistissa:
+  - Modin tiedostot menevät kansioon `mods/NIMI/` sellaisinaan, paitsi otsaketiedosto.
+  - Päätiedoston loppuun tulee kommentti `> Modi NIMI: KUVAUS` ja rivi `include mods/NIMI/**`.
+- Tarkistus lataa pelin kahdesti: modin kanssa ja `Overlay`-kerroksen kautta viedyn pelin ilman modia. Viennin jälkeinen peli on siis ladattu ennen kuin mitään kirjoitetaan.
+- `resolved(malli)` antaa ratkaistut määrittelyt, lohkot, näppäinkontekstit, koodin ja kielet ilman tiedostopaikkoja (`file`, `line`, `pos`), ja `differences` luettelee erot.
+- Vienti hylätään, jos modissa tai viedyssä pelissä on virheitä, jos määrittelyt eroavat, jos otsake jakaa tiedostonsa muiden lohkojen kanssa, tai jos `mods/NIMI/` tai include-rivi on jo olemassa.
+
+**Komentorivi.**
+- `rlml mod export PELI NIMI [--dry-run]` kirjoittaa tiedostot ja päätiedoston ja siirtää modin arkistoon.
+- Kehitystilan `f6`-lista ohittaa kansiot, joiden nimi alkaa pisteellä tai alaviivalla, kuten arkiston.
+
+**Kokeiltu** Kapteeni Aaltolan kopiolla: modi, jossa oli `patch`-lohko ja uusi käsittelijä, vietiin, ja peli latautui ilman virheitä.
+
+**Testit** (`crates/rlml-core/tests/export.rs`).
+- Vienti: tiedostot, päätiedoston rivit, arkisto, uuden pelin arvot ja samat määrittelyt.
+- Toista vientiä ei voi tehdä.
+- Hylätty vienti: peli lataa `mods/**`-hakemiston aikaisin, ja oma myöhempi paikkaus muuttaisi tuloksen.
+- Puuttuva modi, otsake muiden lohkojen kanssa ja virheellinen modi.
+
+Alla on alkuperäinen tehtävälista.
+
 - **`rlml mod export NIMI`** kopioi modin projektiin omaksi tiedostokseen ja lisää peliin include-rivin. `patch`-semantiikka pysyy samana.
 - **Tarkistus.** Resolvoitu määrittelyjoukko lasketaan ennen vientiä (perus + modi) ja sen jälkeen (uusi perus). Jos joukot eroavat, vienti hylätään ja erot näytetään.
 - **Valmis, kun** viedyn ja modina ladatun pelin määrittelyjoukot ovat samat.
