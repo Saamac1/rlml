@@ -19,7 +19,13 @@ use model::Model;
 
 /// Loads the game from `main` and runs every load-time check.
 pub fn check_game(files: &dyn Files, main: &str) -> (Model, Report) {
-    let (loaded, mut report) = load::load(files, main);
+    check_game_with(files, main, &load::Layers::default())
+}
+
+/// `check_game` with the active mods and the player's `overrides/` loaded
+/// after the game's own files (D 3.2, D 3.6).
+pub fn check_game_with(files: &dyn Files, main: &str, layers: &load::Layers) -> (Model, Report) {
+    let (loaded, mut report) = load::load_layers(files, main, layers);
     let model = model::build(loaded, &mut report);
     check::check(&model, main, &mut report);
     (model, report)

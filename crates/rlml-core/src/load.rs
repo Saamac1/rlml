@@ -19,6 +19,8 @@ pub enum Root {
     Game,
     /// The engine's search path, which holds `lib/std.rlml`.
     Engine,
+    /// The player's own data folder, which holds `overrides/` (D 3.2).
+    User,
 }
 
 /// Read-only access to the game and the engine library. Paths use `/` and
@@ -35,6 +37,7 @@ pub trait Files {
 pub struct MemFiles {
     pub game: BTreeMap<String, String>,
     pub engine: BTreeMap<String, String>,
+    pub user: BTreeMap<String, String>,
 }
 
 impl MemFiles {
@@ -42,6 +45,7 @@ impl MemFiles {
         match root {
             Root::Game => &self.game,
             Root::Engine => &self.engine,
+            Root::User => &self.user,
         }
     }
 }
@@ -87,6 +91,7 @@ impl Place {
         match self.root {
             Root::Game => self.path.clone(),
             Root::Engine => format!("<engine>/{}", self.path),
+            Root::User => format!("<user>/{}", self.path),
         }
     }
 
@@ -107,6 +112,30 @@ pub struct Loaded {
     /// FNV-1a over every file's name and text in load order: a game's
     /// version, for the input log's segments (M 4.4).
     pub source_hash: u64,
+    /// The same over the game's own files, before mods and `overrides/`:
+    /// the version a mod was made on (D 3.6).
+    pub base_hash: u64,
+    /// The active mods in load order, with their own files' hashes.
+    pub mods: Vec<(String, u64)>,
+}
+
+/// What loads after the game's own files (D 3.6): mods in activation
+/// order, then the player's `overrides/` (D 3.2).
+#[derive(Debug, Clone, Default)]
+pub struct Layers {
+    pub mods: Vec<String>,
+    pub overrides: bool,
+}
+
+/// Which layer a file of `name` (as `Place::display` gives it) belongs to:
+/// `Some(mod name)` for `dev/NAME/…`.
+pub fn mod_of(name: &str) -> Option<&str> {
+    name.strip_prefix("dev/")?.split_once('/').map(|(m, _)| m)
+}
+
+/// Is a file of `name` the player's `overrides/` (D 3.2)?
+pub fn is_override(name: &str) -> bool {
+    name.starts_with("<user>/overrides/")
 }
 
 #[derive(Debug, Clone)]
@@ -189,6 +218,12 @@ struct Loader<'a> {
 /// Loads the game from `main` (a path in the game root) and every file it
 /// includes.
 pub fn load(files: &dyn Files, main: &str) -> (Loaded, Report) {
+    load_layers(files, main, &Layers::default())
+}
+
+/// `load`, then the active mods' folders and the player's `overrides/`
+/// (D 3.2, D 3.6).
+pub fn load_layers(files: &dyn Files, main: &str, layers: &Layers) -> (Loaded, Report) {
     let mut l = Loader {
         files,
         seen: HashSet::new(),
@@ -203,6 +238,39 @@ pub fn load(files: &dyn Files, main: &str) -> (Loaded, Report) {
         l.report.error(main, 0, "main file not found");
     } else {
         l.file(place);
+    }
+    l.out.base_hash = l.out.source_hash;
+    for name in &layers.mods {
+        let before = l.out.source_hash;
+        let Some(paths) = glob(files, Root::Game, &format!("dev/{name}/**")) else {
+            l.report.error(
+                main,
+                0,
+                format!("no mod `{name}`: there is no folder dev/{name}/ (D 3.6)"),
+            );
+            continue;
+        };
+        l.out.source_hash = 0;
+        for path in paths {
+            l.file(Place {
+                root: Root::Game,
+                path,
+            });
+        }
+        let own = l.out.source_hash;
+        l.out.mods.push((name.clone(), own));
+        // the whole hash goes on over the mod's files
+        l.out.source_hash = before ^ own.rotate_left(17) ^ 0x9e37_79b9_7f4a_7c15;
+    }
+    if layers.overrides
+        && let Some(paths) = glob(files, Root::User, "overrides/*")
+    {
+        for path in paths {
+            l.file(Place {
+                root: Root::User,
+                path,
+            });
+        }
     }
     (l.out, l.report)
 }
@@ -348,6 +416,7 @@ mod tests {
                 .iter()
                 .map(|(p, s)| (p.to_string(), s.to_string()))
                 .collect(),
+            ..Default::default()
         }
     }
 

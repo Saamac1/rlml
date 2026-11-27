@@ -11,6 +11,8 @@ use rlml_core::model::Kind;
 struct DiskFiles {
     game: PathBuf,
     engine: Option<PathBuf>,
+    /// The player's data folder, whose `overrides/` `play` reads (D 3.2).
+    user: Option<PathBuf>,
 }
 
 impl DiskFiles {
@@ -18,7 +20,59 @@ impl DiskFiles {
         match root {
             Root::Game => Some(&self.game),
             Root::Engine => self.engine.as_deref(),
+            Root::User => self.user.as_deref(),
         }
+    }
+}
+
+/// Development mode's files: the game read again with the mods chosen,
+/// and the mods in its `dev/` folder (M 5.7, D 3.6).
+struct Dev {
+    files: DiskFiles,
+    main: String,
+    overrides: bool,
+}
+
+impl<'m> rlml_tui::term::DevFiles<'m> for Dev {
+    fn reload(&mut self, mods: &[String]) -> Result<&'m rlml_core::model::Model, Vec<String>> {
+        let layers = rlml_core::load::Layers {
+            mods: mods.to_vec(),
+            overrides: self.overrides,
+        };
+        let (m, report) = rlml_core::check_game_with(&self.files, &self.main, &layers);
+        if report.has_errors() {
+            return Err(report.errors().map(|d| d.to_string()).collect());
+        }
+        // the game borrows each model it plays, so a model read stays
+        let m: &'static rlml_core::model::Model = Box::leak(Box::new(m));
+        Ok(m)
+    }
+
+    fn mods(&mut self) -> Vec<(String, String)> {
+        let Ok(entries) = std::fs::read_dir(self.files.game.join("dev")) else {
+            return vec![];
+        };
+        let mut out: Vec<(String, String)> = entries
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .map(|e| {
+                let folder = e.file_name().to_string_lossy().to_string();
+                // the header's `about`, read as the line it is
+                let about = std::fs::read_to_string(e.path().join("mod.rlml"))
+                    .ok()
+                    .and_then(|t| {
+                        t.lines().find_map(|l| {
+                            l.trim()
+                                .strip_prefix("- about ")
+                                .map(|a| a.trim_matches('"').to_string())
+                        })
+                    })
+                    .unwrap_or_default();
+                (folder, about)
+            })
+            .collect();
+        out.sort();
+        out
     }
 }
 
@@ -49,6 +103,7 @@ impl Files for DiskFiles {
 const USAGE: &str = "usage: rlml check GAME [--lib DIR]
        rlml run GAME [--seed N] [--keys \"KEY KEY …\"] [--log-out FILE] [--lib DIR]
        rlml play GAME [--seed N] [--log-out FILE] [--data DIR] [--dev] [--lib DIR]
+       (every command also takes --mod NAME, again for more mods)
        rlml replay GAME LOG [--lib DIR]
        rlml inspect GAME [--seed N] [--keys \"KEY …\"] [PATH …] [--lib DIR]
        rlml bench GAME [--seed N] [--keys \"KEY …\" | --keys-file FILE] [--repeat N] [--lib DIR]
@@ -65,8 +120,12 @@ is the last game's log, written also when a runtime error ends it.
 play keeps the game's saves (DIR/saves) and profile (DIR/profile) in
 DIR, by default the user data folder's rlml/GAME (~/.local/share on
 Linux). --dev is development mode: f12 opens the inspector over the
-game, which stands while it is open, and f5 reads and checks the files
-again and goes on with them between actions (M 5.7).
+game, which stands while it is open, f5 reads and checks the files
+again and goes on with them between actions (M 5.7), and f6 lists the
+mods in dev/ to switch on and off.
+--mod NAME loads the mod in dev/NAME/ after the game's own files, in
+the order given (D 3.6). play also reads the player's overrides/ in
+its data folder (D 3.2); the other commands do not.
 replay plays an input log and prints a transcript as run does: the
 frame after each row of the log.
 inspect plays the keys as run does and prints the game's state at each
@@ -96,6 +155,7 @@ fn main() -> ExitCode {
     let command = args.first().cloned().unwrap_or_default();
     let mut repeat: u32 = 1;
     let mut paths: Vec<String> = vec![];
+    let mut mods: Vec<String> = vec![];
     let mut dev = false;
     if !["check", "run", "play", "replay", "bench", "inspect"].contains(&command.as_str()) {
         eprintln!("{USAGE}");
@@ -123,6 +183,10 @@ fn main() -> ExitCode {
                 i += 1;
             }
             "--dev" if command == "play" => dev = true,
+            "--mod" if i + 1 < args.len() => {
+                mods.push(args[i + 1].clone());
+                i += 1;
+            }
             "--data" if command == "play" && i + 1 < args.len() => {
                 data = Some(PathBuf::from(&args[i + 1]));
                 i += 1;
@@ -197,10 +261,37 @@ fn main() -> ExitCode {
         Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
             .filter(|p| p.join("lib/std.rlml").is_file())
     });
-    let files = DiskFiles { game: root, engine };
+    let mut files = DiskFiles {
+        game: root,
+        engine,
+        user: None,
+    };
+    let mut layers = rlml_core::load::Layers {
+        mods: mods.clone(),
+        overrides: false,
+    };
     let loading = std::time::Instant::now();
-    let (model, report) = rlml_core::check_game(&files, &main);
+    let (mut model, mut report) = rlml_core::check_game_with(&files, &main, &layers);
     let loaded = loading.elapsed();
+    // `play` reads the player's overrides/ too (D 3.2): the game's name
+    // tells where its data folder is
+    if command == "play" && !report.has_errors() {
+        let game_name = model
+            .named_game()
+            .map(|g| g.name.clone())
+            .unwrap_or_default();
+        files.user = data
+            .clone()
+            .or_else(|| rlml_tui::saves::user_data(&game_name));
+        if files
+            .user
+            .as_ref()
+            .is_some_and(|u| u.join("overrides").is_dir())
+        {
+            layers.overrides = true;
+            (model, report) = rlml_core::check_game_with(&files, &main, &layers);
+        }
+    }
     if command == "play" {
         if report.has_errors() {
             for d in report.errors() {
@@ -213,16 +304,13 @@ fn main() -> ExitCode {
             .map(|g| g.name.clone())
             .unwrap_or_default();
         let data = data.or_else(|| rlml_tui::saves::user_data(&game_name));
-        // development mode: f5 reads and checks the files again; each
-        // model read stays in memory, as the game borrows it (M 5.7)
+        // development mode: f5 reads and checks the files again and f6
+        // switches mods (M 5.7, D 3.6)
         let reloader: Option<rlml_tui::term::Reloader<'_>> = dev.then(|| {
-            Box::new(move || {
-                let (m, report) = rlml_core::check_game(&files, &main);
-                if report.has_errors() {
-                    return Err(report.errors().map(|d| d.to_string()).collect());
-                }
-                let m: &'static rlml_core::model::Model = Box::leak(Box::new(m));
-                Ok(m)
+            Box::new(Dev {
+                files,
+                main: main.clone(),
+                overrides: layers.overrides,
             }) as rlml_tui::term::Reloader<'_>
         });
         return match rlml_tui::term::play(

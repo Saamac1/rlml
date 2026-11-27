@@ -25,6 +25,7 @@ Muutoshistoria: [muutokset.md](muutokset.md).
   - [3.3 Aloitus](03-tiedostot-ja-include.md#33-aloitus)
   - [3.4 Automaattinen tallennus: autosave](03-tiedostot-ja-include.md#34-automaattinen-tallennus-autosave)
   - [3.5 Profiili: profile](03-tiedostot-ja-include.md#35-profiili-profile)
+  - [3.6 Kehitysmodit: dev](03-tiedostot-ja-include.md#36-kehitysmodit-dev)
 - [4. Nimiavaruudet](04-nimiavaruudet.md)
   - [4.1 Periaate](04-nimiavaruudet.md#41-periaate)
   - [4.2 Määrittely](04-nimiavaruudet.md#42-määrittely)

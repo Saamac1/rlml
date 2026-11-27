@@ -237,6 +237,8 @@ pub struct App<'m> {
     /// asks for it, and it runs between actions.
     pub reloader: Option<Reloader<'m>>,
     reload_asked: bool,
+    /// The mods the next reload loads, in activation order (D 3.6).
+    pub mods: Vec<String>,
     /// The window's size in pixels when the front end knows it; without
     /// it a cell counts as twice as high as wide (D 11.1).
     pub pixels: Option<(usize, usize)>,
@@ -330,8 +332,21 @@ pub struct Reading {
     ),
 }
 
-/// Reads and checks the game's files again (M 5.7).
-pub type Reloader<'m> = Box<dyn FnMut() -> Result<&'m Model, Vec<String>> + 'm>;
+/// Development mode's access to the game's files (M 5.7, D 3.6).
+pub trait DevFiles<'m> {
+    /// Reads and checks the game's files again with `mods` active: the
+    /// new model, or the load's errors.
+    fn reload(&mut self, mods: &[String]) -> Result<&'m Model, Vec<String>>;
+    /// The mods in the game's `dev/` folder: folder and `about`.
+    fn mods(&mut self) -> Vec<(String, String)>;
+}
+
+/// The front end's `DevFiles` for development mode.
+pub type Reloader<'m> = Box<dyn DevFiles<'m> + 'm>;
+
+/// The list `f6` opens in development mode: the mods to switch on and
+/// off (D 3.6).
+pub const MODS_MENU: &str = "<mods>";
 
 /// The verb coin's name as a menu layer.
 pub const COIN_MENU: &str = "<verbs>";
@@ -455,6 +470,7 @@ impl<'m> App<'m> {
             inspecting: None,
             reloader: None,
             reload_asked: false,
+            mods: m.mods.iter().map(|(n, _)| n.clone()).collect(),
             pixels: None,
             releases: false,
             held: None,
@@ -1180,9 +1196,12 @@ impl<'m> App<'m> {
         let Some(read) = self.reloader.as_mut() else {
             return Ok(());
         };
-        let m = match read() {
+        let wanted = self.mods.clone();
+        let m = match read.reload(&wanted) {
             Ok(m) => m,
             Err(errors) => {
+                // the mods stay as the game has them
+                self.mods = self.r.w.m.mods.iter().map(|(n, _)| n.clone()).collect();
                 self.note = Some(format!(
                     "reload: {} load errors, the old version stays: {}",
                     errors.len(),
@@ -1217,6 +1236,48 @@ impl<'m> App<'m> {
             n => format!("reloaded with {n} warnings: {}", warnings[0]),
         });
         Ok(())
+    }
+
+    /// The mods menu: every mod in `dev/` with `[x]` when it is on and its
+    /// `about`. Choosing one switches it, and the menu's closing reloads.
+    fn open_mods_menu(&mut self) {
+        let Some(dev) = self.reloader.as_mut() else {
+            return;
+        };
+        let found = dev.mods();
+        let items: Vec<Item> = found
+            .iter()
+            .map(|(folder, about)| {
+                let on = if self.mods.contains(folder) {
+                    "[x]"
+                } else {
+                    "[ ]"
+                };
+                Item {
+                    key: folder.clone(),
+                    action: ItemAction::Engine("confirm".into()),
+                    hide: None,
+                    disabled: None,
+                    label: Some(format!("{on} {folder}  {about}")),
+                }
+            })
+            .collect();
+        if items.is_empty() {
+            self.note = Some("no mods: the game has no dev/ folder with mods (D 3.6)".into());
+            return;
+        }
+        let menu = Menu {
+            full: MODS_MENU.into(),
+            ns: None,
+            context: "MENU".into(),
+            is_final: false,
+            width: None,
+            height: None,
+            items,
+            verbs: false,
+        };
+        let layer = menu::Layer::open(&mut self.r.w, menu);
+        self.menus.layers.push(layer);
     }
 
     /// Opens the inspector on the state now, or closes it: the overview,
@@ -1644,6 +1705,11 @@ impl<'m> App<'m> {
         if self.dev && b == Binding::key(KeyCode::F(5), Mods::default()) {
             self.reload_asked = true;
             return self.reload_when_free();
+        }
+        // `f6` lists the mods to switch on and off (D 3.6)
+        if self.dev && b == Binding::key(KeyCode::F(6), Mods::default()) {
+            self.open_mods_menu();
+            return Ok(());
         }
         // a scene's field takes the keys as text (RS 9.7)
         if self.field_key(&b)? {
@@ -2164,6 +2230,26 @@ impl<'m> App<'m> {
 
     /// `confirm` in a menu: the item under the cursor (M 7.5).
     fn choose(&mut self, now: Duration) -> RtResult<()> {
+        // a mod switched on or off, and the game reloaded with the new set
+        if let Some(layer) = self
+            .menus
+            .layers
+            .last()
+            .filter(|l| l.menu.full == MODS_MENU)
+        {
+            let Some(folder) = layer.chosen().map(|i| i.key.clone()) else {
+                return Ok(());
+            };
+            match self.mods.iter().position(|m| *m == folder) {
+                Some(i) => {
+                    self.mods.remove(i);
+                }
+                None => self.mods.push(folder),
+            }
+            self.menus.layers.retain(|l| l.menu.full != MODS_MENU);
+            self.reload_asked = true;
+            return self.reload_when_free();
+        }
         // a dialogue's item: chosen, or an `adjust` item raised (RS 9.7)
         if let Some(layer) = self
             .menus

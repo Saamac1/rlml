@@ -14,6 +14,8 @@ pub fn files(
     MemFiles {
         game: game.into_iter().collect(),
         engine: engine.into_iter().collect(),
+        // the browser plays the game as published: no overrides/ (D 3.2)
+        user: Default::default(),
     }
 }
 

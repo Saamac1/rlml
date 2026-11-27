@@ -248,6 +248,52 @@ Ensin speksiin: syötelokin rivi `reload` (M 4.4), ruudun alkuperäiset arvot Ro
 
 ### 5. Kehitysmodit
 
+Tehty 27.11.2026 haarassa `claude/kehitysmodit`.
+
+**Käyttäjän päätökset.**
+- Otsake on `mod`-lohko tiedostossa `dev/NIMI/mod.rlml`, ja sen rivit ovat `about`, `base` ja `update existing`.
+- Modit kytketään päälle valitsimella `--mod NIMI`, jonka voi toistaa, ja kehitystilassa `f6`-listasta. Valinta ei jää voimaan seuraavaan käynnistykseen.
+- Vain `rlml play` lukee pelaajan `overrides/`-hakemiston.
+
+**Speksi.**
+- Uusi luku D 3.6 kertoo kehitysmodeista.
+- D 3.2 kertoo, missä `overrides/` luetaan.
+- M 5.7 saa modien vaihdon, tallennuksen ja `update existing` -päivityksen, ja M 4.4 modit syötelokissa.
+- Muutokset on kirjattu muutoslokeihin.
+
+**Lataaja.**
+- Uusi lähde on pelaajan kansio (`Root::User`).
+- `load_layers` ja `check_game_with` lataavat pelin omien tiedostojen jälkeen aktiiviset modit aktivointijärjestyksessä (`dev/NIMI/**`) ja viimeisenä `overrides/`-hakemiston.
+- `Model::base_hash` on pelin omien tiedostojen tiiviste, ja `Model::mods` sisältää modit tiivisteineen.
+
+**Paikkaus.**
+- `patch` toimii nyt myös nimetylle `game`-lohkolle ja `keys`- ja `pad`-lohkoille, kuten D 4.8 jo sanoi.
+- `overrides/`-tiedoston lohkot ovat tiukkoja paikkoja: tuntematon rivi on virhe ilman `new`-sanaa, ja `profile` on virhe. Nimettömät osiot kuten `settings` yhdistyvät kuten muuallakin.
+- Kahden modin muutos samaan riviin antaa varoituksen, ja myöhempi voittaa.
+- Paikatun rivin tiedosto ja rivi kirjataan määrittelyyn (`Def::patched`). Inspector näyttää ne polussa `entity#N.patched` ja aktiiviset modit yhteenvedossa.
+
+**Otsake.** Otsakkeen `base` verrataan pelin versioon: muuttuneesta pohjasta tulee varoitus, ja otsakkeen puuttumisesta tulee varoitus.
+
+**Tallennus ja syöteloki.**
+- Tallennus kirjaa modit tiivisteineen. Toisilla modeilla ladattu tallennus antaa varoituksen, mutta lataus kesken pelin ei anna.
+- Syöteloki saa rivin `mods`, ja toisto vaatii samat modit.
+
+**`update existing`.**
+- Lataus päivittää jo luotujen ilmentymien kentät entiteeteissä, joita tällainen modi paikkaa.
+- Kenttä päivittyy vain, jos sen arvo on yhä vanhan määrittelyn kirjoitettu arvo. Arvottuja arvoja (nopat, välit) ei kosketa.
+
+**Kehitystila.**
+- `f6` avaa listan pelin `dev/`-hakemiston modeista merkinnöin `[x]` ja `[ ]` ja kuvauksineen. Valinta kytkee modin ja lataa pelin uudelleen.
+- `DevFiles` on käyttöliittymän rajapinta tiedostoihin, ja komentorivi toteuttaa sen.
+
+**Käytös ei muuttunut ilman modeja.** `rlml run` tuottaa Kapteeni Aaltolassa ja minipelissä rivilleen saman tulosteen kuin ennen.
+
+**Testit.**
+- `crates/rlml-core/tests/mods.rs`: `overrides/`-paikat ja niiden virheet, modien järjestys, ristiriita, alkuperä, otsakkeen varoitukset, puuttuva modi, tallennus ja syöteloki sekä `update existing`.
+- Sovellustesti `f6_switches_a_mod_on_and_off`.
+
+Alla on alkuperäinen tehtävälista.
+
 - **Ensin `overrides/`.** Pelaajan `overrides/`-hakemisto luetaan latauksessa viimeisenä, kuin sen lohkoissa olisi `patch` (D 3.2).
 - **Modi** on nimetty hakemisto, esimerkiksi `dev/rotat-vaikeampi/`, jossa on samaa RLML- ja RogueScript-syntaksia kuin pelissä ja samat `patch`-, `drop`- ja `new`-merkinnät.
 - **Otsake** kertoo nimen, lyhyen kuvauksen ja pelin version tiivisteen, jonka päälle modi on tehty. Muuttuneesta pohjasta tulee varoitus, mutta modi ladataan.

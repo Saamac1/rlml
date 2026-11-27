@@ -88,6 +88,7 @@ keys GAME
 - Uusi rivi merkitään sanalla `new` ja uusi lohko otsikon edessä sanalla `new` (`new keys MY_MACROS`). Ilman merkintää tuntematon avain tai lohko on latausvirhe, joten kirjoitusvirhe (`keys GAEM`) jää kiinni.
 - Koko lohkon korvaus merkitään tavalliseen tapaan sanalla `override` (`override keys GAME`).
 - `settings` on moottorin osio, jonka avaimet ovat moottorin sanastoa. Ne ovat aina olemassa, joten `new`-sanaa ei tarvita.
+- **Missä luetaan.** `rlml play` lukee `overrides/`-hakemiston. Testit, toistot ja työkalut (`run`, `replay`, `check`, `bench` ja `inspect`) eivät lue sitä, joten ne eivät riipu pelaajan omista tiedostoista.
 - **Profiili ei ole paikattavissa.** `profile`-lohko `overrides/`-tiedostossa on latausvirhe. Profiilin arvot ovat moottorin omassa tiedostossa (luku [3.5](#35-profiili-profile)).
 
 Asetukset kirjoitetaan `settings`-osioon:
@@ -241,6 +242,36 @@ component UNLOCKS
 - **Ei pelikerran tilaa.** Profiili ei kuulu tallennukseen, checkpointiin, `rollback`-kutsuun eikä `delete_save`-kutsuun. Pelikerta näkee kuitenkin profiilin aloitushetken tilannekuvan ja omat kirjoituksensa, ja ne tallentuvat pelikerran mukana, joten pelin kulku on toistettava.
 - **Nollaus** tehdään moottorin valikosta, ei logiikasta.
 - **Virheet.** Toinen nimetty `profile`-lohko, `profile`-lohko kirjastossa nimettynä tai `profile`-lohko `overrides/`-tiedostossa on latausvirhe. Kirjasto voi kirjoittaa nimettömän `profile`-lohkon, joka lisää komponentteja.
+
+## 3.6 Kehitysmodit: dev
+
+Kehitysmodi on nimetty kerros kokeiluja, jonka voi kytkeä päälle ja pois ilman, että pelin omia tiedostoja muutetaan. Jokainen modi on oma hakemistonsa pelin kansion alla:
+
+```
+dev/
+    rotat-vaikeampi/
+        mod.rlml
+        rotat.rlml
+```
+
+```
+mod ROTAT_VAIKEAMPI
+- about "Rotat ovat sitkeämpiä ja purevat kovemmin."
+- base 3f2a9c1e5b7d4e8a
+- update existing
+```
+
+```
+patch entity RAT
+- HP now 8 max 8
+```
+
+- **Otsake.** Tiedoston `mod.rlml` lohko `mod NIMI` nimeää modin. `about` on lyhyt kuvaus, ja `base` on sen pelin version tiiviste, jonka päälle modi tehtiin. Jos pohjapeli on muuttunut, lataus varoittaa, mutta modi ladataan silti. `update existing` päivittää myös jo luodut ilmentymät (moottoridokumentti, luku [5.7](../moottori/05-aloitus-tallennus-ja-checkpointit.md#57-uudelleenlataus-kehitystilassa)).
+- **Sisältö.** Modin muut tiedostot ovat tavallista RLML:ää ja RogueScriptiä, ja niissä on samat `patch`-, `new`-, `drop`- ja `override`-merkinnät kuin muuallakin (luku [4.8](04-nimiavaruudet.md#48-lohkojen-yhdistäminen-patch-new-ja-drop)). Lataus lukee hakemiston kaikki datatiedostot polun mukaisessa aakkosjärjestyksessä, kuten jokeri `**`.
+- **Latausjärjestys.** Ensin ladataan pelin päätiedosto includeineen, sitten aktiiviset modit aktivointijärjestyksessä ja viimeisenä pelaajan `overrides/` (luku [3.2](#32-pelaajan-oma-data)).
+- **Ristiriita.** Jos kaksi modia muuttaa saman lohkon saman rivin, viimeisenä ladattu voittaa ja lataus varoittaa.
+- **Aktivointi.** Modit kytketään päälle komentorivin valitsimella `--mod NIMI`, jonka voi toistaa, tai kehitystilassa (`rlml play --dev`) näppäimellä `f6` avautuvasta listasta. Valinta lataa pelin uudelleen eikä jää voimaan seuraavalle käynnistykselle.
+- **Ei julkaisuun.** Modit ovat kehitystyökalu. Ilman `--mod`-valitsinta mikään modi ei ole päällä, joten `dev/`-hakemisto ei vaikuta julkaistuun peliin.
 
 ---
 

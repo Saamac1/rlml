@@ -102,6 +102,8 @@ pub struct InputLog {
     /// does not depend on this computer's profile.
     pub profile: Vec<ComponentValue>,
     pub rows: Vec<Row>,
+    /// The active mods in load order (M 4.4, D 3.6).
+    pub mods: Vec<String>,
     /// A segment from a reload (M 4.4): the game's files' hash and the
     /// save the rows start from.
     pub from: Option<(u64, String)>,
@@ -418,6 +420,9 @@ impl InputLog {
                 super::save::write_value(&self.profile)
             ));
         }
+        if !self.mods.is_empty() {
+            out.push_str(&format!("mods {}\n", self.mods.join(" ")));
+        }
         if let Some((hash, save)) = &self.from {
             out.push_str(&format!("from {hash:016x}\n"));
             for l in save.lines() {
@@ -463,6 +468,12 @@ impl InputLog {
             && let Some(p) = l.trim().strip_prefix("profile ")
         {
             log.profile = super::save::read_value(p).map_err(|e| at(i, e))?;
+            lines.next();
+        }
+        if let Some((_, l)) = lines.peek().copied()
+            && let Some(m) = l.trim().strip_prefix("mods ")
+        {
+            log.mods = m.split_whitespace().map(str::to_string).collect();
             lines.next();
         }
         // a segment from a reload: its hash and its save, a line each
@@ -552,6 +563,15 @@ impl<'m> Replay<'m> {
     /// The log's start: a new game with its seed and seats, run to the
     /// first turn.
     pub fn start(m: &'m Model, log: &InputLog) -> RtResult<Replay<'m>> {
+        // the log's mods are the game's rules too (M 4.4)
+        let mods: Vec<String> = m.mods.iter().map(|(n, _)| n.clone()).collect();
+        if mods != log.mods {
+            return Err(format!(
+                "the input log was played with the mods [{}], and these are [{}]",
+                log.mods.join(" "),
+                mods.join(" ")
+            ));
+        }
         // a segment from a reload starts from its save, with the files it
         // was played with (M 4.4)
         if let Some((hash, save)) = &log.from {

@@ -6,7 +6,7 @@ use std::io;
 use std::time::{Duration, Instant};
 
 use rlml_app::app::App;
-pub use rlml_app::app::Reloader;
+pub use rlml_app::app::{DevFiles, Reloader};
 use rlml_app::events::{Event, Feed};
 use rlml_core::model::Model;
 use termplate_core::engine::InputEvent;

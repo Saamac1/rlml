@@ -298,6 +298,7 @@ fn spec_examples_type_check() {
         let files = MemFiles {
             game: [("doc.rlml".to_string(), text)].into(),
             engine: engine.clone(),
+            ..Default::default()
         };
         let (loaded, mut report) = rlml_core::load::load(&files, "doc.rlml");
         let m = rlml_core::model::build(loaded, &mut report);
@@ -345,6 +346,7 @@ fn example_checking_finds_type_errors() {
     let files = MemFiles {
         game: [("doc.rlml".to_string(), src.to_string())].into(),
         engine,
+        ..Default::default()
     };
     let (loaded, mut report) = rlml_core::load::load(&files, "doc.rlml");
     let m = rlml_core::model::build(loaded, &mut report);

@@ -111,6 +111,8 @@ Kehitystilassa (`rlml play --dev`) pelin tiedostot voi ladata uudelleen kesken p
 - **Kartat** yhdistetään uuteen piirrokseen muutettujen ruutujen avulla (luku [5.2](#52-tallennus)). Ruutu, jota peli ei ole muuttanut, saa uuden piirroksen arvon. Pelin muuttama ruutu säilyy. Jos piirroksen arvo on muuttunut ruudussa, jonka peli on muuttanut, pelin arvo jää voimaan ja siitä tulee varoitus. Nimiöt tulevat uudesta piirroksesta, ja kadonneesta nimiöstä tulee varoitus. Lopuksi moottori varoittaa entiteetistä, jonka oma ruutu estää sen liikkeen. Piirroksen uudet `with`-entiteetit syntyvät vain kartan ensimmäisessä latauksessa.
 - **Tallennuksen lataus.** Samat yhdistämisen säännöt ja varoitukset pätevät, kun tallennettu peli ladataan ja kartan piirros on muuttunut tallennuksen jälkeen.
 - **Syöteloki** alkaa latauksesta uuden jakson (luku [4.4](04-satunnaisuus-ja-toistettavuus.md#44-syöteloki)).
+- **Kehitysmodit** ([D 3.6](../dataformaatit/03-tiedostot-ja-include.md#36-kehitysmodit-dev)). Aktiivisten modien vaihto on uudelleenlataus. Tallennus kirjaa aktiiviset modit tiivisteineen. Jos tallennuksen lataa ilman samoja modeja, lataus varoittaa ja peli jatkuu nykyisillä määrittelyillä.
+- **Olemassa olevien päivitys.** Kun modi on merkitty `update existing`, lataus päivittää myös jo luotujen ilmentymien kentät, jotka modi muuttaa. Päivitys koskee vain kenttiä, joiden arvo on yhä vanhan määrittelyn mukainen, joten peli ei ole muuttanut niitä: haavoittuneen rotan `HP` ei palaudu. Muuten määrittelyjen muutokset koskevat vain uusia ilmentymiä.
 
 ---
 

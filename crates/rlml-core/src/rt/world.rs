@@ -549,6 +549,21 @@ impl<'m> World<'m> {
     }
 
     /// A component value with only the fields given on a row.
+    /// An entity kind's components with the fields its rows write, down
+    /// the inheritance chain, as `spawn` reads them before it rolls or
+    /// fills in defaults: what `update existing` compares (M 5.7).
+    pub(crate) fn written_fields(&self, full: &str) -> RtResult<Vec<ComponentValue>> {
+        let mut out = Vec::new();
+        for (comp, item) in self.entity_rows(full)? {
+            let ns = item.namespace.as_deref();
+            let row = Values { m: self.m, ns }
+                .row(&item)
+                .map_err(|e| format!("{}:{}: {e}", item.file, item.line))?;
+            out.push(self.given_fields(&comp, &row.values[..row.given], ns, &item)?);
+        }
+        Ok(out)
+    }
+
     fn given_fields(
         &self,
         component: &str,

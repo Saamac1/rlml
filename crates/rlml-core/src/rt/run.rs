@@ -106,6 +106,7 @@ impl<'m> Runner<'m> {
             seed: w.s.game.seed,
             seats: w.s.seats.len() as SeatId,
             profile: w.profile_start.clone(),
+            mods: w.m.mods.iter().map(|(n, _)| n.clone()).collect(),
             ..InputLog::default()
         };
         let rules = AutosaveRules::read(w.m);

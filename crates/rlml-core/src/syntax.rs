@@ -53,6 +53,7 @@ pub const BLOCK_KINDS: &[&str] = &[
     "messages",
     "panel",
     "sounds",
+    "mod",
 ];
 
 pub const DRAWING_KINDS: &[&str] = &["map", "prefab", "layout", "panel"];

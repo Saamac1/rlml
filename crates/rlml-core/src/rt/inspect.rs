@@ -203,6 +203,17 @@ impl Runner<'_> {
                 Node::leaf(format!("{} waiting", self.waiting.len())),
             ),
             (
+                "mods".into(),
+                Node::leaf({
+                    let names: Vec<&str> = self.w.m.mods.iter().map(|(n, _)| n.as_str()).collect();
+                    if names.is_empty() {
+                        "none".to_string()
+                    } else {
+                        names.join(", ")
+                    }
+                }),
+            ),
+            (
                 "scenes".into(),
                 Node::leaf(format!(
                     "{} in the foreground, {} queued, {} in the background",
@@ -360,6 +371,20 @@ impl Runner<'_> {
                 ("is".into(), Node::leaf(self.entity_line(e))),
                 ("defined".into(), Node::leaf(origin)),
             ];
+            // the rows a patch or a mod changed, and where (D 3.6)
+            if let Some(d) = self.w.m.defs.get(&i.kind)
+                && !d.patched.is_empty()
+            {
+                parts.push((
+                    "patched".into(),
+                    Node::Branch(
+                        d.patched
+                            .iter()
+                            .map(|(k, f, l)| (k.clone(), Node::leaf(format!("{f}:{l}"))))
+                            .collect(),
+                    ),
+                ));
+            }
             if let Some(n) = s.seat_of(e) {
                 parts.push(("seat".into(), Node::leaf(n)));
             }
@@ -373,6 +398,13 @@ impl Runner<'_> {
                 parts.extend(cs);
             }
             return Ok(Node::Branch(parts));
+        }
+        // the definition's patched rows by their own path (D 3.6)
+        if let ["patched", more @ ..] = rest
+            && let Node::Branch(parts) = self.inspect_entity(e, &[], path)?
+            && let Some((_, node)) = parts.into_iter().find(|(n, _)| n == "patched")
+        {
+            return node.at(more, path);
         }
         let (c, took) = component(&i.components, rest)
             .ok_or_else(|| format!("inspect: #{e} has no `{}`", rest.join(".")))?;

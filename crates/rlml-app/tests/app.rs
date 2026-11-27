@@ -2877,6 +2877,66 @@ fn f12_opens_the_inspector_in_development_mode() {
     replays_the_same(&m, &app);
 }
 
+/// Development mode's files for a test: each reload takes the next
+/// version, read with the mods asked for.
+struct Versions(std::vec::IntoIter<MemFiles>);
+
+impl<'m> rlml_app::app::DevFiles<'m> for Versions {
+    fn reload(&mut self, mods: &[String]) -> Result<&'m Model, Vec<String>> {
+        let f = self.0.next().unwrap();
+        let layers = rlml_core::load::Layers {
+            mods: mods.to_vec(),
+            overrides: false,
+        };
+        let (m, r) = rlml_core::check_game_with(&f, "game.rlml", &layers);
+        if r.has_errors() {
+            return Err(r.errors().map(|d| d.to_string()).collect());
+        }
+        let m: &'static Model = Box::leak(Box::new(m));
+        Ok(m)
+    }
+
+    fn mods(&mut self) -> Vec<(String, String)> {
+        vec![("vaikea".into(), "Rotat ovat sitkeämpiä.".into())]
+    }
+}
+
+#[test]
+fn f6_switches_a_mod_on_and_off() {
+    let with_mod = || {
+        let mut f = mini_with(|_| {});
+        f.game.insert(
+            "dev/vaikea/mod.rlml".into(),
+            "mod VAIKEA\n- about \"Rotat ovat sitkeämpiä.\"\n".into(),
+        );
+        f.game.insert(
+            "dev/vaikea/rotat.rlml".into(),
+            "patch entity RAT\n- HP now 9\n".into(),
+        );
+        f
+    };
+    let m = model(&with_mod());
+    let mut app = App::new(&m, 7, (60, 30)).unwrap();
+    app.dev = true;
+    app.reloader = Some(Box::new(Versions(vec![with_mod(), with_mod()].into_iter())));
+    press(&mut app, "l");
+    let f6 = || Binding::key(KeyCode::F(6), Mods::default());
+    app.key(f6(), ms(10)).unwrap();
+    let s = screen(&mut app);
+    assert!(s.contains("[ ] vaikea") && s.contains("sitkeämpiä"), "{s}");
+    press(&mut app, "enter");
+    assert_eq!(app.note.as_deref(), Some("reloaded"));
+    assert_eq!(app.mods, ["vaikea"]);
+    assert_eq!(app.r.w.m.mods.len(), 1, "the game runs with the mod");
+    app.key(f6(), ms(20)).unwrap();
+    assert!(screen(&mut app).contains("[x] vaikea"));
+    press(&mut app, "enter");
+    assert!(
+        app.mods.is_empty() && app.r.w.m.mods.is_empty(),
+        "and without it again"
+    );
+}
+
 #[test]
 fn f5_reloads_the_game_between_actions() {
     let m = model(&mini_with(|_| {}));
@@ -2884,20 +2944,13 @@ fn f5_reloads_the_game_between_actions() {
     let mut app = App::new(&m, 7, (60, 30)).unwrap();
     app.dev = true;
     // the files read again: first with a load error, then changed
-    let mut versions = vec![
-        mini_with(|g| g.push_str("\n```roguescript\ncommand BROKEN( cost 0:\n```\n")),
-        mini_with(|g| g.push_str("\ncomponent RELOADED\n")),
-    ]
-    .into_iter();
-    app.reloader = Some(Box::new(move || {
-        let f = versions.next().unwrap();
-        let (m, r) = rlml_core::check_game(&f, "game.rlml");
-        if r.has_errors() {
-            return Err(r.errors().map(|d| d.to_string()).collect());
-        }
-        let m: &'static Model = Box::leak(Box::new(m));
-        Ok(m)
-    }));
+    app.reloader = Some(Box::new(Versions(
+        vec![
+            mini_with(|g| g.push_str("\n```roguescript\ncommand BROKEN( cost 0:\n```\n")),
+            mini_with(|g| g.push_str("\ncomponent RELOADED\n")),
+        ]
+        .into_iter(),
+    )));
     press(&mut app, "l");
     let at = player_at(&app);
     let hash = app.r.w.m.source_hash;

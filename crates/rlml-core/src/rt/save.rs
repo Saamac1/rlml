@@ -48,6 +48,8 @@ pub struct Save {
     pub checkpoint: Option<Snapshot>,
     /// The log's messages, presentation for the reading view (M 5.2).
     pub log: Vec<LogEntry>,
+    /// The active mods with their files' hashes (M 5.7, D 3.6).
+    pub mods: Vec<(String, u64)>,
 }
 
 // ---- writing ----
@@ -901,6 +903,11 @@ impl Save {
         w.word("log");
         self.log.put(&mut w);
         w.line();
+        if !self.mods.is_empty() {
+            w.word("mods");
+            self.mods.put(&mut w);
+            w.line();
+        }
         w.text
     }
 
@@ -925,6 +932,13 @@ impl Save {
         let checkpoint = Get::get(&mut r)?;
         r.keyword("log")?;
         let log = Get::get(&mut r)?;
+        // saves without mods have no `mods` line
+        let mods = if r.peek().is_some() {
+            r.keyword("mods")?;
+            Get::get(&mut r)?
+        } else {
+            vec![]
+        };
         if r.peek().is_some() {
             return Err(r.err("text after the save".into()));
         }
@@ -936,6 +950,7 @@ impl Save {
             now,
             checkpoint,
             log,
+            mods,
         })
     }
 }
@@ -955,6 +970,7 @@ impl<'m> Runner<'m> {
             now: self.snapshot(),
             checkpoint: self.checkpoint.as_deref().cloned(),
             log: self.w.log.clone(),
+            mods: self.w.m.mods.clone(),
         }
     }
 
@@ -970,7 +986,23 @@ impl<'m> Runner<'m> {
         }
         // maps merge with drawings changed since the save (M 5.7)
         let mut save = save.clone();
-        let warnings = save.merge_maps(m);
+        let mut warnings = save.merge_maps(m);
+        // a save from other mods goes on with the definitions now (M 5.7)
+        if save.mods != m.mods {
+            let names = |v: &[(String, u64)]| {
+                let n: Vec<&str> = v.iter().map(|(n, _)| n.as_str()).collect();
+                if n.is_empty() {
+                    "none".to_string()
+                } else {
+                    n.join(", ")
+                }
+            };
+            warnings.push(format!(
+                "the save was played with the mods {} and is loaded with {}: it goes on with the definitions now",
+                names(&save.mods),
+                names(&m.mods)
+            ));
+        }
         let save = &save;
         let mut r = Runner::new(World::new(m, save.now.s.game.seed));
         r.restore(&save.now);
@@ -982,6 +1014,7 @@ impl<'m> Runner<'m> {
         r.inputs = InputLog {
             seed: r.w.s.game.seed,
             seats: r.w.s.seats.len() as u8,
+            mods: m.mods.iter().map(|(n, _)| n.clone()).collect(),
             ..InputLog::default()
         };
         r.scene_saved = true;

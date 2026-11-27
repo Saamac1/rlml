@@ -8,6 +8,7 @@
 use super::run::Runner;
 use super::save::Save;
 use super::state::State;
+use super::value::Value;
 use super::world::{RtResult, World};
 use crate::model::Model;
 
@@ -81,6 +82,73 @@ pub(crate) fn merge_maps(m: &Model, s: &mut State) -> Vec<String> {
     warnings
 }
 
+/// `update existing` (M 5.7, D 3.6): instances of the kinds such a mod
+/// patches take its new written values in the fields the game has not
+/// changed, those still at the old definition's value. Rolled values
+/// (dice, ranges) are left as they came out. Returns a note a kind.
+pub(crate) fn update_existing(old: &Model, new: &Model, s: &mut State) -> Vec<String> {
+    let folders: Vec<&str> = new
+        .mod_infos
+        .iter()
+        .filter(|i| i.update_existing && new.mods.iter().any(|(n, _)| *n == i.folder))
+        .map(|i| i.folder.as_str())
+        .collect();
+    if folders.is_empty() {
+        return vec![];
+    }
+    let (was, now) = (World::new(old, s.game.seed), World::new(new, s.game.seed));
+    let plain = |v: &Value| !matches!(v, Value::Dice { .. } | Value::Range(..) | Value::Text(_));
+    let mut notes = Vec::new();
+    let mut kinds: Vec<String> = s
+        .entities
+        .iter()
+        .filter(|e| e.alive)
+        .map(|e| e.kind.clone())
+        .collect();
+    kinds.sort();
+    kinds.dedup();
+    for kind in kinds {
+        // only the kinds such a mod changes
+        let patched = new.defs.get(&kind).is_some_and(|d| {
+            d.patched
+                .iter()
+                .any(|(_, f, _)| crate::load::mod_of(f).is_some_and(|m| folders.contains(&m)))
+        });
+        if !patched {
+            continue;
+        }
+        let (Ok(before), Ok(after)) = (was.written_fields(&kind), now.written_fields(&kind)) else {
+            continue;
+        };
+        let mut changed = 0;
+        for inst in s.entities.iter_mut().filter(|e| e.alive && e.kind == kind) {
+            for comp in &after {
+                let Some(old_comp) = before.iter().find(|c| c.name == comp.name) else {
+                    continue;
+                };
+                let Some(cv) = inst.components.iter_mut().find(|c| c.name == comp.name) else {
+                    continue;
+                };
+                for (field, nv) in &comp.fields {
+                    let Some(ov) = old_comp.get(field) else {
+                        continue;
+                    };
+                    if ov != nv && plain(nv) && plain(ov) && cv.get(field) == Some(ov) {
+                        cv.set(field, nv.clone());
+                        changed += 1;
+                    }
+                }
+            }
+        }
+        if changed > 0 {
+            notes.push(format!(
+                "`update existing`: {changed} fields of `{kind}` took the mod's values"
+            ));
+        }
+    }
+    notes
+}
+
 impl<'m> Runner<'m> {
     /// Actors standing on a cell whose tiles block their own move, as a
     /// merged map may leave them (M 5.7).
@@ -111,9 +179,14 @@ impl<'m> Runner<'m> {
         if self.in_scene() || self.w.save_blocked() {
             return Err("a reload waits for the scene, dialogue or menu to end".into());
         }
-        let save = self.save();
+        let mut save = self.save();
+        // the mods marked `update existing` reach the instances there are
+        let mut notes = update_existing(self.w.m, m, &mut save.now.s);
+        // a reload changes the mods on purpose: no warning for it
+        save.mods = m.mods.clone();
         let mut r = Runner::load(m, &save)?;
-        let warnings = std::mem::take(&mut r.w.warnings);
+        let mut warnings = std::mem::take(&mut r.w.warnings);
+        warnings.append(&mut notes);
         r.scene_clock = self.scene_clock;
         r.auto_off = self.auto_off;
         r.delete_auto = self.delete_auto;

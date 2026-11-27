@@ -6,7 +6,7 @@
 //! `patch` blocks change single rows of an existing block (D 4.8). Unnamed
 //! sections (`settings`, `tiles`, `colors`, …) merge row by row.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::sync::OnceLock;
 
@@ -98,6 +98,25 @@ pub struct Def {
     pub line: usize,
     pub overrides: bool,
     pub source: Source,
+    /// The rows `patch` changed, by row key, with the file and line that
+    /// changed them last: the value's origin (D 3.6).
+    pub patched: Vec<PatchedRow>,
+}
+
+/// A row a patch changed: its key, and the file and line of the change.
+pub type PatchedRow = (String, String, usize);
+
+/// A mod's `mod` header (D 3.6).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ModInfo {
+    pub name: String,
+    /// The folder under `dev/` it was read from.
+    pub folder: String,
+    pub about: String,
+    /// The game's version it was made on.
+    pub base: Option<u64>,
+    /// `update existing`: already created instances take its changes.
+    pub update_existing: bool,
 }
 
 impl Def {
@@ -129,6 +148,12 @@ pub struct Model {
     pub files: Vec<crate::load::Place>,
     /// The loaded files' hash: the game's version (M 4.4).
     pub source_hash: u64,
+    /// The game's own files' hash, before mods (D 3.6).
+    pub base_hash: u64,
+    /// The active mods in load order with their files' hashes, and their
+    /// `mod` headers (D 3.6).
+    pub mods: Vec<(String, u64)>,
+    pub mod_infos: Vec<ModInfo>,
     /// Full names written with `override`, for the check that something
     /// was replaced.
     overrides: Vec<(String, Kind, String, usize)>,
@@ -541,9 +566,13 @@ pub fn build(loaded: Loaded, report: &mut Report) -> Model {
         languages: loaded.languages,
         files: loaded.files,
         source_hash: loaded.source_hash,
+        base_hash: loaded.base_hash,
+        mods: loaded.mods,
         ..Default::default()
     };
-    let mut patches = Vec::new();
+    // (the block, strict: an `overrides/` file's place, where a row it
+    // does not know needs `new`)
+    let mut patches: Vec<(RawBlock, bool)> = Vec::new();
     for entry in loaded.entries {
         match entry {
             Entry::Include { .. } => {}
@@ -565,6 +594,7 @@ pub fn build(loaded: Loaded, report: &mut Report) -> Model {
                                 line,
                                 overrides: ov,
                                 source: Source::Decl(d.clone()),
+                                patched: vec![],
                             },
                         );
                     }
@@ -574,7 +604,25 @@ pub fn build(loaded: Loaded, report: &mut Report) -> Model {
             Entry::Block(b) => {
                 let b = *b;
                 if b.modifier == Modifier::Patch {
-                    patches.push(b);
+                    patches.push((b, false));
+                    continue;
+                }
+                // the player's `overrides/`: its blocks are places, as if
+                // written `patch`, but sections merge as everywhere (D 3.2)
+                if crate::load::is_override(&b.file) {
+                    if b.kind == "profile" {
+                        report.push(b.err("a `profile` block cannot be in `overrides/`: the profile is the engine's (D 3.5)"));
+                        continue;
+                    }
+                    if b.modifier == Modifier::None
+                        && !crate::syntax::SECTION_KINDS.contains(&b.kind.as_str())
+                    {
+                        patches.push((b, true));
+                        continue;
+                    }
+                }
+                if b.kind == "mod" {
+                    m.mod_header(report, b);
                     continue;
                 }
                 match b.kind.as_str() {
@@ -598,6 +646,7 @@ pub fn build(loaded: Loaded, report: &mut Report) -> Model {
                             line: b.line,
                             overrides: b.modifier == Modifier::Override,
                             source: Source::Block(Box::new(b)),
+                            patched: vec![],
                         };
                         m.define(report, def);
                     }
@@ -606,9 +655,11 @@ pub fn build(loaded: Loaded, report: &mut Report) -> Model {
         }
     }
     m.tiles(report);
-    for p in patches {
-        m.patch(report, p);
+    let mut changed_by: HashMap<(String, String), String> = HashMap::new();
+    for (p, strict) in patches {
+        m.patch(report, p, strict, &mut changed_by);
     }
+    m.check_mods(report);
     m.check_overrides(report);
     m
 }
@@ -695,6 +746,7 @@ impl Model {
                     line: item.line,
                     overrides: marker == Modifier::Override,
                     source: Source::Row(item),
+                    patched: vec![],
                 },
             );
         }
@@ -762,6 +814,7 @@ impl Model {
                             line,
                             overrides: false,
                             source: Source::Tile,
+                            patched: vec![],
                         },
                     );
                 }
@@ -769,34 +822,103 @@ impl Model {
         }
     }
 
-    fn patch(&mut self, report: &mut Report, p: RawBlock) {
+    /// A `patch` block, or a place in `overrides/` (`strict`): its rows
+    /// change the target's by row key (D 4.8). A named definition, the
+    /// named `game` block or a key context can be patched. Two mods that
+    /// change the same row are warned of; the later wins (D 3.6).
+    fn patch(
+        &mut self,
+        report: &mut Report,
+        p: RawBlock,
+        strict: bool,
+        changed_by: &mut HashMap<(String, String), String>,
+    ) {
         let full = qualify(p.namespace.as_deref(), &p.name);
-        let Some(def) = self.defs.get_mut(&full) else {
-            report.push(p.err(format!("`patch {} {full}`: nothing to patch", p.kind)));
-            return;
-        };
-        let Source::Block(target) = &mut def.source else {
-            report.push(p.err(format!(
-                "`{full}` is a {} written in RogueScript and cannot be patched",
-                def.kind
-            )));
-            return;
-        };
-        if target.kind != p.kind {
-            report.push(p.err(format!("`patch {}`: `{full}` is a {}", p.kind, target.kind)));
-            return;
-        }
-        if p.kind == "table" || !p.drawing.is_empty() {
-            report.push(p.err("a table or a drawing cannot be patched (D 4.8)"));
-            return;
-        }
+        let by = crate::load::mod_of(&p.file).map(str::to_string);
+        // what the patch changes: its rows, and where a definition keeps
+        // its rows' origin
+        let (target, origin): (&mut Vec<RawItem>, Option<&mut Vec<PatchedRow>>) =
+            match p.kind.as_str() {
+                // an unnamed `game` in `overrides/` places the game's own
+                "game" if p.name.is_empty() => {
+                    let Some(g) = self.games.iter_mut().find(|g| !g.name.is_empty()) else {
+                        report.push(p.err("there is no named `game` block to patch"));
+                        return;
+                    };
+                    (&mut g.items, None)
+                }
+                "keys" | "pad" => {
+                    let Some(blocks) = self.contexts.get_mut(&full) else {
+                        report.push(p.err(format!("`{} {full}`: nothing to patch", p.kind)));
+                        return;
+                    };
+                    let Some(last) = blocks.iter_mut().rev().find(|b| b.kind == p.kind) else {
+                        report.push(p.err(format!("`{} {full}`: nothing to patch", p.kind)));
+                        return;
+                    };
+                    // a context's rows are its blocks' rows; the place's
+                    // rows go into the last of them
+                    (&mut last.items, None)
+                }
+                _ => {
+                    let Some(def) = self.defs.get_mut(&full) else {
+                        report.push(p.err(format!("`patch {} {full}`: nothing to patch", p.kind)));
+                        return;
+                    };
+                    let Def {
+                        source,
+                        patched,
+                        kind,
+                        ..
+                    } = def;
+                    let Source::Block(target) = source else {
+                        report.push(p.err(format!(
+                            "`{full}` is a {kind} written in RogueScript and cannot be patched"
+                        )));
+                        return;
+                    };
+                    if target.kind != p.kind {
+                        report.push(
+                            p.err(format!("`patch {}`: `{full}` is a {}", p.kind, target.kind)),
+                        );
+                        return;
+                    }
+                    if p.kind == "table" || !p.drawing.is_empty() {
+                        report.push(p.err("a table or a drawing cannot be patched (D 4.8)"));
+                        return;
+                    }
+                    for sub in p.subs.iter().cloned() {
+                        target.subs.push(sub);
+                    }
+                    (&mut target.items, Some(patched))
+                }
+            };
+        let mut origin = origin;
         for item in p.items {
             let (marker, row) = item.marker();
             let key = row.key().to_string();
-            let at = target.items.iter().position(|i| i.marker().1.key() == key);
+            let at = target.iter().position(|i| i.marker().1.key() == key);
+            // two mods on the same row: the later wins, with a warning
+            if let Some(by) = &by {
+                let k = (format!("{} {full}", p.kind), key.clone());
+                if let Some(before) = changed_by.get(&k)
+                    && before != by
+                {
+                    report.warning(
+                        &item.file,
+                        item.line,
+                        format!("mods `{before}` and `{by}` both change `{key}` of `{full}`: `{by}` wins, as it loads later (D 3.6)"),
+                    );
+                }
+                changed_by.insert(k, by.clone());
+            }
+            if let Some(o) = origin.as_deref_mut() {
+                o.retain(|(k, _, _)| *k != key);
+                o.push((key.clone(), item.file.clone(), item.line));
+            }
             match (marker, at) {
                 (Modifier::Drop, Some(i)) => {
-                    target.items.remove(i);
+                    target.remove(i);
                 }
                 (Modifier::Drop, None) => {
                     report.push(item.err(format!("`drop {key}`: `{full}` has no such row")))
@@ -804,12 +926,69 @@ impl Model {
                 (Modifier::New, Some(_)) => {
                     report.push(item.err(format!("`new {key}`: `{full}` already has this row")))
                 }
-                (_, Some(i)) => target.items[i] = row,
-                (_, None) => target.items.push(row),
+                (Modifier::New, None) => target.push(row),
+                (_, Some(i)) => target[i] = row,
+                // in `overrides/` an unknown row is a typo until it says
+                // `new` (D 3.2)
+                (_, None) if strict => report.push(item.err(format!(
+                    "`{key}`: `{full}` has no such row; a new one is written `new {key}` (D 3.2)"
+                ))),
+                (_, None) => target.push(row),
             }
         }
-        for sub in p.subs {
-            target.subs.push(sub);
+    }
+
+    /// A mod's `mod NAME` header (D 3.6).
+    fn mod_header(&mut self, report: &mut Report, b: RawBlock) {
+        let Some(folder) = crate::load::mod_of(&b.file) else {
+            report.push(b.err("a `mod` header belongs in a mod's folder, dev/NAME/ (D 3.6)"));
+            return;
+        };
+        let mut info = ModInfo {
+            name: b.name.clone(),
+            folder: folder.to_string(),
+            ..ModInfo::default()
+        };
+        for item in &b.items {
+            match (item.key(), item.word(1)) {
+                ("about", _) => info.about = item.rest(1).trim_matches('"').to_string(),
+                ("base", Some(h)) => match u64::from_str_radix(h, 16) {
+                    Ok(h) => info.base = Some(h),
+                    Err(_) => report.push(item.err("`base` takes the game's hash in hexadecimal")),
+                },
+                ("update", Some("existing")) => info.update_existing = true,
+                (k, _) => report.push(item.err(format!(
+                    "unknown `mod` row `{k}`: the rows are about, base and update existing (D 3.6)"
+                ))),
+            }
+        }
+        self.mod_infos.push(info);
+    }
+
+    /// The active mods against their headers: a changed game is warned of
+    /// (D 3.6).
+    fn check_mods(&self, report: &mut Report) {
+        for (name, _) in &self.mods {
+            let Some(info) = self.mod_infos.iter().find(|i| &i.folder == name) else {
+                report.warning(
+                    &format!("dev/{name}/"),
+                    0,
+                    format!("mod `{name}` has no `mod` header in dev/{name}/mod.rlml (D 3.6)"),
+                );
+                continue;
+            };
+            if let Some(base) = info.base
+                && base != self.base_hash
+            {
+                report.warning(
+                    &format!("dev/{name}/mod.rlml"),
+                    0,
+                    format!(
+                        "mod `{}` was made on another version of the game ({base:016x}, now {:016x}); it loads anyway (D 3.6)",
+                        info.name, self.base_hash
+                    ),
+                );
+            }
         }
     }
 
