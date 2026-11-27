@@ -9,6 +9,9 @@
 
 use std::collections::BTreeMap;
 
+mod merge;
+pub use merge::{Merge, merge, unified};
+
 use crate::load::{Files, Layers, Root};
 use crate::model::Model;
 use crate::syntax::Entry;

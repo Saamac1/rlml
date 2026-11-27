@@ -379,6 +379,41 @@ Alla on alkuperäinen tehtävälista.
 
 ### 8. Yhdistäminen perustiedostoihin
 
+Tehty 27.11.2026 haarassa `claude/mod-merge`.
+
+**Käyttäjän päätökset.**
+- Mitä ei voi yhdistää pistekorjauksena, viedään vaiheen 7 tapaan kansioon `mods/NIMI/` include-rivillä, ja koko modi arkistoidaan. Yksi tarkistus kattaa molemmat.
+- Diff näytetään, ja komento kysyy `[y/N]`. `--yes` hyväksyy kysymättä, `--dry-run` vain näyttää, ja jos syöte ei ole pääte eikä `--yes`-valitsinta ole annettu, mitään ei kirjoiteta.
+- `override`-rungon korvaus tekstissä tehdään myöhemmin. Nyt rungot menevät jäännökseen.
+
+**Speksi.** D 3.6 saa kohdan "Yhdistäminen peliin", ja muutos on kirjattu muutoslokiin.
+
+**Ydin** (`crates/rlml-core/src/devmod/merge.rs`).
+- Kohde haetaan pelin mallista ilman modia samoin kuin `patch` sen hakee: määrittely, nimetty `game`-lohko tai näppäinkontekstin viimeinen lohko.
+- Rivin paikka on rivin oma tiedosto ja rivi. Jos pelin oma myöhempi `patch` on jo muuttanut rivin, korjaus tehdään siihen.
+- **Korvaus** vaihtaa vain vanhan ja uuden tekstin eroavan keskiosan, joten rivin perässä oleva kommentti säilyy.
+- **`drop`** poistaa rivin.
+- **Uusi rivi** kirjoitetaan lohkon viimeisen samassa tiedostossa olevan rivin perään samalla sisennyksellä.
+- Tiedostot käsitellään riveinä, joilla on pysyvä tunniste, joten saman tiedoston useat muutokset eivät siirrä toistensa rivinumeroita.
+- **Jäännös:** muut kuin `patch`-lohkot, RogueScript, kielitiedostot, alalohkot ja rivit muualla kuin pelin omissa tiedostoissa (vakiokirjasto). Modin tiedostosta poistetaan yhdistetyt rivit ja kokonaan yhdistettyjen lohkojen otsakkeet, ja loput viedään.
+- **Tarkistus** on sama kuin vaiheessa 7 (`resolved` ja `differences`).
+- `unified` tekee diffin pisimmän yhteisen alijonon avulla.
+
+**Komento.** `rlml mod merge PELI NIMI [--dry-run] [--yes]` tulostaa diffin, jäännöksen ja arkiston, kysyy ja kirjoittaa.
+
+**Kokeiltu** Kapteeni Aaltolan kopiolla:
+- `CREW`-entiteetin `render`-rivi vaihtui paikallaan, ja `new light radius 2` tuli lohkon loppuun.
+- Käsittelijä vietiin kansioon `mods/testi/`, ja peli latautui ilman virheitä.
+
+**Testit** (`crates/rlml-core/tests/merge.rs`).
+- Pistekorjaukset: arvo, kommentti, `drop`, uusi rivi ja näppäinkonteksti, sekä diff.
+- Jäännös: vakiokirjaston rivi ja modin oma määrittely.
+- Pelin oman myöhemmän paikkauksen rivi korjataan sen paikassa.
+- Järjestystä muuttava yhdistäminen hylätään.
+- Diffin yksikkötesti.
+
+Alla on alkuperäinen tehtävälista.
+
 - **`rlml mod merge NIMI`** hakee jokaiselle patchille kohdemäärittelyn lähdepaikan jäsennyspuusta ja korjaa tekstiä pisteenä: vain muuttuva arvo korvataan, joten kommentit ja muotoilu säilyvät.
 - **Merkinnät.** `drop` poistaa kentän tai määrittelyn, `new` lisää kentän määrittelyn loppuun, ja muuttunut runko korvataan kokonaisena.
 - **STD ja muut suojatut tiedostot.** Jos kohde on vakiokirjastossa tai tiedostossa, jota ei haluta muuttaa, patch jää jäännösmodiin ja siitä raportoidaan.

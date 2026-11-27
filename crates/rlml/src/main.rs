@@ -141,6 +141,7 @@ const USAGE: &str = "usage: rlml check GAME [--lib DIR]
        rlml inspect GAME [--seed N] [--keys \"KEY …\"] [--set PATH=VALUE …] [PATH …] [--lib DIR]
        rlml bench GAME [--seed N] [--keys \"KEY …\" | --keys-file FILE] [--repeat N] [--lib DIR]
        rlml mod export GAME NAME [--dry-run] [--lib DIR]
+       rlml mod merge GAME NAME [--dry-run] [--yes] [--lib DIR]
 
 check loads the game and reports load errors and warnings (M 2).
 run plays a new game without a screen: each key is one player's turn,
@@ -176,6 +177,12 @@ go to mods/NAME/ without the `mod` header, the main file gets
 dev/.arkisto/. The game is loaded first with the mod and as exported,
 and nothing is written if their definitions differ. --dry-run shows
 what would be written.
+mod merge writes the mod's patch rows into the rows they change (D 3.6):
+only the changed part of a row, drop removes its line, and a new row
+follows the block's last. What cannot be merged so (new definitions,
+RogueScript, rows of the engine's library) is exported as export does.
+The game is loaded with the mod and as merged first; the diff is shown
+and written only when answered y, or with --yes.
 bench plays the keys as run does, --repeat times, without drawing, and
 prints how long loading and playing took. Built with `--features
 stats`, it also prints the interpreter's counters: statements, body
@@ -205,6 +212,7 @@ fn main() -> ExitCode {
     let mut sub: Option<String> = None;
     let mut mod_name: Option<String> = None;
     let mut dry_run = false;
+    let mut yes = false;
     if !["check", "run", "play", "replay", "bench", "inspect", "mod"].contains(&command.as_str()) {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
@@ -275,9 +283,10 @@ fn main() -> ExitCode {
                 i += 1;
             }
             "--dry-run" if command == "mod" => dry_run = true,
+            "--yes" if command == "mod" => yes = true,
             a if command == "mod" && sub.is_none() && !a.starts_with('-') => {
-                if a != "export" {
-                    eprintln!("rlml mod takes export\n\n{USAGE}");
+                if a != "export" && a != "merge" {
+                    eprintln!("rlml mod takes export or merge\n\n{USAGE}");
                     return ExitCode::from(2);
                 }
                 sub = Some(a.to_string())
@@ -342,6 +351,9 @@ fn main() -> ExitCode {
             eprintln!("{USAGE}");
             return ExitCode::from(2);
         };
+        if sub.as_deref() == Some("merge") {
+            return mod_merge(&files, &main, &name, dry_run, yes);
+        }
         return mod_export(&files, &main, &name, dry_run);
     }
     let mut layers = rlml_core::load::Layers {
@@ -688,6 +700,74 @@ fn mod_export(files: &DiskFiles, main: &str, name: &str, dry_run: bool) -> ExitC
             if !dry_run {
                 println!("the game loads the mod as its own; the definitions are the same");
             }
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("{err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `rlml mod merge` (D 3.6): plans the merge in memory, shows its diff
+/// and writes it when the user says so.
+fn mod_merge(files: &DiskFiles, main: &str, name: &str, dry_run: bool, yes: bool) -> ExitCode {
+    use std::io::{BufRead, IsTerminal, Write};
+    let m = match rlml_core::devmod::merge(files, main, name) {
+        Ok(m) => m,
+        Err(errors) => {
+            for line in errors {
+                eprintln!("{line}");
+            }
+            eprintln!("nothing was written");
+            return ExitCode::FAILURE;
+        }
+    };
+    for (path, old, new) in &m.changed {
+        print!("{}", rlml_core::devmod::unified(path, old, new, 3));
+    }
+    if !m.residual.is_empty() {
+        println!("\nexported to mods/{name}/ rather than merged:");
+        for r in &m.residual {
+            println!("  {r}");
+        }
+    }
+    let (from, to) = &m.archive;
+    println!("\n{from}/ goes to {to}/; the definitions are the same as with the mod");
+    if dry_run {
+        return ExitCode::SUCCESS;
+    }
+    if !yes {
+        if !std::io::stdin().is_terminal() {
+            eprintln!("nothing was written: --yes writes without asking");
+            return ExitCode::FAILURE;
+        }
+        print!("write these changes? [y/N] ");
+        let _ = std::io::stdout().flush();
+        let mut answer = String::new();
+        let _ = std::io::stdin().lock().read_line(&mut answer);
+        if !matches!(answer.trim(), "y" | "Y" | "yes" | "k" | "K" | "kyllä") {
+            println!("nothing was written");
+            return ExitCode::SUCCESS;
+        }
+    }
+    let root = &files.game;
+    let done = || -> std::io::Result<()> {
+        for (path, _, text) in &m.changed {
+            let p = root.join(path);
+            if let Some(dir) = p.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            std::fs::write(p, text)?;
+        }
+        if let Some(dir) = root.join(to).parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::rename(root.join(from), root.join(to))
+    };
+    match done() {
+        Ok(()) => {
+            println!("wrote {} files and moved {from}/ to {to}/", m.changed.len());
             ExitCode::SUCCESS
         }
         Err(err) => {

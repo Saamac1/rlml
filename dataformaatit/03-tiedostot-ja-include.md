@@ -279,6 +279,12 @@ patch entity RAT
   - Onnistuneen viennin jälkeen modin kansio siirretään arkistoon `dev/.arkisto/NIMI/`, jota lataus ja `f6`-lista eivät lue, koska piste nimen alussa jättää sen pois.
   - `--dry-run` näyttää muutokset kirjoittamatta mitään.
   - Otsakkeen täytyy olla omassa tiedostossaan, eikä samaa modia voi viedä kahdesti.
+- **Yhdistäminen peliin.** `rlml mod merge PELI NIMI` kirjoittaa modin muutokset suoraan pelin määrittelyihin:
+  - `patch`-rivi korvaa rivin, jota se muuttaa, siinä tiedostossa ja kohdassa, jossa rivi nyt on kirjoitettu. Vain muuttuva osa vaihtuu, joten rivin kommentti ja muut rivit säilyvät.
+  - `drop` poistaa rivin, ja uusi rivi kirjoitetaan lohkon viimeisen oman rivin perään.
+  - Mitä ei voi yhdistää näin, viedään kuten `mod export` vie: uudet määrittelyt, RogueScript, alalohkoja lisäävät paikkaukset ja vakiokirjaston rivien paikkaukset. Komento luettelee ne.
+  - Tarkistus on sama kuin viennissä: yhdistetyn pelin ratkaistut määrittelyt ovat samat kuin modin kanssa ladatun.
+  - Komento näyttää muutokset diffinä ja kirjoittaa vain, kun vastaus on `y`. `--yes` kirjoittaa kysymättä, ja `--dry-run` vain näyttää. Lopuksi modi arkistoidaan kuten viennissä. Komento ei tee committia.
 
 ---
 
